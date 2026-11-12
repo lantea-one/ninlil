@@ -53,7 +53,13 @@ public sealed class DnssecKeyManagementServiceProhibitedAlgorithmTests
             service.GenerateKeyAsync(Guid.NewGuid(), DnssecKeyRoleEnum.Zsk, algorithm)
         );
 
-        Assert.Contains("prohibited", exception.Message, StringComparison.Ordinal);
+        // RSASHA1 and RSASHA1-NSEC3-SHA1 are Ninlil's own rule; the other four are MUST NOT.
+        string expected = algorithm
+            is DnssecAlgorithmEnum.RsaSha1
+                or DnssecAlgorithmEnum.RsaSha1Nsec3Sha1
+            ? "Ninlil does not sign with"
+            : "prohibited for signing (RFC 9904 §3)";
+        Assert.Contains(expected, exception.Message, StringComparison.Ordinal);
         Assert.Empty(repository.Items);
     }
 

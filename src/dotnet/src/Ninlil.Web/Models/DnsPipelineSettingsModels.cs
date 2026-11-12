@@ -3,7 +3,7 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This record is the REST shape of the query pipeline settings
-///     (<c>DnsQueryProcessingPipelineOptions</c>) that <c>GET /api/dns-pipeline-settings</c>
+///     (configuration section <c>DnsServer:Pipeline</c>) that <c>GET /api/dns-pipeline-settings</c>
 ///     returns: queue readers, concurrency cap and queue sizing, and the UDP amplification guard. A <c>PATCH</c> to
 ///     the same endpoint accepts the same fields.
 /// </summary>

@@ -146,6 +146,11 @@ public static class ServiceCollectionAuthoritativeExtension
             provider.GetRequiredService<SignedZoneCache>()
         );
 
+        // Reloads both caches for a zone another instance changed in the shared database. It is
+        // registered after both caches, because the host starts hosted services in registration
+        // order and the first pass compares with what they loaded.
+        instance.AddHostedService<ZoneCacheBackstopService>();
+
         // Re-sign a zone when it changes.
         instance.AddScoped<
             IDnsServerEventSubscriber<DnsZoneChangedEvent>,
@@ -181,6 +186,8 @@ public static class ServiceCollectionAuthoritativeExtension
         );
 
         // Scoped, because it uses the scoped repositories and unit of work.
+        // Singleton: every scope of this process shares the one pass lock.
+        instance.AddSingleton<PtrSyncPassLock>();
         instance.AddScoped<PtrSyncService>();
 
         // Sync PTR records when a zone changes.

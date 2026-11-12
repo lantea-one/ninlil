@@ -2,9 +2,9 @@
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST shape of the client presence settings (<c>ClientPresenceOptions</c>)
-///     that <c>GET /api/client-presence-settings</c> returns. Nothing in it is secret, so a
-///     <c>PATCH</c> to the same endpoint accepts the same fields.
+///     This record is the REST shape of the client presence settings (configuration section
+///     <c>DnsServer:ClientPresence</c>) that <c>GET /api/client-presence-settings</c> returns.
+///     Nothing in it is secret, so a <c>PATCH</c> to the same endpoint accepts the same fields.
 /// </summary>
 /// <param name="OnlineWindow">How recently a client must have been seen to be reported online. Defaults to 10 minutes.</param>
 /// <param name="FlushInterval">How often buffered sightings are written to storage. Defaults to 30 seconds.</param>

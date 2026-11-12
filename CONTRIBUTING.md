@@ -19,6 +19,7 @@ time; later, jump to the part you need.
   - [Add a setting](#add-a-setting)
   - [Add a console page](#add-a-console-page)
 - [Build the binaries and packages](#build-the-binaries-and-packages)
+- [Report a bug or propose a change](#report-a-bug-or-propose-a-change)
 - [Commit, branch and pull request](#commit-branch-and-pull-request)
 - [Cutting a release](#cutting-a-release)
 - [Reporting a vulnerability](#reporting-a-vulnerability)
@@ -99,6 +100,9 @@ Docker is only needed for tests marked `RequiresDocker` and for the lint contain
    git clone https://git.lantea.one/lantea-one/ninlil.git
    cd ninlil
    ```
+
+   On Windows too, every text file is checked out with LF line endings (the repository's
+   `.gitattributes` sets this), so the format checks pass whatever `core.autocrlf` says.
 
 2. Restore the local tools (`dotnet-ef`, `csharpier`, `reportgenerator`):
 
@@ -371,8 +375,8 @@ failed checks first; `shots/` holds one full-page screenshot per visit; `host.lo
   database helper scripts.
 - [`.forgejo/scripts/windows-smoke.ps1`](./.forgejo/scripts/windows-smoke.ps1) starts the Windows
   executable (from the release zip, or a local file with `-ExecutablePath`) and checks `/status`,
-  the console, DNS over UDP, HTTPS, DNS-over-TLS and DNS-over-QUIC. The pipeline runs it on a
-  Windows runner.
+  the console, DNS over UDP, HTTPS, DNS-over-TLS and DNS-over-QUIC. The pipeline runs it on the
+  Windows runner `lofnheim`.
 
 ## Format and lint
 
@@ -685,6 +689,60 @@ The scripts use the Node.js and .NET SDK you have installed. To use the pipeline
 which need only Docker, prefix a script with `.forgejo/scripts/in-container.sh node` or
 `.forgejo/scripts/in-container.sh dotnet`.
 
+## Report a bug or propose a change
+
+Report a vulnerability by e-mail, never here: see
+[Reporting a vulnerability](#reporting-a-vulnerability).
+Every other problem and every proposal goes to the
+[issue tracker](https://git.lantea.one/lantea-one/ninlil/issues).
+
+#### Steps
+
+1. Open [a new issue](https://git.lantea.one/lantea-one/ninlil/issues/new/choose) and pick a
+   template from [`.forgejo/ISSUE_TEMPLATE/`](./.forgejo/ISSUE_TEMPLATE/). Blank issues are off.
+   - **Bug**: Ninlil does something wrong. Give the version, the steps and what you saw.
+   - **Feature**: a behaviour you want.
+   - **Work package**: a unit of work a maintainer or an agent can pick up, with acceptance checks.
+2. Search the open and closed issues first, so you do not file a duplicate.
+3. A maintainer labels the issue. Labels have a scope, the text before the `/`. A scope marked
+   exclusive allows one label per issue. The set is in
+   [`.forgejo/labels.json`](./.forgejo/labels.json) and on the tracker's
+   [label page](https://git.lantea.one/lantea-one/ninlil/labels).
+
+   | Scope | Meaning | Examples |
+   |---|---|---|
+   | `kind/` | What sort of work | `kind/bug`, `kind/feature`, `kind/epic`, `kind/docs` |
+   | `area/` | Which part of Ninlil | `area/dns`, `area/dhcp`, `area/console`, `area/storage` |
+   | `priority/` | How soon | `priority/high`, `priority/medium`, `priority/low` |
+   | `status/` | Where the issue stands | `status/needs-design`, `status/ready`, `status/in-progress`, `status/blocked` |
+   | `agent/` | Which [agent role](./AGENTS.md#code-conventions) takes it | `agent/coder`, `agent/docs-writer` |
+   | `theme/` | Which line of work it belongs to | `theme/valkey`, `theme/parity-query`, `theme/later` |
+   | `resolution/` | Why it closed without a change | `resolution/duplicate`, `resolution/wontfix`, `resolution/not-a-bug` |
+
+4. A milestone is a release, named `Release: <scope>`. The release is cut when its milestone has
+   no open issue, so a milestone holds only the issues that must ship in it. An issue that is not
+   planned for a release has no milestone; its `theme/` label still says where it belongs. When a
+   release is cut, a maintainer closes its milestone and writes the version in its description (see
+   [Cutting a release](#cutting-a-release)).
+5. An issue lists what it depends on (`Depends on: #n`). A dependency also exists in Forgejo's
+   dependency list of the issue. An issue with open dependencies cannot be closed by a closing
+   keyword (see [Commit, branch and pull request](#commit-branch-and-pull-request)).
+
+For maintainers, `.forgejo/scripts/sync-labels.sh` creates or updates the labels from
+`.forgejo/labels.json`. It never deletes a label. Read the token from a file, never type it on the
+command line:
+
+```bash
+NINLIL_CI_TOKEN="$(cat <path-to-token-file>)" FORGEJO_API=https://git.lantea.one/api/v1 .forgejo/scripts/sync-labels.sh lantea-one/ninlil
+```
+
+`<path-to-token-file>` holds a Forgejo access token that may write labels in the repository.
+
+#### Check that it worked
+
+The script prints one line per label, `created <name>`, `updated <name>` or `unchanged <name>`. A
+second run prints only `unchanged` lines. The new issue shows its labels in the tracker.
+
 ## Commit, branch and pull request
 
 #### Steps
@@ -700,8 +758,11 @@ which need only Docker, prefix a script with `.forgejo/scripts/in-container.sh n
 
    ```bash
    git switch develop && git pull
-   git switch -c feature/<short-name>
+   git switch -c feature/<issue>-<short-name>
    ```
+
+   `<issue>` is the number of the issue the branch works on; for a sub-phase it is the epic. A
+   hotfix branch is `hotfix/<issue>-<short-name>`, created from `main`.
 
 2. Commit in small logical steps. The message is one plain-English sentence in the present tense
    that describes the behaviour change as a user or caller sees it. It has no prefix (`feat:`,
@@ -711,15 +772,54 @@ which need only Docker, prefix a script with `.forgejo/scripts/in-container.sh n
 
    Keep the backend change, the snapshot with the client, and the console change in separate
    commits.
+
+   The subject carries no issue number. The body has a line above the trailers: `Closes #<n>` in
+   the commit that finishes issue `<n>`, `Refs #<n>` in every other commit about it:
+
+   ```text
+   The README explains how a secondary zone retries and expires, step by step
+
+   Closes #<n>
+
+   Co-Authored-By: <name> <e-mail>
+   ```
+
+   The commit keyword acts only when the commit reaches `main`, so it is a backstop.
 3. Run the checks from [Format and lint](#format-and-lint) and the
    [`AGENTS.md` checklist](./AGENTS.md#before-you-finish).
 4. Push the branch and open a pull request into `develop` (a hotfix goes into `main`):
 
    ```bash
-   git push -u origin feature/<short-name>
+   git push -u origin feature/<issue>-<short-name>
    ```
 
    Never commit secrets. Contributors without write access push to their fork.
+5. Name the issue in the pull request description. Issues close when their work reaches
+   `develop`: write `Closes #<n>` for the issue the pull request finishes, and Forgejo closes it
+   when the pull request merges. A hotfix pull request into `main` uses the same lines and closes
+   its issue when it merges into `main`. Write `Refs #<n>` for an issue it only works on. The
+   [pull request template](./.forgejo/PULL_REQUEST_TEMPLATE.md) has the line.
+
+   When a user sees the change, the pull request also adds one entry under `## Unreleased` in
+   [`CHANGELOG.md`](./CHANGELOG.md). The entry ends with the full link to the issue. For example,
+   for issue `<n>`:
+
+   ```text
+   - **Secondary zones retry and expire.** See [Secondary zones and transfers](./README.md#secondary-zones-and-transfers). ([#<n>](https://git.lantea.one/lantea-one/ninlil/issues/<n>))
+   ```
+
+   Check that it worked: `git diff develop... -- CHANGELOG.md` shows the new line under
+   `## Unreleased` and no change below it.
+6. Watch for two traps:
+   - A closing keyword on an issue with open dependencies does nothing, silently. Merge the
+     dependency's pull request first, or close the issue by hand once its dependencies are closed.
+   - A commit-body keyword on a commit that sits only on `develop`, a release or a hotfix branch
+     closes nothing until it reaches `main`. The pull request description is what closes.
+
+#### Check that it worked
+
+Open the merged pull request on the tracker. The issue it finished shows as closed. If it is
+still open, look at its dependencies and close it by hand.
 
 #### What the pipeline runs
 
@@ -738,15 +838,36 @@ The workflows are in [`.forgejo/workflows/`](./.forgejo/workflows/). The README'
 
 ## Cutting a release
 
-For maintainers. The version is generated by the pipeline from the release branch's name; see
-[Releases and versioning](./README.md#releases-and-versioning).
+For maintainers. Every release goes through a release branch cut from `main`. A normal release
+carries `develop` into `main`; a hotfix release carries a `hotfix/*` branch instead and does not
+wait for a milestone. The version is generated by the pipeline from the release branch's name;
+see [Releases and versioning](./README.md#releases-and-versioning).
 
-1. In `CHANGELOG.md`, rename the `## Unreleased` heading to the release branch's name from step 3
+Before you start, check that the release is due:
+
+- Normal release: the release's milestone (`Release: <scope>`) on the
+  [milestones page](https://git.lantea.one/lantea-one/ninlil/milestones) shows 0 open issues, and the latest pipeline run of
+  `develop` is green on the [Actions page](https://git.lantea.one/lantea-one/ninlil/actions).
+- Hotfix release: the latest pipeline run of the `hotfix/*` branch is green.
+
+Then:
+
+1. In `CHANGELOG.md`, rename the `## Unreleased` heading to the release branch's name from step 4
    (for example `## v2026.09.24.1`) and add an empty `## Unreleased` section above it. Commit this on `develop` (or the
    `hotfix/*` branch) so that step 2 carries it to `main`: the release page links the file at the
    release's tag.
 2. Merge `develop` (or a `hotfix/*` branch) into `main` through a pull request.
-3. Create the release branch from `main`, named for the release's date and that day's increment:
+3. Review post-quantum cryptography (PQC) support before the release branch exists:
+   1. Open the [PQC watch issue](https://git.lantea.one/lantea-one/ninlil/issues/1).
+   2. Check the sources its review rule lists: the .NET release notes, OpenSSL and SChannel
+      changes, the IETF TLS, LAMPS and DNSOP working groups, the IANA DNSSEC algorithm registry
+      and the DNSCrypt specification.
+   3. Update the issue's table where something changed.
+   4. Add a comment that starts with the date and the release name (for example
+      `2026-09-24, v2026.09.24.1`) and says what changed. "No change" is a valid comment.
+
+   Check that it worked: the comment shows at the bottom of the issue.
+4. Create the release branch from `main`, named for the release's date and that day's increment:
 
    ```bash
    git switch main && git pull
@@ -754,10 +875,22 @@ For maintainers. The version is generated by the pipeline from the release branc
    git push -u origin v2026.09.24.1
    ```
 
-4. The pipeline verifies that the branch points at a commit on `main`, runs every test and
+5. The pipeline verifies that the branch points at a commit on `main`, runs every test and
    publishes the release. A release version is published once: pushing the same release branch
    again with a different commit fails rather than overwriting it.
-5. Merge `main` back down into `develop`.
+6. Merge `main` back down into `develop`.
+7. Check that every issue the release ships is closed. Close by hand any issue a dependency
+   blocked. Close the release's milestone and put the release's name in its description, for
+   example `Shipped in v2026.09.24.1`. A hotfix release has no milestone of its own; skip the
+   milestone.
+
+   Check that it worked: on the [milestones page](https://git.lantea.one/lantea-one/ninlil/milestones?state=closed) the milestone is listed as
+   closed and its description names the version.
+8. Check that the next release milestone exists. If it does not, create it as
+   `Release: <scope>` and move into it the issues that must ship in that release. An issue that
+   is not planned for a release keeps no milestone.
+
+   Check that it worked: the [milestones page](https://git.lantea.one/lantea-one/ninlil/milestones) lists the next release as open.
 
 ## Reporting a vulnerability
 

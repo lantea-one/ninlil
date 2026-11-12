@@ -46,7 +46,7 @@ export interface StorageReadReplicaStatus {
      */
     readsToPrimary?: number;
     /**
-     * The `host:port` entries of the read connection. Empty on MongoDB, where the replica set members are the primary\'s hosts and ReadPreference chooses among them.
+     * The `host:port` entries of the read connection. Empty on MongoDB, where the replica set members are the primary\'s hosts and `readPreference` chooses among them.
      */
     hosts?: Array<string> | null;
     /**

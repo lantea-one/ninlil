@@ -183,6 +183,7 @@ public class PasswordResetLinkTests(NinlilDnsWebApplicationFactory factory)
             emailOptions,
             services.GetRequiredService<IDnsServerEventPublisher>(),
             services.GetRequiredService<IOptionsMonitor<ClusterOptions>>(),
+            new EmailChangeLinkSender(userManager, emailSender, emailOptions),
             deliveryProvider.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<AuthController>.Instance
         )

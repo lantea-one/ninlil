@@ -13,6 +13,8 @@ import { Observable }                                        from 'rxjs';
 
 import { AdminResetPasswordRequest } from '../model/models';
 import { AdminResetPasswordResult } from '../model/models';
+import { ChangeEmailPendingResult } from '../model/models';
+import { ChangeEmailRequest } from '../model/models';
 import { ChangePasswordRequest } from '../model/models';
 import { CreateUserRequest } from '../model/models';
 import { UpdateUserRequest } from '../model/models';
@@ -71,6 +73,10 @@ export interface ApiUsersIdRolesRoleNameDeleteRequestParams {
 
 export interface ApiUsersMeChangePasswordPostRequestParams {
     changePasswordRequest?: ChangePasswordRequest;
+}
+
+export interface ApiUsersMeEmailPostRequestParams {
+    changeEmailRequest?: ChangeEmailRequest;
 }
 
 export interface ApiUsersMePatchRequestParams {
@@ -135,7 +141,7 @@ export interface UsersServiceInterface {
     apiUsersIdPut(requestParameters: ApiUsersIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action resets an account\&#39;s password for an administrator, for an account that cannot supply its current password as &#x60;POST /api/users/me/change-password&#x60; requires. &#x60;AdminResetPasswordRequest.Mode&#x60; picks one of two modes (see &#x60;AdminPasswordResetMode&#x60;). Requires &#x60;users:write&#x60;. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;&#x60;AdminPasswordResetMode.AutoGenerate&#x60; sets a generated strong         password at once, through a reset token and         M:Microsoft.AspNetCore.Identity.UserManager&#x60;1.ResetPasswordAsync(&#x60;0,System.String,System.String) so Identity\&#39;s usual         validation and hashing apply, and returns it in this response only. It also replaces         the account\&#39;s security stamp and revokes every refresh token of the account, so         every access token issued before the reset answers 401 on its next request.     &lt;/item&gt;&lt;item&gt;&#x60;AdminPasswordResetMode.EmailLink&#x60; e-mails the account a link to         the admin console\&#39;s \&quot;set new password\&quot; page, which submits to         &#x60;POST /api/auth/reset-password&#x60;. The link carries an         Identity reset token, Base64Url-encoded for the query string (see         &#x60;ConfirmPasswordResetRequest&#x60;). The account must have an e-mail         address, and SMTP and the public base URL the link points at must be         configured (see &#x60;SmtpSettingsController&#x60;); otherwise this returns 400         with a clear message.     &lt;/item&gt;&lt;/list&gt;
+     * This action resets an account\&#39;s password for an administrator, for an account that cannot supply its current password as &#x60;POST /api/users/me/change-password&#x60; requires. &#x60;AdminResetPasswordRequest.mode&#x60; picks one of two modes (see &#x60;AdminPasswordResetMode&#x60;). Requires &#x60;users:write&#x60;. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;&#x60;AutoGenerate&#x60; sets a generated strong         password at once, through a reset token, so Identity\&#39;s usual validation and         hashing apply, and returns it in this response only. It also replaces the         account\&#39;s security stamp and revokes every refresh token of the account, so         every access token issued before the reset answers 401 on its next request.     &lt;/item&gt;&lt;item&gt;&#x60;EmailLink&#x60; e-mails the account a link to         the admin console\&#39;s \&quot;set new password\&quot; page, which submits to         &#x60;POST /api/auth/reset-password&#x60;. The link carries an         Identity reset token, Base64Url-encoded for the query string (see         &#x60;ConfirmPasswordResetRequest&#x60;). The account must have an e-mail         address, and SMTP and the public base URL the link points at must be         configured (see &#x60;/api/smtp-settings&#x60;); otherwise this returns 400         with a clear message.     &lt;/item&gt;&lt;/list&gt;
      * 
      * @endpoint post /api/users/{id}/reset-password
 * @param requestParameters
@@ -159,7 +165,7 @@ export interface UsersServiceInterface {
     apiUsersIdRolesRoleNameDelete(requestParameters: ApiUsersIdRolesRoleNameDeleteRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action changes the caller\&#39;s password. It requires the current password; a wrong one returns 400 with Identity\&#39;s &#x60;PasswordMismatch&#x60; error. A successful change replaces the account\&#39;s security stamp and revokes every refresh token of the account, including the caller\&#39;s own session: every access token issued before the change, the caller\&#39;s included, answers 401 on its next request, and the caller signs in again with the new password. Requires only a signed-in caller.
+     * This action changes the caller\&#39;s password. It requires the current password; a wrong one returns 400 with Identity\&#39;s &#x60;PasswordMismatch&#x60; error. Wrong passwords are counted per account, together with those of the e-mail change: once 5 have been submitted within 15 minutes, this returns 429 with a &#x60;Retry-After&#x60; header, even for the correct password, until the window ends. A successful change replaces the account\&#39;s security stamp and revokes every refresh token of the account, including the caller\&#39;s own session: every access token issued before the change, the caller\&#39;s included, answers 401 on its next request, and the caller signs in again with the new password. Requires only a signed-in caller.
      * 
      * @endpoint post /api/users/me/change-password
 * @param requestParameters
@@ -167,14 +173,22 @@ export interface UsersServiceInterface {
     apiUsersMeChangePasswordPost(requestParameters: ApiUsersMeChangePasswordPostRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action returns the caller\&#39;s profile: display name, phone number and read-only e-mail address. Requires only a signed-in caller.
+     * This action changes the caller\&#39;s own e-mail address. It requires the current password; a wrong one returns 400 with Identity\&#39;s &#x60;PasswordMismatch&#x60; error. Wrong passwords are counted per account, together with those of the password change: once 5 have been submitted within 15 minutes, this returns 429 with a &#x60;Retry-After&#x60; header, even for the correct password, until the window ends. An invalid address or one another account uses returns 400 with Identity\&#39;s error. Requires only a signed-in caller. &lt;list type&#x3D;\&quot;bullet\&quot;&gt;&lt;item&gt;&lt;b&gt;Confirmation required&lt;/b&gt; (the         &#x60;Identity:EmailChange:RequireConfirmation&#x60; setting, the default): SMTP and         the public base URL must be configured, otherwise this returns 400 naming what         is missing. It e-mails a link to the new address and returns 202 with a body         whose &#x60;confirmationSent&#x60; is true. Nothing on the account changes until the         link is submitted to &#x60;POST /api/auth/confirm-email-change&#x60;, which         also marks the address confirmed.     &lt;/item&gt;&lt;item&gt;&lt;b&gt;Not required&lt;/b&gt;: the address changes at once and the response is 200 with         the profile. The account\&#39;s confirmed state stays as it was, as after an         administrator\&#39;s change in &#x60;PUT /api/users/{id}&#x60;, so a mistyped address can cut         off e-mailed two-factor codes, which go only to a confirmed address.     &lt;/item&gt;&lt;/list&gt; When the address changes, the security stamp is replaced and every refresh token is revoked, so every session of the account, the caller\&#39;s own included, must sign in again, and a notice goes to the old address if SMTP is configured.
+     * 
+     * @endpoint post /api/users/me/email
+* @param requestParameters
+     */
+    apiUsersMeEmailPost(requestParameters: ApiUsersMeEmailPostRequestParams, extraHttpRequestParams?: any): Observable<UserProfileDetail>;
+
+    /**
+     * This action returns the caller\&#39;s profile: display name, phone number, read-only e-mail address and whether changing that address needs a confirmation. Requires only a signed-in caller.
      * 
      * @endpoint get /api/users/me
 */
     apiUsersMeGet(extraHttpRequestParams?: any): Observable<UserProfileDetail>;
 
     /**
-     * This action updates the caller\&#39;s display name and phone number as an RFC 7396 merge patch (see &#x60;JsonElementMergePatchExtension&#x60;): an absent field is unchanged, a JSON &#x60;null&#x60; clears it, and a string sets it. The e-mail address cannot be changed here (see &#x60;UserProfileDetail&#x60;). Requires only a signed-in caller.
+     * This action updates the caller\&#39;s display name and phone number as an RFC 7396 merge patch: an absent field is unchanged, a JSON &#x60;null&#x60; clears it, and a string sets it. An &#x60;email&#x60; field is ignored: the address changes only through &#x60;POST /api/users/me/email&#x60;. Requires only a signed-in caller.
      * 
      * @endpoint patch /api/users/me
 * @param requestParameters
@@ -182,7 +196,7 @@ export interface UsersServiceInterface {
     apiUsersMePatch(requestParameters: ApiUsersMePatchRequestParams, extraHttpRequestParams?: any): Observable<UserProfileDetail>;
 
     /**
-     * This action creates a user account. It first asks every reachable, healthy cluster peer whether the username exists there and returns 409 if one does; an unreachable peer is skipped, so user management never blocks on one node being down. A collision that only shows up later (after a network partition) is resolved when the nodes resync, by the last-write-wins handling in &#x60;UserClusterConfigSyncApplier&#x60;. Returns 400 when the username, e-mail address or password fails validation. Requires &#x60;users:write&#x60;.
+     * This action creates a user account. It first asks every reachable, healthy cluster peer whether the username exists there and returns 409 if one does; an unreachable peer is skipped, so user management never blocks on one node being down. A collision that only shows up later (after a network partition) is resolved when the nodes resync, by the cluster user sync\&#39;s last-write-wins handling. Returns 400 when the username, e-mail address or password fails validation. Requires &#x60;users:write&#x60;.
      * 
      * @endpoint post /api/users
 * @param requestParameters

@@ -326,6 +326,13 @@ public class NinlilDnsMongoContext(
         Collection<ClusterSyncTombstoneEntity>("NinlilDnsClusterSyncTombstones");
 
     /// <summary>
+    ///     This property contains the cluster peers that are owed a config backfill, one document
+    ///     per peer.
+    /// </summary>
+    public IMongoCollection<ClusterPeerConfigBackfillEntity> ClusterPeerConfigBackfills =>
+        Collection<ClusterPeerConfigBackfillEntity>("NinlilDnsClusterPeerConfigBackfills");
+
+    /// <summary>
     ///     This property contains one raw document per applied schema step (see
     ///     <see cref="Maintenance.MongoSchemaSteps" />), keyed by the step name. Startup compares
     ///     it with the steps this build knows to detect a database a newer version has upgraded.

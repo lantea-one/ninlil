@@ -73,6 +73,40 @@ public abstract class LeaseTimesMigrationTestsBase(EngineFixtureBase fixture)
         return (database, context);
     }
 
+    /// <summary>
+    ///     This method inserts the scope named <c>scope</c> that the test leases refer to by name.
+    ///     The later <c>AddDhcpLeaseScopeId</c> migration deletes a lease whose scope name matches
+    ///     no scope, so the leases would not survive the migration without it. The lease
+    ///     durations are still the native time type on every engine at this point.
+    /// </summary>
+    private async Task InsertScopeAsync(NinlilDnsContext context)
+    {
+        string columns = string.Join(
+            ", ",
+            new[]
+            {
+                "Id",
+                "CreatedAtUtc",
+                "Name",
+                "ProtocolVersion",
+                "Kind",
+                "RangeStartAddress",
+                "RangeEndAddress",
+                "SubnetPrefixLength",
+                "IsDisabled",
+                "DefaultLeaseDuration",
+                "MaxLeaseDuration",
+            }.Select(Quote)
+        );
+
+        await context.Database.ExecuteSqlRawAsync(
+            $"INSERT INTO {Quote("NinlilDhcpScopes")} ({columns}) VALUES ("
+                + $"{Id(Guid.NewGuid())}, {Literal(Obtained)}, 'scope', 'IPv4', "
+                + $"'AddressAssignment', '10.0.0.1', '10.0.0.250', 24, {Bool(false)}, "
+                + "'01:00:00', '02:00:00')"
+        );
+    }
+
     private async Task InsertLeaseAsync(
         NinlilDnsContext context,
         string clientIdentifier,
@@ -115,6 +149,7 @@ public abstract class LeaseTimesMigrationTestsBase(EngineFixtureBase fixture)
         (EngineDatabase database, NinlilDnsContext context) = await MigrateToBeforeAsync();
         await using (database)
         {
+            await InsertScopeAsync(context);
             await InsertLeaseAsync(context, "with-expiry", "10.0.0.1", "Active", Obtained, Expiry);
             await InsertLeaseAsync(context, "no-expiry", "10.0.0.2", "Active", Obtained, null);
             await InsertLeaseAsync(context, "no-times", "10.0.0.3", "Offered", null, null);
@@ -124,22 +159,27 @@ public abstract class LeaseTimesMigrationTestsBase(EngineFixtureBase fixture)
             await using AsyncServiceScope scope = database.Services.CreateAsyncScope();
             ILeaseRepository repository =
                 scope.ServiceProvider.GetRequiredService<ILeaseRepository>();
+            Guid scopeId = (
+                await scope
+                    .ServiceProvider.GetRequiredService<IDhcpScopeRepository>()
+                    .FindByNameAsync("scope")
+            ).Id;
 
             LeaseEntity withExpiry = await repository.FindByClientIdentifierAsync(
-                "scope",
+                scopeId,
                 "with-expiry"
             );
             Assert.Equal(Obtained, withExpiry.LeaseObtainedAtUtc);
             Assert.Equal(Expiry, withExpiry.LeaseExpiresAtUtc);
 
             LeaseEntity noExpiry = await repository.FindByClientIdentifierAsync(
-                "scope",
+                scopeId,
                 "no-expiry"
             );
             Assert.Equal(Obtained, noExpiry.LeaseObtainedAtUtc);
             Assert.Null(noExpiry.LeaseExpiresAtUtc);
 
-            LeaseEntity noTimes = await repository.FindByClientIdentifierAsync("scope", "no-times");
+            LeaseEntity noTimes = await repository.FindByClientIdentifierAsync(scopeId, "no-times");
             Assert.Null(noTimes.LeaseObtainedAtUtc);
             Assert.Null(noTimes.LeaseExpiresAtUtc);
         }
@@ -156,6 +196,7 @@ public abstract class LeaseTimesMigrationTestsBase(EngineFixtureBase fixture)
         await using (database)
         {
             DateTimeOffset now = Expiry;
+            await InsertScopeAsync(context);
             await InsertLeaseAsync(
                 context,
                 "live",
@@ -208,6 +249,7 @@ public abstract class LeaseTimesMigrationTestsBase(EngineFixtureBase fixture)
         await using (database)
         {
             string before = context.Database.GetAppliedMigrations().Last();
+            await InsertScopeAsync(context);
             await InsertLeaseAsync(context, "round", "10.0.0.1", "Active", Obtained, Expiry);
 
             await context.Database.MigrateAsync();
@@ -218,9 +260,14 @@ public abstract class LeaseTimesMigrationTestsBase(EngineFixtureBase fixture)
             await context.Database.MigrateAsync();
 
             await using AsyncServiceScope scope = database.Services.CreateAsyncScope();
+            Guid scopeId = (
+                await scope
+                    .ServiceProvider.GetRequiredService<IDhcpScopeRepository>()
+                    .FindByNameAsync("scope")
+            ).Id;
             LeaseEntity lease = await scope
                 .ServiceProvider.GetRequiredService<ILeaseRepository>()
-                .FindByClientIdentifierAsync("scope", "round");
+                .FindByClientIdentifierAsync(scopeId, "round");
             Assert.Equal(Obtained, lease.LeaseObtainedAtUtc);
             Assert.Equal(Expiry, lease.LeaseExpiresAtUtc);
         }

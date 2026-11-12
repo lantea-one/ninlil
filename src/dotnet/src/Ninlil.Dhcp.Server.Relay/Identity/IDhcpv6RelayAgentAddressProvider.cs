@@ -5,7 +5,7 @@ namespace Ninlil.Dhcp.Server.Relay.Identity;
 
 /// <summary>
 ///     This interface supplies the DHCPv6 relay's link address: the value written into the
-///     "link-address" field of every RELAY-FORW (RFC 8415). It is the DHCPv6 counterpart of
+///     "link-address" field of every RELAY-FORW (RFC 9915). It is the DHCPv6 counterpart of
 ///     <see cref="IDhcpv4RelayAgentAddressProvider" />.
 /// </summary>
 public interface IDhcpv6RelayAgentAddressProvider

@@ -15,15 +15,15 @@ import { FilterPatternPreviewMatch } from './filterPatternPreviewMatch';
  */
 export interface FilterPatternPreviewResult { 
     /**
-     * Whether `FilterPatternPreviewRequest.Value` compiles as the requested `FilterPatternPreviewRequest.Kind`, using the same check `FilterListEntriesController` applies before saving a `DnsFilterEntryKindEnum.Wildcard` or `DnsFilterEntryKindEnum.Regex` entry.
+     * Whether `FilterPatternPreviewRequest.value` compiles as the requested `FilterPatternPreviewRequest.kind`, using the same check that `POST /api/filter-lists/{listId}/entries` applies before saving a `Wildcard` or `Regex` entry.
      */
     isValid?: boolean;
     /**
-     * A human-readable reason `FilterPatternPreviewResult.IsValid` is false, or null when it is true.
+     * A human-readable reason `isValid` is false, or null when it is true.
      */
     error?: string | null;
     /**
-     * Each sample domain tested and whether the pattern matched it. Empty when `FilterPatternPreviewResult.IsValid` is false, since a pattern that does not compile is not tested.
+     * Each sample domain tested and whether the pattern matched it. Empty when `isValid` is false, since a pattern that does not compile is not tested.
      */
     matches?: Array<FilterPatternPreviewMatch> | null;
 }

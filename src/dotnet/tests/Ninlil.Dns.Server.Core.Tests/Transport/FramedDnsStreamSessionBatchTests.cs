@@ -127,11 +127,16 @@ public sealed class FramedDnsStreamSessionBatchTests
     [Fact]
     public async Task ABatchQueuedBehindAStalledPeer_MissesTheDeadlineOnce_AndFreesEverySlot()
     {
-        await using Harness harness = await Harness.StartAsync(TimeSpan.FromMilliseconds(300));
+        // The idle timeout is also the read-idle limit and the write deadline, so a scheduler
+        // stall longer than it before the 16 queries arrive, or while the test queues the replies
+        // behind the held write, ends the session early on a loaded runner. One second leaves room
+        // for that and still keeps the test fast.
+        await using Harness harness = await Harness.StartAsync(TimeSpan.FromSeconds(1));
         TaskCompletionSource release = harness.Stream.HoldNextWrite();
 
-        for (int id = 0; id < 16; id++)
-            await harness.SendFrameAsync(id);
+        // One write puts all 16 frames on the wire together, so no gap between frames can reach
+        // the read-idle limit.
+        await harness.SendFramesAsync(16);
 
         List<ReceivedQuery> group = [];
 
@@ -361,10 +366,39 @@ public sealed class FramedDnsStreamSessionBatchTests
             await _clientStream.WriteAsync(frame);
         }
 
+        /// <summary>
+        ///     This method sends <paramref name="count" /> query frames, ids 0 up to
+        ///     <paramref name="count" />, in one write.
+        /// </summary>
+        public async Task SendFramesAsync(int count)
+        {
+            byte[] frames = new byte[10 * count];
+
+            for (int id = 0; id < count; id++)
+            {
+                Span<byte> frame = frames.AsSpan(10 * id, 10);
+                BinaryPrimitives.WriteUInt16BigEndian(frame, 8);
+                BinaryPrimitives.WriteUInt16BigEndian(frame[2..], (ushort)id);
+            }
+
+            await _clientStream.WriteAsync(frames);
+        }
+
+        /// <summary>
+        ///     This method returns the next query the handler received. It fails at once, with the
+        ///     reason, when the session ended first instead of waiting out the safety timeout.
+        /// </summary>
         public async Task<ReceivedQuery> ReceiveAsync()
         {
             using CancellationTokenSource timeout = new(SafetyTimeout);
-            return await _received.Reader.ReadAsync(timeout.Token);
+            Task<ReceivedQuery> read = _received.Reader.ReadAsync(timeout.Token).AsTask();
+
+            if (await Task.WhenAny(read, RunTask) == RunTask && !read.IsCompleted)
+                throw new InvalidOperationException(
+                    "The session ended before the handler received the query."
+                );
+
+            return await read;
         }
 
         /// <summary>

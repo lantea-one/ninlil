@@ -4,10 +4,10 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST shape of the filtering engine settings (<c>DnsFilterOptions</c>)
-///     that <c>GET /api/filtering-settings</c> returns. Nothing in it is secret, so a
-///     <c>PATCH</c> to the same endpoint accepts the same fields. The lists themselves are managed
-///     through <c>/api/filter-lists</c>.
+///     This record is the REST shape of the filtering engine settings (configuration section
+///     <c>DnsServer:Filtering</c>) that <c>GET /api/filtering-settings</c> returns. Nothing in it
+///     is secret, so a <c>PATCH</c> to the same endpoint accepts the same fields. The lists
+///     themselves are managed through <c>/api/filter-lists</c>.
 /// </summary>
 /// <param name="Enable">Whether block and allow lists are applied at all. Defaults to <see langword="false" />.</param>
 /// <param name="BlockResponseMode">How a blocked query is answered. Defaults to NXDOMAIN.</param>

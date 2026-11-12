@@ -51,8 +51,9 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
             "2001:db8:9999::11"
         );
 
-        _serverPort = GetFreeUdpPort();
-        Dhcpv6ProtocolOptions options = new() { Enable = true, ServerPort = _serverPort };
+        // Port 0 lets the operating system pick the port and the listener report it, so no other
+        // process can take a port number between a probe and the bind.
+        Dhcpv6ProtocolOptions options = new() { Enable = true, ServerPort = 0 };
 
         // Pass the host's service provider so the listener finds IDhcpv6RelayMessageHandler,
         // which is the same Dhcpv6RequestHandler singleton (see AddNinlilDhcpv6ServerCore).
@@ -64,6 +65,7 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
         );
 
         await _listener.StartAsync(CancellationToken.None);
+        _serverPort = _listener.BoundPort;
 
         DateTime deadline = DateTime.UtcNow.AddSeconds(5);
         while (!_listener.IsListening && DateTime.UtcNow < deadline)
@@ -119,7 +121,9 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
         );
 
         byte[] receiveBuffer = new byte[4096];
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(5));
+        // A reply ends the wait at once; the long bound covers the first request, which makes the
+        // engine compile its database queries, on a host busy with other test processes.
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
         SocketReceiveFromResult received = await sender.ReceiveFromAsync(
             receiveBuffer,
             new IPEndPoint(IPAddress.IPv6Any, 0),
@@ -137,7 +141,7 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
             failureReason
         );
         Assert.Equal(Dhcpv6MessageTypeEnum.RelayReply, relayReply.MessageType);
-        // Hop count, link address and peer address are copied unchanged (RFC 8415).
+        // Hop count, link address and peer address are copied unchanged (RFC 9915).
         Assert.Equal(relayForward.HopCount, relayReply.HopCount);
         Assert.Equal(RelayLinkAddress, relayReply.LinkAddress);
         Assert.Equal(ClientPeerAddress, relayReply.PeerAddress);
@@ -167,16 +171,5 @@ public sealed class Dhcpv6RelayReceivingRoundTripTests : IAsyncLifetime
         // The offered address comes from relay-receiving-scope's pool (with one scope, the
         // single-scope fallback would also choose it).
         Assert.Equal(IPAddress.Parse("2001:db8:9999::10"), offered[0].Addresses[0].Address);
-    }
-
-    /// <summary>
-    ///     This method gets an unused high IPv6 UDP port, as
-    ///     <c>Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> does.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using Socket probe = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        probe.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
-        return ((IPEndPoint)probe.LocalEndPoint).Port;
     }
 }

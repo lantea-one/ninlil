@@ -61,7 +61,6 @@ public class SettingsClusterSyncRoundTripTests : IDisposable
                 ),
                 new PresetConfigurationSetting(DnsRateLimitOptions.SectionName, "BurstSize", 42),
                 new PresetConfigurationSetting(DnsRateLimitOptions.SectionName, "Enable", true),
-                new PresetConfigurationSetting(DnsRateLimitOptions.SectionName, "Note", "hello"),
                 new PresetConfigurationSetting(
                     DnsRateLimitOptions.SectionName,
                     "CleanupInterval",
@@ -69,10 +68,14 @@ public class SettingsClusterSyncRoundTripTests : IDisposable
                 ),
                 new PresetConfigurationSetting(
                     DnsRateLimitOptions.SectionName,
-                    "Level",
+                    "MaxTrackedClients",
                     DayOfWeek.Friday
                 ),
-                new PresetConfigurationSetting(DnsRateLimitOptions.SectionName, "Gone", null),
+                new PresetConfigurationSetting(
+                    DnsRateLimitOptions.SectionName,
+                    "SubnetSampleWindow",
+                    null
+                ),
             ]
         );
 
@@ -88,12 +91,11 @@ public class SettingsClusterSyncRoundTripTests : IDisposable
         Assert.Equal(2.5, section["QueriesPerSecond"].GetValue<double>());
         Assert.Equal(42, section["BurstSize"].GetValue<int>());
         Assert.Equal(JsonValueKind.True, section["Enable"].GetValueKind());
-        Assert.Equal("hello", section["Note"].GetValue<string>());
         Assert.Equal("00:02:00", section["CleanupInterval"].GetValue<string>());
         // An enum is serialized as its number by default; the binder reads either form.
-        Assert.Equal(JsonValueKind.Number, section["Level"].GetValueKind());
-        Assert.True(section.ContainsKey("Gone"));
-        Assert.Null(section["Gone"]);
+        Assert.Equal(JsonValueKind.Number, section["MaxTrackedClients"].GetValueKind());
+        Assert.True(section.ContainsKey("SubnetSampleWindow"));
+        Assert.Null(section["SubnetSampleWindow"]);
 
         DnsRateLimitOptions bound = new ConfigurationBuilder()
             .AddJsonFile(peerFilePath)

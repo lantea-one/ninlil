@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Text.Json.Serialization;
 using Ninlil.Dns.Common.Enum;
 
 // Define our namespace.
@@ -29,6 +30,21 @@ public class Nsec3ParamRecordData(byte hashAlgorithm, ushort iterations, byte[] 
     public byte HashAlgorithm { get; } = hashAlgorithm;
 
     /// <summary>
+    ///     This property contains the Flags octet. RFC 5155 §4.1.2 defines no flags and says
+    ///     "NSEC3PARAM RRs with a Flags field value other than zero MUST be ignored", so the
+    ///     value is kept for the consumer to check (<see cref="HasValidFlags" />) and so the
+    ///     record re-encodes as it arrived.
+    /// </summary>
+    public byte Flags { get; init; }
+
+    /// <summary>
+    ///     This property contains whether a consumer may use this record: <see cref="Flags" /> is
+    ///     zero (RFC 5155 §4.1.2).
+    /// </summary>
+    [JsonIgnore]
+    public bool HasValidFlags => Flags == 0;
+
+    /// <summary>
     ///     This property contains how many additional times this zone's NSEC3 chain applies the
     ///     hash.
     /// </summary>
@@ -46,6 +62,7 @@ public class Nsec3ParamRecordData(byte hashAlgorithm, ushort iterations, byte[] 
             ReferenceEquals(this, other)
             || (
                 HashAlgorithm == other.HashAlgorithm
+                && Flags == other.Flags
                 && Iterations == other.Iterations
                 && Salt.AsSpan().SequenceEqual(other.Salt)
             )
@@ -59,6 +76,7 @@ public class Nsec3ParamRecordData(byte hashAlgorithm, ushort iterations, byte[] 
     {
         HashCode hash = new();
         hash.Add(HashAlgorithm);
+        hash.Add(Flags);
         hash.Add(Iterations);
 
         foreach (byte b in Salt)
@@ -84,13 +102,14 @@ public class Nsec3ParamRecordDataCodec : IDnsRecordDataCodec
     {
         byte hashAlgorithm = rdata[0];
 
-        // rdata[1] is the Flags field. RFC 5155 §4.1.2 defines no NSEC3PARAM flags (Opt-Out
-        // belongs to each NSEC3 record, not the zone), so the model has no property for it.
+        // rdata[1] is the Flags field, kept so a consumer can ignore a record whose Flags value
+        // is other than zero (RFC 5155 §4.1.2).
+        byte flags = rdata[1];
         ushort iterations = BinaryPrimitives.ReadUInt16BigEndian(rdata.Slice(2, 2));
         byte saltLength = rdata[4];
         byte[] salt = rdata.Slice(5, saltLength).ToArray();
 
-        return new Nsec3ParamRecordData(hashAlgorithm, iterations, salt);
+        return new Nsec3ParamRecordData(hashAlgorithm, iterations, salt) { Flags = flags };
     }
 
     /// <inheritdoc />
@@ -101,7 +120,7 @@ public class Nsec3ParamRecordDataCodec : IDnsRecordDataCodec
 
         Span<byte> header = buffer.GetSpan(5);
         header[0] = typed.HashAlgorithm;
-        header[1] = 0;
+        header[1] = typed.Flags;
         BinaryPrimitives.WriteUInt16BigEndian(header.Slice(2, 2), typed.Iterations);
         header[4] = (byte)typed.Salt.Length;
         buffer.Advance(5);

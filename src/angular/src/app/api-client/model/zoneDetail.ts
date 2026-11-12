@@ -89,23 +89,23 @@ export interface ZoneDetail {
      */
     cloudSyncInterval?: string;
     /**
-     * Whether CAA auto-management keeps the zone\'s CAA records in step. null inherits `CaaAutoManagementOptions.DefaultEnabled`.
+     * Whether CAA auto-management keeps the zone\'s CAA records in step. null inherits `DnsServer:Acme:CaaAutoManagement:DefaultEnabled`.
      */
     autoManageCaaRecords?: boolean | null;
     /**
-     * The CA issuer domain CAA auto-management writes. null inherits `CaaAutoManagementOptions.DefaultIssuerDomain`.
+     * The CA issuer domain CAA auto-management writes. null inherits `DnsServer:Acme:CaaAutoManagement:DefaultIssuerDomain`.
      */
     caaIssuerDomain?: string | null;
     /**
-     * Whether PTR sync mirrors the zone\'s A and AAAA records into the matching reverse zone. null inherits `PtrSyncOptions.DefaultEnabled`.
+     * Whether PTR sync mirrors the zone\'s A and AAAA records into the matching reverse zone. null inherits `DnsServer:Authoritative:PtrSync:DefaultEnabled`.
      */
     autoManagePtrRecords?: boolean | null;
     /**
-     * The zone\'s IPv4 reverse zone size, in prefix bits. null inherits `PtrSyncOptions.DefaultIpv4ReverseZonePrefixBits`.
+     * The zone\'s IPv4 reverse zone size, in prefix bits. null inherits `DnsServer:Authoritative:PtrSync:DefaultIpv4ReverseZonePrefixBits`.
      */
     ptrIpv4PrefixLength?: number | null;
     /**
-     * The zone\'s IPv6 reverse zone size, in prefix bits. null inherits `PtrSyncOptions.DefaultIpv6ReverseZonePrefixBits`.
+     * The zone\'s IPv6 reverse zone size, in prefix bits. null inherits `DnsServer:Authoritative:PtrSync:DefaultIpv6ReverseZonePrefixBits`.
      */
     ptrIpv6PrefixLength?: number | null;
     /**

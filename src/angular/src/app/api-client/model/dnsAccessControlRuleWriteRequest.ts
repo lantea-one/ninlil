@@ -18,11 +18,11 @@ export interface DnsAccessControlRuleWriteRequest {
      */
     name?: string | null;
     /**
-     * The address or network the rule applies to: a bare IPv4 or IPv6 address (one host, matched exactly) or a network in CIDR notation. A zone index (`fe80::1%2`) and an out-of-range prefix length are rejected with a 400. The value is stored as entered (trimmed) and matched by `DnsAccessControlRuleCache` at query time.
+     * The address or network the rule applies to: a bare IPv4 or IPv6 address (one host, matched exactly) or a network in CIDR notation. A zone index (`fe80::1%2`) and an out-of-range prefix length are rejected with a 400. The value is stored as entered (trimmed) and matched against the client address at query time.
      */
     cidr?: string | null;
     /**
-     * The capabilities the rule grants a client whose source address is in `DnsAccessControlRuleWriteRequest.Cidr`, as an array of `DnsAccessControlCapabilityEnum` member names (for example `[\"RecursionAccess\", \"RateLimitBypass\"]`), not the stored System.FlagsAttribute bitmask. Names are case-sensitive. An empty array is accepted (a rule that grants nothing); an unknown name is rejected with a 400.
+     * The capabilities the rule grants a client whose source address is in `cidr`, as an array of `DnsAccessControlCapabilityEnum` member names (for example `[\"RecursionAccess\", \"RateLimitBypass\"]`), not the stored bitmask. Names are case-sensitive. An empty array is accepted (a rule that grants nothing); an unknown name is rejected with a 400.
      */
     capabilities?: Array<string> | null;
     /**

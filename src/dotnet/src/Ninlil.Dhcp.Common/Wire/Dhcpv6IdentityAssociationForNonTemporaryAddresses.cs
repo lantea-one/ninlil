@@ -6,7 +6,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents RFC 8415 Section 21.4's Identity Association for Non-temporary
+///     This class represents RFC 9915 Section 21.4's Identity Association for Non-temporary
 ///     Addresses (IA_NA) option: a container named by a client-chosen IAID, with the T1/T2 timers
 ///     and nested options, usually one or more <see cref="Dhcpv6IdentityAssociationAddress" />
 ///     options and sometimes a Status Code for the whole association. A message can carry several
@@ -28,7 +28,7 @@ public class Dhcpv6IdentityAssociationForNonTemporaryAddresses
 
     /// <summary>
     ///     This property contains how long after this option is sent the client should wait
-    ///     before asking the assigning server to renew (a RENEW). This is RFC 8415 Section 21.4's
+    ///     before asking the assigning server to renew (a RENEW). This is RFC 9915 Section 21.4's
     ///     "T1" field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan T1 { get; set; }
@@ -36,7 +36,7 @@ public class Dhcpv6IdentityAssociationForNonTemporaryAddresses
     /// <summary>
     ///     This property contains how long after this option is sent the client should wait
     ///     before asking any server to extend the addresses (a REBIND, after an unanswered RENEW).
-    ///     This is RFC 8415 Section 21.4's "T2" field, in whole seconds on the wire.
+    ///     This is RFC 9915 Section 21.4's "T2" field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan T2 { get; set; }
 

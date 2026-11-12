@@ -49,7 +49,7 @@ public class ZoneSigningService(
 {
     /// <summary>
     ///     This constant contains the DS digest type used for generated DS records: 2 (SHA-256),
-    ///     which RFC 8624 makes mandatory to implement.
+    ///     which RFC 9904 §4 makes mandatory to implement.
     /// </summary>
     private const byte DsDigestType = 2;
 
@@ -107,10 +107,10 @@ public class ZoneSigningService(
             )
         )
             logger?.LogWarning(
-                "Zone {Zone}: DNSSEC key {KeyTag} uses algorithm {Algorithm}, which is prohibited for signing (RFC 8624 §3.1); it is not published and signs nothing. Roll the key over to a current algorithm.",
+                "Zone {Zone}: DNSSEC key {KeyTag} is not published and signs nothing. {Reason} Roll the key over to a current algorithm.",
                 zone.Name,
                 skipped.KeyTag,
-                skipped.Algorithm
+                DnssecAlgorithmRegistry.DescribeSigningRefusal(skipped.Algorithm)
             );
 
         List<DnssecKeyEntity> activeKeys =
@@ -150,7 +150,10 @@ public class ZoneSigningService(
         // written as RDATA is left out with a Warning: throwing here would stop the whole zone
         // from signing, and it would serve its older signatures until they expire.
         Dictionary<DnsName, List<RecordEntity>> recordsByName = storedRecords
-            .Where(record => !record.IsDisabled && CanWriteRdata(record, zone.Name))
+            .Where(record =>
+                !record.IsDisabled
+                && RecordEntityCodec.CanWriteRdata(record, zone.Name, "the signed zone", logger)
+            )
             .GroupBy(record => DnsName.Parse(record.Name))
             .ToDictionary(group => group.Key, group => group.ToList());
 
@@ -355,7 +358,7 @@ public class ZoneSigningService(
                 await zoneRepository.ListAsync(zone => zone.Name == delegationName, stoppingToken)
             ).FirstOrDefault();
 
-            if (childZone is not { IsDnssecSigned: true })
+            if (!DelegationDsKeys.ContributesDs(childZone))
                 continue;
 
             IReadOnlyList<DnssecKeyEntity> childKeys = await keyRepository.ListByZoneIdAsync(
@@ -363,21 +366,15 @@ public class ZoneSigningService(
                 stoppingToken
             );
 
-            // One DS per Active KSK of the child with a permitted algorithm; a child whose keys
-            // are all prohibited is served unsigned, so its parent publishes an insecure
-            // delegation. In a Double-Signature KSK rollover (RFC 6781
-            // §4.1.2) the parent swaps the DS at the "DS change" stage rather than publishing
-            // both, so a KSK in DoubleSignature (incoming or outgoing) gets no DS here.
-            // DnssecKeyRolloverBackgroundService promotes the incoming KSK to Active, which moves
-            // the DS to it.
+            // One DS per key DelegationDsKeys.GetsDs accepts (an Active KSK with a permitted
+            // algorithm); a child whose keys are all prohibited is served unsigned, so its parent
+            // publishes an insecure delegation. A KSK in DoubleSignature gets no DS here (RFC 6781
+            // §4.1.2). DnssecKeyRolloverBackgroundService promotes the incoming KSK to Active,
+            // which moves the DS to it. SignedZoneCache re-signs this zone when that set changes.
             List<DnsResourceRecord> dsRecords =
             [
                 .. childKeys
-                    .Where(key =>
-                        key.LifecycleState == DnssecKeyLifecycleStateEnum.Active
-                        && key.Role == DnssecKeyRoleEnum.Ksk
-                        && !DnssecAlgorithmRegistry.IsSigningProhibited(key.Algorithm)
-                    )
+                    .Where(DelegationDsKeys.GetsDs)
                     .Select(childKsk =>
                     {
                         byte[] childDnsKeyRdata = EncodeDnsKeyRdata(childKsk);
@@ -808,36 +805,6 @@ public class ZoneSigningService(
         );
 
         return (records, nsec3ParamRecord);
-    }
-
-    /// <summary>
-    ///     This method reports whether a stored record can be written as RDATA, and logs a Warning
-    ///     naming the record when it cannot. A record with no registered codec passes: it is not
-    ///     served, so the signer has nothing to say about it.
-    /// </summary>
-    /// <param name="record">The stored record to try.</param>
-    /// <param name="zoneName">The zone's name, for the Warning.</param>
-    /// <returns>Whether signing may use <paramref name="record" />.</returns>
-    private bool CanWriteRdata(RecordEntity record, string zoneName)
-    {
-        try
-        {
-            DnsName ownerName = DnsName.Parse(record.Name);
-            RecordEntityCodec.ToWireRecord(record, ownerName);
-            return true;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            logger?.LogWarning(
-                "Zone {Zone}: the {Type} record '{Name}' ({RecordId}) holds data that cannot be written as RDATA ({Reason}); it is left out of the signed zone. Edit or delete the record.",
-                zoneName,
-                record.Type,
-                record.Name,
-                record.Id,
-                exception.Message
-            );
-            return false;
-        }
     }
 
     /// <summary>

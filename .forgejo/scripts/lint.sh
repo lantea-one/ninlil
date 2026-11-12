@@ -10,17 +10,20 @@
 #   1. shellcheck -x -S style on every *.sh under .forgejo/scripts, docker, src/script and src/linux-packages.
 #   2. actionlint on .forgejo/workflows/*.yml with .forgejo/actionlint.yaml. actionlint has no
 #      Forgejo mode, so the workflows are copied to a temporary .github/workflows with the
-#      forgejo context renamed to github, which has the same shape. It does not treat
-#      forgejo.ref_name as untrusted input; the "no ${{ }} in a run: body" rule is kept by review.
+#      forgejo context renamed to github (a host name such as code.forgejo.org stays), which has
+#      the same shape. It does not treat forgejo.ref_name as untrusted input; the "no ${{ }} in a
+#      run: body" rule is kept by review.
 #   3. No tracked C# file uses a block-scoped namespace (`namespace X {`). The code base uses
 #      file-scoped ones only; `dotnet ef migrations add` writes block-scoped ones, which
 #      src/script/development/file-scoped-namespaces.sh converts.
 #   4. The agent definitions of every coding assistant (.claude/, .gemini/, .agents/, .codex/)
 #      match the roles in src/agents/ (src/script/development/sync-agent-definitions.py --check).
-#   5. Every .forgejo/scripts/tests/*.test.sh.
+#   5. Every relative link and #anchor in the tracked Markdown files resolves
+#      (.forgejo/scripts/check-markdown-links.py; external URLs are not fetched).
+#   6. Every .forgejo/scripts/tests/*.test.sh.
 #
 # Inputs: none; run from anywhere (it changes to the repository root). Needs shellcheck,
-# actionlint, find and the tools the tests need. Outputs: tool output on stdout/stderr and a
+# actionlint, python3, find and the tools the tests need. Outputs: tool output on stdout/stderr and a
 # summary line. Exit status: 0 when every step passes, 1 otherwise.
 
 set -euo pipefail
@@ -48,7 +51,7 @@ trap 'rm -rf "${work}"' EXIT
 git init --quiet "${work}"
 mkdir -p "${work}/.github/workflows"
 for workflow in .forgejo/workflows/*.yml; do
-    sed -e 's/forgejo\./github./g' -e 's#\.forgejo/workflows/#.github/workflows/#g' \
+    sed -E -e 's/(^|[^.A-Za-z0-9_\/-])forgejo\./\1github./g' -e 's#\.forgejo/workflows/#.github/workflows/#g' \
         "${workflow}" > "${work}/.github/workflows/$(basename "${workflow}")"
 done
 if (cd "${work}" && actionlint -config-file "${repository_root}/.forgejo/actionlint.yaml"); then
@@ -71,6 +74,11 @@ if python3 src/script/development/sync-agent-definitions.py --check; then
     :
 else
     failed+=('agent definitions')
+fi
+
+echo '== markdown links'
+if ! python3 -I .forgejo/scripts/check-markdown-links.py; then
+    failed+=('markdown links')
 fi
 
 echo '== script self-tests'

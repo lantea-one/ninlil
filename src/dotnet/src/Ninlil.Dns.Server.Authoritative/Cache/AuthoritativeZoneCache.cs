@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
@@ -13,14 +14,23 @@ namespace Ninlil.Dns.Server.Authoritative.Cache;
 ///     This class holds every hosted zone in memory as a <see cref="CachedZone" />, keyed by zone
 ///     name, so <see cref="Resolution.AuthoritativeQueryResolver" /> and
 ///     <see cref="Transfer.ZoneTransferService" /> never query the database per request. It loads
-///     every answerable zone at startup, and <see cref="ZoneChangedEventSubscriber" /> reloads one
-///     zone on each <c>DnsZoneChangedEvent</c>.
+///     every answerable zone at startup, <see cref="ZoneChangedEventSubscriber" /> reloads one
+///     zone on each <c>DnsZoneChangedEvent</c> of this instance, and
+///     <see cref="ZoneCacheBackstopService" /> reloads a zone that another instance sharing the
+///     database changed, at most 60 seconds after the change.
 /// </summary>
 /// <param name="scopeFactory">
 ///     The factory used to reach the repositories, one scope per load so no database context is
 ///     held longer than needed.
 /// </param>
-public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : IHostedService
+/// <param name="logger">
+///     The logger for the Warning about each stored record a load leaves out because its data
+///     cannot be written as RDATA (<see cref="CachedZone" />). <see langword="null" /> logs nothing.
+/// </param>
+public sealed class AuthoritativeZoneCache(
+    IServiceScopeFactory scopeFactory,
+    ILogger<AuthoritativeZoneCache> logger = null
+) : IHostedService
 {
     /// <summary>
     ///     This field contains every cached zone, keyed by name.
@@ -30,21 +40,44 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        // A plain scope reads the primary. This cache is reloaded only at startup and after a
-        // change event, never on a timer, so every load follows a write that a replica may not
-        // have yet. Do not use CreateReplicaReadScope here.
+        // A plain scope reads the primary. A startup load and an event reload follow a write that
+        // a replica may not have yet; do not use CreateReplicaReadScope here. Only the change
+        // detection of ZoneCacheBackstopService reads a replica, and it never writes this cache.
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        IZoneRepository zoneRepository =
-            scope.ServiceProvider.GetRequiredService<IZoneRepository>();
-        IRecordRepository recordRepository =
-            scope.ServiceProvider.GetRequiredService<IRecordRepository>();
+
+        (List<ZoneEntity> answerableZones, ILookup<Guid, RecordEntity> recordsByZoneId) =
+            await ReadStoredZonesAsync(scope.ServiceProvider, cancellationToken);
+
+        foreach (ZoneEntity zone in answerableZones)
+            _zonesByName[DnsName.Parse(zone.Name)] = new CachedZone(
+                zone,
+                [.. recordsByZoneId[zone.Id]],
+                logger
+            );
+    }
+
+    /// <summary>
+    ///     This method reads every enabled, answerable zone and the records of all of them. The
+    ///     startup load and the change detection of <see cref="ZoneCacheBackstopService" /> share
+    ///     it, so both see the same set of zones.
+    /// </summary>
+    /// <param name="services">The service provider of the scope (primary or replica) to read from.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>The answerable zones and their records, grouped by zone identifier.</returns>
+    internal static async Task<(
+        List<ZoneEntity> AnswerableZones,
+        ILookup<Guid, RecordEntity> RecordsByZoneId
+    )> ReadStoredZonesAsync(IServiceProvider services, CancellationToken stoppingToken)
+    {
+        IZoneRepository zoneRepository = services.GetRequiredService<IZoneRepository>();
+        IRecordRepository recordRepository = services.GetRequiredService<IRecordRepository>();
 
         // See IsAnswerableZoneType for which types load. It is applied in memory after the
         // IsDisabled filter because EF Core cannot translate a C# method call to SQL and would
         // throw at query time.
         IReadOnlyList<ZoneEntity> everyEnabledZone = await zoneRepository.ListAsync(
             zone => !zone.IsDisabled,
-            cancellationToken
+            stoppingToken
         );
 
         List<ZoneEntity> answerableZones =
@@ -52,20 +85,23 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
             .. everyEnabledZone.Where(zone => IsAnswerableZoneType(zone.Type)),
         ];
 
-        // One query for the records of every zone, not one per zone, so the number of queries at
-        // startup does not grow with the number of zones.
+        // One query for the records of every zone, not one per zone, so the number of queries
+        // does not grow with the number of zones.
         IReadOnlyList<RecordEntity> everyRecord = await recordRepository.ListByZoneIdsAsync(
             [.. answerableZones.Select(zone => zone.Id)],
-            cancellationToken
+            stoppingToken
         );
-        ILookup<Guid, RecordEntity> recordsByZoneId = everyRecord.ToLookup(record => record.ZoneId);
 
-        foreach (ZoneEntity zone in answerableZones)
-            _zonesByName[DnsName.Parse(zone.Name)] = new CachedZone(
-                zone,
-                [.. recordsByZoneId[zone.Id]]
-            );
+        return (answerableZones, everyRecord.ToLookup(record => record.ZoneId));
     }
+
+    /// <summary>
+    ///     This method lists the cached zones, a read-only view for
+    ///     <see cref="ZoneCacheBackstopService" /> to compare with the database. Nothing it
+    ///     returns can change the cache.
+    /// </summary>
+    /// <returns>A snapshot of the cached zones.</returns>
+    public IReadOnlyCollection<CachedZone> GetCachedZones() => [.. _zonesByName.Values];
 
     /// <inheritdoc />
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -141,9 +177,9 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
     public async Task ReloadZoneAsync(Guid zoneId, CancellationToken stoppingToken = default)
     {
-        // A plain scope reads the primary. This cache is reloaded only at startup and after a
-        // change event, never on a timer, so every load follows a write that a replica may not
-        // have yet. Do not use CreateReplicaReadScope here.
+        // A plain scope reads the primary, also when ZoneCacheBackstopService calls this after
+        // it detected a change: the reload must see the newest row, and a replica may lag
+        // behind it. Do not use CreateReplicaReadScope here.
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IZoneRepository zoneRepository =
             scope.ServiceProvider.GetRequiredService<IZoneRepository>();
@@ -194,7 +230,7 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
             stoppingToken
         );
 
-        _zonesByName[DnsName.Parse(zone.Name)] = new CachedZone(zone, records);
+        _zonesByName[DnsName.Parse(zone.Name)] = new CachedZone(zone, records, logger);
     }
 
     /// <summary>
@@ -220,7 +256,7 @@ public sealed class AuthoritativeZoneCache(IServiceScopeFactory scopeFactory) : 
     ///         only their apex SOA and forwards everything else.
     ///     </para>
     /// </summary>
-    private static bool IsAnswerableZoneType(ZoneTypeEnum zoneType) =>
+    internal static bool IsAnswerableZoneType(ZoneTypeEnum zoneType) =>
         zoneType
             is ZoneTypeEnum.Primary
                 or ZoneTypeEnum.Secondary

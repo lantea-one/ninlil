@@ -69,11 +69,16 @@ public sealed class SystemBackupServiceArchiveValidationTests : IAsyncLifetime
                 SelfSignedCertificateStatePath = Path.Combine(_rootDirectory, "unused.pfx"),
             }
         );
+        builder.Services.AddSingleton(
+            new BackupPathSettings
+            {
+                DataProtectionKeyRingDirectory = _keyRingDirectory,
+                RuntimeConfigurationFilePath = _configurationPath,
+            }
+        );
         builder.Services.AddNinlilDnsServerBackup(builder.Configuration);
         builder.Services.PostConfigure<BackupOptions>(options =>
         {
-            options.DataProtectionKeyRingDirectory = _keyRingDirectory;
-            options.RuntimeConfigurationFilePath = _configurationPath;
             options.MinimumPassphraseLength = 8;
         });
 
@@ -89,8 +94,7 @@ public sealed class SystemBackupServiceArchiveValidationTests : IAsyncLifetime
     {
         _host.Dispose();
 
-        if (Directory.Exists(_rootDirectory))
-            Directory.Delete(_rootDirectory, recursive: true);
+        TemporaryFiles.DeleteDirectory(_rootDirectory);
 
         return Task.CompletedTask;
     }
@@ -279,6 +283,66 @@ public sealed class SystemBackupServiceArchiveValidationTests : IAsyncLifetime
                 );
     }
 
+    /// <summary>
+    ///     A key ring the host's check refuses stops the restore with the check's message and
+    ///     leaves the database, key ring and configuration as they were.
+    /// </summary>
+    [Fact]
+    public async Task AKeyRingTheHostCannotReadIsRejectedWithTheChecksMessageAndNothingChanges()
+    {
+        byte[] archive = await CreateArchiveAsync();
+        FakeKeyRingRestoreCheck check = new("The key ring is encrypted with DPAPI. Set X.");
+        SystemBackupService service = CreateService(long.MaxValue, check);
+        Snapshot before = await TakeSnapshotAsync();
+
+        BackupArchiveInvalidException exception =
+            await Assert.ThrowsAsync<BackupArchiveInvalidException>(() =>
+                service.RestoreBackupAsync(new MemoryStream(archive), null)
+            );
+
+        Assert.Equal("The key ring is encrypted with DPAPI. Set X.", exception.Message);
+        Assert.NotEmpty(check.CheckedFileNames);
+        await AssertUnchangedAsync(before);
+    }
+
+    /// <summary>
+    ///     A key ring the check accepts is restored, and the check saw the archive's key files.
+    /// </summary>
+    [Fact]
+    public async Task AKeyRingTheHostCanReadIsRestoredAfterTheCheck()
+    {
+        byte[] archive = await CreateArchiveAsync();
+        string[] archiveKeyFiles = Directory
+            .GetFiles(_keyRingDirectory, "key-*.xml")
+            .Select(Path.GetFileName)
+            .ToArray();
+        FakeKeyRingRestoreCheck check = new(null);
+
+        await CreateService(long.MaxValue, check)
+            .RestoreBackupAsync(new MemoryStream(archive), null);
+
+        Assert.Equal(
+            archiveKeyFiles.OrderBy(name => name),
+            check.CheckedFileNames.OrderBy(name => name)
+        );
+    }
+
+    /// <summary>
+    ///     A restore that leaves files alone does not run the check, because it reads no key
+    ///     into the key ring.
+    /// </summary>
+    [Fact]
+    public async Task ARestoreWithoutFilesDoesNotRunTheKeyRingCheck()
+    {
+        byte[] archive = await CreateArchiveAsync();
+        FakeKeyRingRestoreCheck check = new("refused");
+
+        await CreateService(long.MaxValue, check)
+            .RestoreBackupAsync(new MemoryStream(archive), null, restoreFiles: false);
+
+        Assert.Empty(check.CheckedFileNames);
+    }
+
     [Fact]
     public async Task APlainKeyRingDirectoryEntryDoesNotBreakTheRestore()
     {
@@ -373,21 +437,21 @@ public sealed class SystemBackupServiceArchiveValidationTests : IAsyncLifetime
         await service.RestoreBackupAsync(new MemoryStream(archive), null);
     }
 
-    private SystemBackupService CreateService(long maximumRestoredPayloadBytes)
+    private SystemBackupService CreateService(
+        long maximumRestoredPayloadBytes,
+        IKeyRingRestoreCheck keyRingRestoreCheck = null
+    )
     {
-        BackupOptions options = new()
-        {
-            DataProtectionKeyRingDirectory = _keyRingDirectory,
-            RuntimeConfigurationFilePath = _configurationPath,
-            MaximumRestoredPayloadBytes = maximumRestoredPayloadBytes,
-        };
+        BackupOptions options = new() { MaximumRestoredPayloadBytes = maximumRestoredPayloadBytes };
 
         return new SystemBackupService(
             _host.Services.GetRequiredService<IServiceScopeFactory>(),
             Microsoft.Extensions.Options.Options.Create(options),
+            _host.Services.GetRequiredService<BackupPathSettings>(),
             _host.Services.GetRequiredService<TlsCertificateOptions>(),
             _host.Services.GetRequiredService<StorageOptions>(),
-            NullLogger<SystemBackupService>.Instance
+            NullLogger<SystemBackupService>.Instance,
+            keyRingRestoreCheck
         );
     }
 
@@ -481,6 +545,27 @@ public sealed class SystemBackupServiceArchiveValidationTests : IAsyncLifetime
             started.TrySetResult();
             await release;
             return await base.ReadAsync(buffer, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    ///     This class is a fake <see cref="IKeyRingRestoreCheck" /> that records the key file
+    ///     names it is given and answers with a fixed message, or <see langword="null" /> to
+    ///     accept.
+    /// </summary>
+    /// <param name="answer">The refusal message, or <see langword="null" /> to accept.</param>
+    private sealed class FakeKeyRingRestoreCheck(string answer) : IKeyRingRestoreCheck
+    {
+        /// <summary>
+        ///     This property contains the key file names of every call so far.
+        /// </summary>
+        public List<string> CheckedFileNames { get; } = [];
+
+        /// <inheritdoc />
+        public string Check(IReadOnlyList<(string FileName, byte[] Bytes)> keyFiles)
+        {
+            CheckedFileNames.AddRange(keyFiles.Select(file => file.FileName));
+            return answer;
         }
     }
 }

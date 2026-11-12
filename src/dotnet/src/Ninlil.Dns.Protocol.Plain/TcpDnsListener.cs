@@ -61,7 +61,8 @@ public sealed class TcpDnsListener(
     private readonly ZoneTransferRequestRunner _transferRunner = new(
         scopeFactory,
         rateLimiter,
-        eventPublisher
+        eventPublisher,
+        logger
     );
 
     /// <summary>
@@ -97,6 +98,13 @@ public sealed class TcpDnsListener(
     ///     as "address (reason)", for the health check.
     /// </summary>
     public IReadOnlyList<string> FailedListenAddresses => _listenSockets.FailedAddresses;
+
+    /// <summary>
+    ///     This property contains the port of the first bound socket (0 while nothing is bound).
+    ///     A listener configured with port 0 gets its port from the operating system; this is how
+    ///     a caller reads it.
+    /// </summary>
+    public int BoundPort => _listenSockets.BoundPort;
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -186,6 +194,7 @@ public sealed class TcpDnsListener(
     private async Task HandleConnectionAsync(Socket connection, CancellationToken stoppingToken)
     {
         IPEndPoint remoteEndpoint = (IPEndPoint)connection.RemoteEndPoint;
+        bool lingeringClose = false;
         // Every write is a complete reply batch that a client is waiting for. With Nagle's
         // algorithm on (it holds a small segment while earlier data is unacknowledged), the next
         // batch of a pipelined connection waits for the client's delayed acknowledgement, which is
@@ -207,6 +216,7 @@ public sealed class TcpDnsListener(
                 (messageBytes, _, sessionToken) =>
                     HandleMessageAsync(messageBytes, remoteEndpoint.Address, session, sessionToken)
             );
+            lingeringClose = session.ClosedAfterDrain;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -218,7 +228,17 @@ public sealed class TcpDnsListener(
         }
         finally
         {
-            connection.Close();
+            // After a transfer the client may have sent a message the session never read; a plain
+            // close would reset the connection and could destroy the last reply.
+            if (lingeringClose)
+                await LingeringSocketClose.CloseAsync(
+                    connection,
+                    LingeringSocketClose.DefaultMaxWait,
+                    stoppingToken
+                );
+            else
+                connection.Close();
+
             _connectionLimiter.Release();
         }
     }

@@ -21,8 +21,10 @@ namespace Ninlil.Dns.Protocol.Plain.Tests;
 ///     bytes for the life of the query, so every datagram must reach it in an array of its own;
 ///     one test holds a first query inside the resolver while a second arrives and checks the
 ///     first one's bytes did not change. The other tests check that many clients get exactly
-///     one correct answer each and that stopping the listener ends its receive loops without a
-///     warning in the log.
+///     one correct answer each, that stopping the listener ends its receive loops without a
+///     warning in the log, and (Windows only) that a client closing its port before the reply
+///     neither logs a warning nor blocks the next query. The listener binds port 0 and the tests
+///     read the port from <see cref="UdpDnsListener.BoundPort" />.
 /// </summary>
 public sealed class UdpReceiveTests
 {
@@ -136,6 +138,40 @@ public sealed class UdpReceiveTests
         Assert.DoesNotContain(logger.Entries, entry => entry.Level >= LogLevel.Warning);
     }
 
+    [Fact]
+    public async Task AClientThatClosesItsPortBeforeTheReply_DoesNotLogAWarningOrBlockTheNextQuery()
+    {
+        // On Windows the reply to a closed port makes the stack report an ICMP port-unreachable,
+        // which fails the listener's next receive with ConnectionReset (10054) unless the
+        // socket turned that off (SIO_UDP_CONNRESET). Windows only.
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        CapturingLogger<UdpDnsListener> logger = new();
+        await using Host host = await Host.StartAsync(holdFirstQuery: true, logger);
+
+        // The first query is held in the resolver, so the client can close its port before the
+        // reply goes out.
+        using (UdpClient vanishing = new(AddressFamily.InterNetwork))
+        {
+            vanishing.Connect(IPAddress.Loopback, host.Port);
+            await vanishing.SendAsync(DnsMessageWriter.Write(BuildQuery(1, "vanishing.example.")));
+            await host.Resolver.FirstQueryHeld.Task.WaitAsync(Timeout);
+        }
+
+        host.Resolver.ReleaseFirstQuery();
+
+        // Give the reply, the ICMP message and the receive that would fail time to happen.
+        await Task.Delay(500);
+
+        using UdpClient next = new(AddressFamily.InterNetwork);
+        next.Connect(IPAddress.Loopback, host.Port);
+        await next.SendAsync(DnsMessageWriter.Write(BuildQuery(2, "next.example.")));
+
+        Assert.Equal(2, await ReceiveIdAsync(next));
+        Assert.DoesNotContain(logger.Entries, entry => entry.Level >= LogLevel.Warning);
+    }
+
     private static async Task<List<ushort>> RunClientAsync(int port, int client, int count)
     {
         using UdpClient udp = new(AddressFamily.InterNetwork);
@@ -184,7 +220,7 @@ public sealed class UdpReceiveTests
         private DnsQueryProcessingPipeline _pipeline;
         private UdpDnsListener _udp;
 
-        public int Port { get; private init; }
+        public int Port { get; private set; }
 
         public CapturingResolver Resolver { get; private init; }
 
@@ -193,11 +229,7 @@ public sealed class UdpReceiveTests
             ILogger<UdpDnsListener> listenerLogger = null
         )
         {
-            Host host = new()
-            {
-                Port = LocalAddresses.GetFreePort(),
-                Resolver = new CapturingResolver(holdFirstQuery),
-            };
+            Host host = new() { Resolver = new CapturingResolver(holdFirstQuery) };
 
             host._pipeline = new DnsQueryProcessingPipeline(
                 new DnsQueryDispatcher([host.Resolver], new NoOpEventPublisher()),
@@ -211,18 +243,27 @@ public sealed class UdpReceiveTests
             host._udp = new UdpDnsListener(
                 host._pipeline,
                 new StaticOptionsMonitor<PlainProtocolOptions>(
-                    new PlainProtocolOptions { Port = host.Port, ListenAddresses = "127.0.0.1" }
+                    new PlainProtocolOptions { Port = 0, ListenAddresses = "127.0.0.1" }
                 ),
                 listenerLogger ?? NullLogger<UdpDnsListener>.Instance
             );
             await host._udp.StartAsync(CancellationToken.None);
 
-            // BackgroundService runs ExecuteAsync (which binds) as a continuation, so wait for
-            // the listener to report that it is receiving.
-            for (int attempt = 0; attempt < 500 && !host._udp.IsListening; attempt++)
+            // The listener binds in ExecuteAsync, which may run after StartAsync returns, so wait
+            // until it reports listening or a failed bind.
+            for (
+                int attempt = 0;
+                attempt < 3000
+                    && !host._udp.IsListening
+                    && host._udp.FailedListenAddresses.Count == 0;
+                attempt++
+            )
                 await Task.Delay(10);
 
             Assert.True(host._udp.IsListening);
+
+            // The listener asked the OS for a port; read the one it got.
+            host.Port = host._udp.BoundPort;
             return host;
         }
 

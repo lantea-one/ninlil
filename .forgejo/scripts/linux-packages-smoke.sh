@@ -11,7 +11,7 @@
 # limits anonymous pulls from shared runners.
 #
 # Usage: linux-packages-smoke.sh <packages-directory>
-#   The directory holds the packages linux-packages.sh built (ninlil_*_<arch>.deb,
+#   The directory holds the packages linux-packages.sh built (ninlil-*-<arch>.deb,
 #   ninlil-*.<arch>.rpm).
 #
 # Environment:

@@ -8,10 +8,10 @@ namespace Ninlil.Dhcp.Common.OptionCatalog;
 /// <summary>
 ///     This static class is the read-only metadata catalog of DHCPv6 options, the counterpart of
 ///     <see cref="Dhcpv4OptionCatalog" />. It is written from the IANA DHCPv6 Option Codes registry
-///     and the text of RFC 8415, RFC 3646 and RFC 5970, under the clean-room rule in
+///     and the text of RFC 9915, RFC 3646 and RFC 5970, under the clean-room rule in
 ///     <c>NOTICE.md</c>.
 ///     <para>
-///         <b>Scope.</b> The list is short. Most RFC 8415 options are protocol mechanics with
+///         <b>Scope.</b> The list is short. Most RFC 9915 options are protocol mechanics with
 ///         their own wire types (the IA options, IA Address and IA Prefix, Status Code, Rapid
 ///         Commit, Elapsed Time, Option Request, Preference, Client and Server Identifier, Relay
 ///         Message, Interface-ID, Remote-ID), or information only clients send (Client FQDN, User
@@ -38,12 +38,12 @@ public static class Dhcpv6OptionCatalog
     /// </summary>
     public static IReadOnlyList<DhcpOptionCatalogEntry> Entries { get; } =
     [
-        // RFC 8415 §21.17: a 4-octet IANA Enterprise Number followed by a nested
+        // RFC 9915 §21.17: a 4-octet IANA Enterprise Number followed by a nested
         // code/length/data list, the counterpart of the DHCPv4 Vendor Specific Information option.
         new DhcpOptionCatalogEntry(
             17,
             "Vendor-specific Information",
-            "RFC 8415 §21.17 -- a 4-octet IANA Enterprise Number followed by opaque, vendor-defined encapsulated option data.",
+            "RFC 9915 §21.17 -- a 4-octet IANA Enterprise Number followed by opaque, vendor-defined encapsulated option data.",
             DhcpOptionValueTypeEnum.OpaqueHex,
             IsServerAddressEligible: false
         ),
@@ -66,11 +66,11 @@ public static class Dhcpv6OptionCatalog
             DhcpOptionValueTypeEnum.DomainNameList,
             IsServerAddressEligible: false
         ),
-        // RFC 8415 §21.23.
+        // RFC 9915 §21.23.
         new DhcpOptionCatalogEntry(
             32,
             "Information Refresh Time",
-            "RFC 8415 §21.23 -- the duration, in seconds, a stateless client should wait before refreshing information via a new Information-Request.",
+            "RFC 9915 §21.23 -- the duration, in seconds, a stateless client should wait before refreshing information via a new Information-Request.",
             DhcpOptionValueTypeEnum.Duration,
             IsServerAddressEligible: false
         ),

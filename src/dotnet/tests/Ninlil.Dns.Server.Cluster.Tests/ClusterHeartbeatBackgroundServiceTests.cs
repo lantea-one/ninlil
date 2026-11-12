@@ -71,8 +71,7 @@ public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
         _certificateProvider.Dispose();
 
         TemporaryFiles.DeleteSqliteDatabase(_databasePath);
-        if (File.Exists(_certificateStatePath))
-            File.Delete(_certificateStatePath);
+        TemporaryFiles.DeleteFile(_certificateStatePath);
     }
 
     /// <summary>
@@ -173,6 +172,7 @@ public sealed class ClusterHeartbeatBackgroundServiceTests : IDisposable
             ),
             new FixedOptionsMonitor<ClusterOptions>(options),
             _certificateProvider,
+            new Backfill.ClusterBackfillTestHost.FakeRunner(),
             NullLogger<ClusterHeartbeatBackgroundService>.Instance
         );
 

@@ -27,11 +27,13 @@ namespace Ninlil.Dns.Protocol.DnsOverHttps;
 ///     </para>
 /// </summary>
 /// <param name="pipeline">The pipeline every query is enqueued onto.</param>
-/// <param name="options">The port, path, message size limit and certificate, read at start.</param>
+/// <param name="options">The enable flag, path and message size limit, read at start.</param>
+/// <param name="listenerOptions">The port and certificate of the Kestrel server started here.</param>
 /// <param name="logger">The logger used for certificate loading and startup.</param>
 public sealed class DnsOverHttpsHostedService(
     DnsQueryProcessingPipeline pipeline,
     IOptions<DnsOverHttpsOptions> options,
+    IOptions<DnsOverHttpsListenerOptions> listenerOptions,
     ILogger<DnsOverHttpsHostedService> logger
 ) : IHostedService
 {
@@ -55,9 +57,9 @@ public sealed class DnsOverHttpsHostedService(
             return;
 
         _certificateProvider = new ReloadableTlsCertificateProvider(
-            options.Value.Certificate,
+            listenerOptions.Value.Certificate,
             logger,
-            options.Value.Certificate.CertificateReloadPollInterval
+            listenerOptions.Value.Certificate.CertificateReloadPollInterval
         );
 
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -70,7 +72,7 @@ public sealed class DnsOverHttpsHostedService(
 
             kestrel.Listen(
                 IPAddress.IPv6Any,
-                options.Value.Port,
+                listenerOptions.Value.Port,
                 listenOptions =>
                 {
                     listenOptions.Protocols = HttpProtocols.Http1AndHttp2;
@@ -78,7 +80,10 @@ public sealed class DnsOverHttpsHostedService(
                     {
                         httpsOptions.ServerCertificateSelector = (_, _) =>
                             _certificateProvider.Current;
-                        httpsOptions.SslProtocols = options.Value.Certificate.AllowedProtocols;
+                        httpsOptions.SslProtocols = listenerOptions
+                            .Value
+                            .Certificate
+                            .AllowedProtocols;
                     });
                 }
             );
@@ -125,7 +130,7 @@ public sealed class DnsOverHttpsHostedService(
 
         logger.LogInformation(
             "DNS-over-HTTPS listening on port {Port}, path '{Path}'.",
-            options.Value.Port,
+            listenerOptions.Value.Port,
             options.Value.Path
         );
     }

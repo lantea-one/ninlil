@@ -221,7 +221,7 @@ public sealed class Dhcpv6DnsIntegrationEndToEndTests : IAsyncLifetime
             RemoteEndPoint,
             CancellationToken.None
         );
-        // Unlike DHCPv4, a DHCPv6 server replies to a RELEASE (RFC 8415).
+        // Unlike DHCPv4, a DHCPv6 server replies to a RELEASE (RFC 9915).
         Assert.NotNull(releaseReply);
         Assert.True(
             releaseReply.TryGetIdentityAssociationsForNonTemporaryAddresses(

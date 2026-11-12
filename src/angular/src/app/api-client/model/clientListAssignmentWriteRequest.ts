@@ -14,7 +14,7 @@
  */
 export interface ClientListAssignmentWriteRequest { 
     /**
-     * The `DnsFilterListEntity` to assign to the client.
+     * The filter list to assign to the client.
      */
     listId?: string;
 }

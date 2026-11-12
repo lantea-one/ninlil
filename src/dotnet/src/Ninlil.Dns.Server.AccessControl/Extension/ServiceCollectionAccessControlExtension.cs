@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Ninlil.Dns.Server.Core.AccessControl;
 using Ninlil.Dns.Server.Core.Events;
@@ -31,6 +32,12 @@ public static class ServiceCollectionAccessControlExtension
         instance.AddSingleton<IHostedService>(provider =>
             provider.GetRequiredService<DnsAccessControlRuleCache>()
         );
+
+        // Reloads the rule set every minute, so a rule changed on another instance that shares the
+        // database takes effect here. Registered after the cache, which the host starts first.
+        // TryAdd keeps a clock another extension or a test registered.
+        instance.TryAddSingleton(TimeProvider.System);
+        instance.AddHostedService<DnsAccessControlRuleBackstopService>();
 
         // Singleton, not scoped: RecursiveQueryResolver and TokenBucketDnsRateLimiter are
         // singletons that take IDnsAccessControlEngine in their constructors, so a scoped

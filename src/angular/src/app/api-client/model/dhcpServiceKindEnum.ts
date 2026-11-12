@@ -10,7 +10,7 @@
 
 
 /**
- * This enumeration names the four DHCP-family services that `DhcpServiceControlController` reports on and controls, one per registered `IDhcpProtocolService` implementation. The `{kind}` route segment of `POST /api/dhcp-services/{kind}/start` and `POST /api/dhcp-services/{kind}/stop` binds to it case-insensitively (the ASP.NET Core default for an enum), so an unknown segment fails model binding before the action runs.
+ * This enumeration names the four DHCP-family services that `/api/dhcp-services` reports on and controls, one per service. The `{kind}` route segment of `POST /api/dhcp-services/{kind}/start` and `POST /api/dhcp-services/{kind}/stop` binds to it by declared name only, case-insensitively, so a digit string or an unknown segment fails model binding with 400 before the action runs.
  */
 export const DhcpServiceKindEnum = {
     Dhcpv4: 'Dhcpv4',

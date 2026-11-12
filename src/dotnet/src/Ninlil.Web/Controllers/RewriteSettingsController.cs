@@ -38,8 +38,8 @@ namespace Ninlil.Web.Controllers;
 /// </param>
 /// <param name="stateRepository">
 ///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
-///     <see cref="RewriteSettingsDetail.LastModifiedUtc" /> and
-///     <see cref="RewriteSettingsDetail.OriginatingNodeId" />.
+///     <c>RewriteSettingsDetail.lastModifiedUtc</c> and
+///     <c>RewriteSettingsDetail.originatingNodeId</c>.
 /// </param>
 [ApiController]
 [Route("api/rewrite-settings")]
@@ -71,7 +71,7 @@ public class RewriteSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Rewrites</c> as an RFC 7396 merge
-    ///     patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value. Every field takes effect at once, and the
     ///     change is also replicated to the other cluster nodes, which apply it live as well.
     ///     Requires <c>rewritesettings:write</c>.
@@ -113,14 +113,11 @@ public class RewriteSettingsController(
         if (settings.Count == 0)
             return Ok(new RuntimeSettingsWriteResult("Nothing to change -- the patch was empty."));
 
-        await PresetConfigurationFileApplier.ApplyAsync(
-            settings,
-            runtimeConfigurationOptions.ConfigurationFilePath
-        );
-
-        await clusterSyncRecorder.RecordAndPublishAsync(
+        await clusterSyncRecorder.ApplyAndRecordAsync(
             DnsRewriteOptions.SectionName,
             settings,
+            settings,
+            runtimeConfigurationOptions.ConfigurationFilePath,
             HttpContext.RequestAborted
         );
 

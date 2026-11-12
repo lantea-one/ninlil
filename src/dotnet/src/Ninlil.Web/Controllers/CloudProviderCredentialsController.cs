@@ -20,7 +20,7 @@ namespace Ninlil.Web.Controllers;
 ///     DigitalOcean API credentials that a <c>CloudPrimary</c> or <c>CloudSecondary</c> zone's
 ///     connector uses (see <c>CloudDnsZoneSyncService</c>). A credential set belongs to no single
 ///     zone; several zones can share one account's credentials, and each refers to it by id
-///     through its <c>CloudProviderCredentialId</c> (see <see cref="ZonesController" />), as zones
+///     through its <c>cloudProviderCredentialId</c> (see <see cref="ZonesController" />), as zones
 ///     refer to <see cref="TsigKeysController" /> keys by name. Secrets are encrypted at rest and
 ///     returned only when created. Reads need <c>cloudprovidercredentials:read</c> and changes
 ///     need <c>cloudprovidercredentials:write</c>.
@@ -242,8 +242,8 @@ public class CloudProviderCredentialsController(
 
         CloudDnsProviderTypeEnum providerType = credential.ProviderType;
         if (patch.TryGetMergePatchField("providerType", out JsonElement providerTypeElement))
-            providerType = JsonSerializer.Deserialize<CloudDnsProviderTypeEnum>(
-                providerTypeElement.GetRawText()
+            providerType = providerTypeElement.GetEnumName<CloudDnsProviderTypeEnum>(
+                "providerType"
             );
 
         if (patch.TryGetMergePatchField("credentials", out JsonElement credentialsElement))
@@ -282,7 +282,7 @@ public class CloudProviderCredentialsController(
 
     /// <summary>
     ///     This action deletes a credential set. Zones that still refer to it by
-    ///     <c>CloudProviderCredentialId</c> are not checked or blocked; they simply can no longer
+    ///     <c>cloudProviderCredentialId</c> are not checked or blocked; they simply can no longer
     ///     sync, as with a deleted TSIG key (see <see cref="TsigKeysController.Delete" />).
     ///     Requires <c>cloudprovidercredentials:write</c>.
     /// </summary>

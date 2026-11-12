@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries a token-based password reset, submitted from the \"set new password\" landing page to `POST /api/auth/reset-password`. The page serves both the reset e-mail an administrator sends (`UsersController.ResetPassword` in `EmailLink` mode) and the self-service `POST /api/auth/forgot-password` request. Nobody is signed in at this point, so the action is `[AllowAnonymous]` and `ConfirmPasswordResetRequest.Token` with `ConfirmPasswordResetRequest.UserId` is its only proof of authorization.
+ * This class carries a token-based password reset, submitted from the \"set new password\" landing page to `POST /api/auth/reset-password`. The page serves both the reset e-mail an administrator sends (`POST /api/users/{id}/reset-password` in `EmailLink` mode) and the self-service `POST /api/auth/forgot-password` request. Nobody is signed in at this point, so the action needs no sign-in and `token` with `userId` is its only proof of authorization.
  */
 export interface ConfirmPasswordResetRequest { 
     /**
@@ -18,11 +18,11 @@ export interface ConfirmPasswordResetRequest {
      */
     userId?: string;
     /**
-     * The password-reset token from `UserManager<TUser>.GeneratePasswordResetTokenAsync`, Base64Url-encoded because a raw Identity token can contain `+`, `/` and `=`, which are unsafe in a URL query string. The action decodes it before checking it.
+     * The password-reset token ASP.NET Core Identity issued, Base64Url-encoded because a raw Identity token can contain `+`, `/` and `=`, which are unsafe in a URL query string. The action decodes it before checking it.
      */
     token?: string | null;
     /**
-     * The new password to set, once `ConfirmPasswordResetRequest.Token` checks out.
+     * The new password to set, once `token` checks out.
      */
     newPassword?: string | null;
 }

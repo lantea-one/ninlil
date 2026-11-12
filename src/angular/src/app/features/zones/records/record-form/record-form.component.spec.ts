@@ -264,7 +264,7 @@ describe('RecordFormComponent', () => {
     expect(recordsApiSpy.apiZonesZoneIdRecordsPost).toHaveBeenCalledWith({
       zoneId: 'zone-1',
       recordWriteRequest: jasmine.objectContaining({
-        name: 'www',
+        name: 'www.example.com',
         type: DnsResourceRecordTypeEnum.A,
         timeToLiveSeconds: 600,
         data: { address: '203.0.113.5' },
@@ -272,6 +272,31 @@ describe('RecordFormComponent', () => {
     });
     expect(notificationSpy.success).toHaveBeenCalled();
     expect(navigateSpy).toHaveBeenCalledWith(['/zones', 'zone-1', 'records']);
+  });
+
+  it('save() sends a short name with the zone appended and a full name unchanged', async () => {
+    const fixture = await createComponent({ zoneId: 'zone-1' }, () => {
+      recordsApiSpy.apiZonesZoneIdRecordsPost.and.returnValue(of({ id: 'r', zoneId: 'zone-1' }));
+    });
+    addressControlOf(fixture)?.setValue('203.0.113.5');
+
+    fixture.componentInstance.form.patchValue({ name: 'www' });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.storedName()).toBe('www.example.com');
+    expect(fixture.nativeElement.querySelector('.stored-name').textContent).toContain(
+      'www.example.com',
+    );
+    await fixture.componentInstance.save();
+
+    fixture.componentInstance.form.patchValue({ name: 'www.example.com' });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.storedName()).toBe('www.example.com');
+    await fixture.componentInstance.save();
+
+    const names = recordsApiSpy.apiZonesZoneIdRecordsPost.calls
+      .allArgs()
+      .map((args) => args[0].recordWriteRequest.name);
+    expect(names).toEqual(['www.example.com', 'www.example.com']);
   });
 
   it('save() shows an error message and does not navigate when the backend rejects the request', async () => {

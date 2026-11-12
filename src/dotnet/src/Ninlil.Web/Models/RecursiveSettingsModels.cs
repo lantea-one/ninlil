@@ -5,23 +5,24 @@ namespace Ninlil.Web.Models;
 
 /// <summary>
 ///     This record is the REST shape of the recursive resolver settings
-///     (<c>RecursiveServerOptions</c>) that <c>GET /api/recursive-settings</c> returns. A
-///     <c>PATCH</c> to the same endpoint accepts the same fields. The two override lists are read
-///     once at startup or first seed, so the GET shows the saved lists, which may not be the ones
-///     in use; every other field takes effect at once. <c>RecursiveServerOptions</c> documents
-///     each field and its default.
+///     (configuration section <c>DnsServer:Recursive</c>) that <c>GET /api/recursive-settings</c>
+///     returns. A <c>PATCH</c> to the same endpoint accepts the same fields. The two override lists
+///     are read once at startup or first seed, so the GET shows the saved lists, which may not be
+///     the ones in use; every other field takes effect at once. The defaults of the fields are
+///     listed in <c>ENVIRONMENT.md</c>, in the <c>NINLIL_DNS_SERVER_RECURSIVE_*</c> rows.
 ///     <para>
-///         <c>InsecureDomains</c> is the list of Insecure domains (negative trust anchors) in
+///         <c>insecureDomains</c> is the list of Insecure domains (negative trust anchors) in
 ///         force: a query for a name at or below one skips DNSSEC validation and is never answered
-///         with AD. It is the built-in list while <c>UseCustomInsecureDomains</c> is
+///         with AD. It is the built-in list while <c>useCustomInsecureDomains</c> is
 ///         <see langword="false" />. A <c>PATCH</c> with an array replaces the whole list and makes
 ///         it custom; a <c>PATCH</c> with <see langword="null" /> restores the built-in list.
-///         <c>BuiltInInsecureDomains</c> is that built-in list (<c>home.arpa</c>, <c>internal</c>
-///         and the locally-served reverse zones of RFC 6303), for comparison and for a "restore
-///         defaults" action; it is read-only.
+///         <c>builtInInsecureDomains</c> is that built-in list (<c>home.arpa</c>,
+///         <c>resolver.arpa</c>, <c>service.arpa</c>, <c>internal</c> and the locally-served
+///         reverse zones of RFC 6303), for comparison and for a "restore defaults" action; it is
+///         read-only.
 ///     </para>
 ///     <para>
-///         <c>EnableRecursion</c> turns on recursive service for every client, by iterating from
+///         <c>enableRecursion</c> turns on recursive service for every client, by iterating from
 ///         the root and by forwarding to the configured forwarders (forwarding also needs its own
 ///         switch). While it is off, an access rule granting recursion access still lets
 ///         particular clients use both.
@@ -54,15 +55,15 @@ public record RecursiveSettingsDetail(
 );
 
 /// <summary>
-///     This record is one <c>RootHintServerOption</c> entry in
-///     <see cref="RecursiveSettingsDetail.RootHintServersOverride" />: a root server's name and
+///     This record is one entry in
+///     <c>RecursiveSettingsDetail.rootHintServersOverride</c>: a root server's name and
 ///     addresses. An empty override list uses the built-in internet root hints.
 /// </summary>
 public record RecursiveRootHintServerDetail(string Name, IReadOnlyList<string> Addresses);
 
 /// <summary>
-///     This record is one <c>TrustAnchorOption</c> entry in
-///     <see cref="RecursiveSettingsDetail.TrustAnchorsOverride" />: a root DS record given as key
+///     This record is one entry in
+///     <c>RecursiveSettingsDetail.trustAnchorsOverride</c>: a root DS record given as key
 ///     tag, algorithm, digest type and hex digest. An empty override list uses the IANA root
 ///     anchors. The list only seeds the trust anchor store when its state file is missing.
 /// </summary>

@@ -99,10 +99,7 @@ public class DhcpDnsRegistrationService(
                 $"The lease is {lease.State}; its DNS record is left as it is."
             );
 
-        DhcpScopeEntity scope = await scopeRepository.FindByNameAsync(
-            lease.ScopeName,
-            stoppingToken
-        );
+        DhcpScopeEntity scope = await scopeRepository.GetByIdAsync(lease.ScopeId, stoppingToken);
 
         (ZoneEntity zone, string skipReason) = await FindEligibleZoneAsync(
             scope,

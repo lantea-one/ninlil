@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Data.Abstractions.Exceptions;
@@ -60,6 +62,41 @@ public abstract class RelationalStartupMigratorTestsBase(EngineFixtureBase fixtu
             context.Database.GetMigrations().ToList(),
             (await context.Database.GetAppliedMigrationsAsync()).ToList()
         );
+    }
+
+    /// <summary>
+    ///     On a server with no database yet, the migrator and the EF Core context it drives log
+    ///     nothing at Error or above, and the fresh start is announced at Information. The
+    ///     failed open of the missing database is expected, not an error.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_OnAServerWithoutTheDatabase_LogsNoError()
+    {
+        CapturingLoggerProvider captured = new();
+        await using EngineDatabase database = await fixture.CreateDatabaseAsync(
+            createSchema: false,
+            configureServices: (services, _) => services.AddSingleton<ILoggerProvider>(captured)
+        );
+        NinlilDnsContext context = database.CreateContext();
+        ILogger logger = database
+            .Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Test");
+
+        await RelationalStartupMigrator.RunAsync(
+            context,
+            Options(database.ConnectionString),
+            logger
+        );
+
+        Assert.DoesNotContain(captured.Entries, entry => entry.Level >= LogLevel.Error);
+        Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+        if (fixture.Engine != StorageEngineEnum.Sqlite)
+            Assert.Contains(
+                captured.Entries,
+                entry =>
+                    entry.Level == LogLevel.Information
+                    && entry.Message.Contains("does not exist yet")
+            );
     }
 
     /// <summary>

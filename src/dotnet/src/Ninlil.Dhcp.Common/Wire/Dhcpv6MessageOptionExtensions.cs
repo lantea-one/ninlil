@@ -9,7 +9,7 @@ namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
 ///     This class provides typed accessors for the DHCPv6 options the server works with (RFC
-///     8415, RFC 3646 and RFC 4704) on top of the raw <see cref="Dhcpv6Message.Options" /> list.
+///     9915, RFC 3646 and RFC 4704) on top of the raw <see cref="Dhcpv6Message.Options" /> list.
 ///     It is the DHCPv6 counterpart of <see cref="Dhcpv4MessageOptionExtensions" /> and follows
 ///     the same pattern: <c>TryGetX</c> returns <see langword="false" /> when an option is missing
 ///     or malformed, and <c>SetX</c> replaces any existing instance. The IA_NA, IA_TA and IA_PD
@@ -117,7 +117,7 @@ public static class Dhcpv6MessageOptionExtensions
         SetOption(message, Dhcpv6OptionCodeEnum.Preference, [preference]);
 
     /// <summary>
-    ///     This method attempts to read the Elapsed Time option (code 8). Per RFC 8415 Section
+    ///     This method attempts to read the Elapsed Time option (code 8). Per RFC 9915 Section
     ///     21.9 the value is in hundredths of a second, and 0xFFFF (655.35 seconds) means "that or
     ///     longer"; the capped value is returned as-is.
     /// </summary>
@@ -138,7 +138,7 @@ public static class Dhcpv6MessageOptionExtensions
 
     /// <summary>
     ///     This method sets the Elapsed Time option (code 8). A value too large for the 16-bit
-    ///     field is clamped to 0xFFFF rather than rejected, since RFC 8415 Section 21.9 has a client use
+    ///     field is clamped to 0xFFFF rather than rejected, since RFC 9915 Section 21.9 has a client use
     ///     that value for any elapsed time above the largest the field holds. A negative value
     ///     throws.
     /// </summary>
@@ -265,7 +265,7 @@ public static class Dhcpv6MessageOptionExtensions
         SetOption(message, Dhcpv6OptionCodeEnum.RapidCommit, []);
 
     /// <summary>
-    ///     This method attempts to read the User Class option (RFC 8415 Section 21.15, code 15):
+    ///     This method attempts to read the User Class option (RFC 9915 Section 21.15, code 15):
     ///     one or more "user-class-data" instances back to back, each a 2-octet length followed by
     ///     that many octets, read as ASCII like the DHCPv4 User Class
     ///     (<see cref="Dhcpv4MessageOptionExtensions.TryGetUserClasses" />).
@@ -315,7 +315,7 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets the User Class option (RFC 8415 Section 21.15, code 15).
+    ///     This method sets the User Class option (RFC 9915 Section 21.15, code 15).
     /// </summary>
     public static void SetUserClasses(this Dhcpv6Message message, IReadOnlyList<string> userClasses)
     {
@@ -347,7 +347,7 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Vendor Class option (RFC 8415 Section 21.16, code 16):
+    ///     This method attempts to read the Vendor Class option (RFC 9915 Section 21.16, code 16):
     ///     a 4-octet IANA Enterprise Number followed by "vendor-class-data" instances, each a
     ///     2-octet length and that many octets, read as ASCII.
     /// </summary>
@@ -397,7 +397,7 @@ public static class Dhcpv6MessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method sets the Vendor Class option (RFC 8415 Section 21.16, code 16).
+    ///     This method sets the Vendor Class option (RFC 9915 Section 21.16, code 16).
     /// </summary>
     /// <param name="message">The message to set the option on.</param>
     /// <param name="enterpriseNumber">The vendor's IANA Enterprise Number.</param>

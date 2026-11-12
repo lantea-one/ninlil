@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the zone transfer client settings (`ZoneTransferClientOptions`) that `GET /api/zone-transfer-client-settings` returns: how the server, as a secondary, pulls AXFR and IXFR transfers from a primary. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the zone transfer client settings (configuration section `DnsServer:Authoritative:ZoneTransferClient`) that `GET /api/zone-transfer-client-settings` returns: how the server, as a secondary, pulls AXFR and IXFR transfers from a primary. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface ZoneTransferClientSettingsDetail { 
     /**

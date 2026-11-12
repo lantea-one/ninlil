@@ -84,7 +84,7 @@ export interface FilterListEntriesServiceInterface {
     apiFilterListsListIdEntriesIdPut(requestParameters: ApiFilterListsListIdEntriesIdPutRequestParams, extraHttpRequestParams?: any): Observable<{}>;
 
     /**
-     * This action adds an entry to a &#x60;DnsFilterListSourceEnum.Local&#x60; list. Returns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a pattern that does not compile; 404 for an unknown list; and 409 for a subscribed list. Requires &#x60;filterlists:write&#x60;.
+     * This action adds an entry to a &#x60;Local&#x60; list. Returns 400 for a missing value, a wildcard or regex entry in a non-domain list, or a pattern that does not compile; 404 for an unknown list; and 409 for a subscribed list. Requires &#x60;filterlists:write&#x60;.
      * 
      * @endpoint post /api/filter-lists/{listId}/entries
 * @param requestParameters

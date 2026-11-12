@@ -38,4 +38,27 @@ public interface IDnsRewriteEngine
         IPAddress remoteAddress = null,
         CancellationToken stoppingToken = default
     );
+
+    /// <summary>
+    ///     This method turns a resolver's NXDOMAIN into a NODATA answer when the queried name
+    ///     exists through a rewrite of another record type (RFC 2308 §2.1 and §2.2): the name is
+    ///     there, only this type has no data. The pipeline calls it after the dispatcher answered
+    ///     NXDOMAIN to a query no rewrite answered. It never changes <paramref name="resolved" />,
+    ///     which can be a shared cache entry.
+    /// </summary>
+    /// <param name="request">The decoded request.</param>
+    /// <param name="resolved">The resolvers' NXDOMAIN response.</param>
+    /// <param name="remoteAddress">The client's source address, as for <see cref="TryBuildResponseAsync" />.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <returns>
+    ///     A new NOERROR response with an empty answer section, or <see langword="null" /> when the
+    ///     name has no such rewrite and <paramref name="resolved" /> stands. The default
+    ///     implementation returns <see langword="null" />.
+    /// </returns>
+    ValueTask<DnsMessage> TryBuildNoDataForNxDomainAsync(
+        DnsMessage request,
+        DnsMessage resolved,
+        IPAddress remoteAddress = null,
+        CancellationToken stoppingToken = default
+    ) => ValueTask.FromResult<DnsMessage>(null);
 }

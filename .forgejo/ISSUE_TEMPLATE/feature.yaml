@@ -1,0 +1,38 @@
+name: Feature request
+description: Ask for new behaviour.
+title: ""
+labels:
+  - kind/feature
+  - status/needs-design
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ninlil is clean-room. Do not paste or link the source of another DNS, DHCP or ad-blocking
+        project. Describe the behaviour and cite an RFC or an IANA registry. See
+        [Ground rules](https://git.lantea.one/lantea-one/ninlil/src/branch/main/CONTRIBUTING.md#ground-rules) rule 1.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you cannot do today, and why it matters to you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: What Ninlil should do, as you would see it in the console, the API or the protocol.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Other approaches considered
+      description: Other ways to solve the problem, and why you prefer your proposal.
+  - type: input
+    id: rfc
+    attributes:
+      label: RFC or specification
+      description: The RFC number and section, or the published specification, if the feature implements a protocol.
+      placeholder: RFC 8484 section 4.1

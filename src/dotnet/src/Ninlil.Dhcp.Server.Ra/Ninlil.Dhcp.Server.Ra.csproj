@@ -29,7 +29,7 @@
   <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' != 'false' And Exists('..\Ninlil.Dhcp.Protocol.Ra\Ninlil.Dhcp.Protocol.Ra.csproj')">
     <ProjectReference Include="..\Ninlil.Dhcp.Protocol.Ra\Ninlil.Dhcp.Protocol.Ra.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or Exists('..\Ninlil.Dhcp.Protocol.Ra\Ninlil.Dhcp.Protocol.Ra.csproj')">
+  <ItemGroup Condition="'$(USE_LOCAL_INCLUDES)' == 'false' Or !Exists('..\Ninlil.Dhcp.Protocol.Ra\Ninlil.Dhcp.Protocol.Ra.csproj')">
     <PackageReference Include="Ninlil.Dhcp.Protocol.Ra" Version="*" />
   </ItemGroup>
   <!-- EndConditionalPackageProject:Ninlil.Dhcp.Protocol.Ra -->

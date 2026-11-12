@@ -194,7 +194,7 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
     }
 
     /**
-     * This action lists one subscription\&#39;s delivery attempts, newest first, one page at a time: every delivery &#x60;WebhookDeliveryService&#x60; and &#x60;WebhookDeliveryRetrySweepService&#x60; have recorded for it, from the first try to its final outcome or pending retry. It is read only; the API has no way to create, edit or retry an attempt. Returns 404 for an unknown subscription. Requires &#x60;webhooks:read&#x60;.
+     * This action lists one subscription\&#39;s delivery attempts, newest first, one page at a time: every delivery that the webhook delivery and its retry job have recorded for it, from the first try to its final outcome or pending retry. It is read only; the API has no way to create, edit or retry an attempt. Returns 404 for an unknown subscription. Requires &#x60;webhooks:read&#x60;.
      * @endpoint get /api/webhooks/{id}/delivery-attempts
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

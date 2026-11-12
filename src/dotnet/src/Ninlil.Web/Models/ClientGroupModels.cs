@@ -11,7 +11,7 @@ namespace Ninlil.Web.Models;
 /// <param name="IsDefault">
 ///     Whether this is the fallback group for a client that matches no other group's networks.
 ///     Setting it <see langword="true" /> takes the flag from whichever group holds it, since only
-///     one group may (see <see cref="ClientGroupsController" />).
+///     one group may.
 /// </param>
 /// <param name="IsDisabled">Whether the group is disabled.</param>
 public record ClientGroupWriteRequest(string Name, bool IsDefault = false, bool IsDisabled = false);
@@ -27,13 +27,12 @@ public record ClientGroupWriteRequest(string Name, bool IsDefault = false, bool 
 /// <param name="CreatedAtUtc">When the group was created.</param>
 /// <param name="UpdatedAtUtc">When the group was last updated, or <see langword="null" /> if never.</param>
 /// <param name="PausedUntilUtc">
-///     The UTC instant until which the group's pause blocks DNS resolution for every member (see
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupEntity.PausedUntilUtc" />), or
+///     The UTC instant until which the group's pause blocks DNS resolution for every member, or
 ///     <see langword="null" /> when no pause has been set.
 /// </param>
 /// <param name="IsCurrentlyPaused">
-///     Whether <paramref name="PausedUntilUtc" /> is still in the future, computed when the
-///     response is built, as for <see cref="ClientDetail.IsCurrentlyPaused" />.
+///     Whether <c>pausedUntilUtc</c> is still in the future, computed when the
+///     response is built, as for <c>ClientDetail.isCurrentlyPaused</c>.
 /// </param>
 public record ClientGroupDetail(
     Guid Id,
@@ -49,18 +48,17 @@ public record ClientGroupDetail(
 /// <summary>
 ///     This class carries the fields used to create or fully replace a network belonging to a
 ///     client group (<c>POST</c> and <c>PUT</c> under <c>/api/client-groups/{groupId}/networks</c>).
-///     Exactly one of <paramref name="Cidr" /> and <paramref name="ClientId" /> must be set (see
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity" />).
+///     Exactly one of <c>cidr</c> and <c>clientId</c> must be set.
 /// </summary>
 /// <param name="Cidr">
 ///     An IP address or a network in CIDR notation: a bare IPv4 address means one host (/32), a
 ///     bare IPv6 address one host (/128). A zone index (<c>fe80::1%2</c>) and an out-of-range
 ///     prefix length are rejected with a 400. <see langword="null" /> when
-///     <paramref name="ClientId" /> is set instead.
+///     <c>clientId</c> is set instead.
 /// </param>
 /// <param name="ClientId">
-///     A DNS-over-HTTPS ClientID label this row matches (see
-///     <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientGroupNetworkEntity.ClientId" />). <see langword="null" /> when <paramref name="Cidr" /> is set instead.
+///     A DNS-over-HTTPS ClientID label this row matches. <see langword="null" /> when
+///     <c>cidr</c> is set instead.
 /// </param>
 public record ClientGroupNetworkWriteRequest(string Cidr, string ClientId = null);
 
@@ -82,7 +80,7 @@ public record ClientGroupNetworkDetail(
 ///     <c>PATCH</c>: an assignment only joins a group to a list and has no other fields, so
 ///     assigning a different list means deleting one assignment and creating another.
 /// </summary>
-/// <param name="ListId">The <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsFilterListEntity" /> to assign to this group.</param>
+/// <param name="ListId">The filter list to assign to this group.</param>
 public record ClientGroupListAssignmentWriteRequest(Guid ListId);
 
 /// <summary>

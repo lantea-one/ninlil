@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of `Dhcpv4RelayOptions` (`GET /api/dhcp-settings/relay`): whether the server relays DHCPv4 requests to upstream servers instead of answering them from its own scopes.
+ * This record is the REST shape of the DHCPv4 relay settings (`GET /api/dhcp-settings/relay`): whether the server relays DHCPv4 requests to upstream servers instead of answering them from its own scopes.
  */
 export interface DhcpRelaySettingsDetail { 
     /**

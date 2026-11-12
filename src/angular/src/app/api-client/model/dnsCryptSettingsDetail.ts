@@ -10,11 +10,11 @@
 
 
 /**
- * This record is the DNSCrypt settings (`DnsCryptOptions`) that `GET /api/transport-settings/dnscrypt` returns.
+ * This record is the DNSCrypt settings (configuration section `DnsServer:Protocol:DnsCrypt`) that `GET /api/transport-settings/dnscrypt` returns.
  */
 export interface DnsCryptSettingsDetail { 
     /**
-     * Whether the transport listens. A change applies at once: it starts or stops the `dnscrypt-udp` and `dnscrypt-tcp` listeners and the `dnscrypt-certificate-rotation` loop through `IManagedServiceRegistry`. The loop issues the resolver\'s certificates; without one, a listener could accept connections but not answer an encrypted query.
+     * Whether the transport listens. A change applies at once: it starts or stops the `dnscrypt-udp` and `dnscrypt-tcp` listeners and the `dnscrypt-certificate-rotation` loop, which `GET /api/services` lists. The loop issues the resolver\'s certificates; without one, a listener could accept connections but not answer an encrypted query.
      */
     enable?: boolean;
     /**
@@ -38,7 +38,7 @@ export interface DnsCryptSettingsDetail {
      */
     maxConcurrentTcpConnections?: number;
     /**
-     * The DNSCrypt ciphers the resolver keeps a valid certificate for, by name (for example `[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). `DnsCryptCertificateRotationService` reads it when it starts, so a change applies once that loop restarts, for example by turning the transport off and on.
+     * The DNSCrypt ciphers the resolver keeps a valid certificate for, by name (for example `[\"XChaCha20Poly1305\", \"XSalsa20Poly1305\"]`). The DNSCrypt certificate rotation job reads it when it starts, so a change applies once that job restarts, for example by turning the transport off and on.
      */
     enabledEsVersions?: Array<string> | null;
     /**

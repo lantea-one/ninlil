@@ -4,9 +4,9 @@ using Ninlil.Dns.Common.Enum;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record is the REST shape of the query logging settings (<c>QueryLoggingOptions</c>)
-///     that <c>GET /api/query-logging-settings</c> returns. A <c>PATCH</c> to the same endpoint
-///     accepts the same fields.
+///     This record is the REST shape of the query logging settings (configuration section
+///     <c>DnsServer:QueryLogging</c>) that <c>GET /api/query-logging-settings</c> returns. A
+///     <c>PATCH</c> to the same endpoint accepts the same fields.
 /// </summary>
 /// <param name="Enable">Whether answered queries are written to the query log. Defaults to <see langword="true" />.</param>
 /// <param name="RetentionPeriod">How long a query log entry is kept. Defaults to 30 days.</param>

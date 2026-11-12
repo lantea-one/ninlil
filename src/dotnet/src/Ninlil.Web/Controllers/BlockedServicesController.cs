@@ -31,19 +31,19 @@ namespace Ninlil.Web.Controllers;
 ///         <b>Finding an entry's list again.</b> The managed list is the subscribed list whose
 ///         <see cref="DnsFilterListEntity.SubscriptionUrl" /> equals the entry's
 ///         <see cref="BlockedServiceCatalogEntry.SubscriptionUrl" />. That survives a rename,
-///         which matching by <c>Name</c> would not.
+///         which matching by <c>name</c> would not.
 ///     </para>
 ///     <para>
 ///         <b>Targeting a client or client group, or everyone.</b> Every action takes optional,
 ///         mutually exclusive <c>clientId</c> and <c>clientGroupId</c> query parameters. The shared
-///         list is created, re-enabled or found as above either way. With a target, <c>Enable</c>
+///         list is created, re-enabled or found as above either way. With a target, <c>enable</c>
 ///         also creates a
 ///         <see cref="Ninlil.Dns.Data.Abstractions.Entity.DnsClientListAssignmentEntity" /> or
 ///         <see cref="DnsClientGroupListAssignmentEntity" /> linking the list to that target,
 ///         through the repositories behind <see cref="ClientListAssignmentsController" /> and
 ///         <see cref="ClientGroupListAssignmentsController" />, saving a second call. With a
 ///         target, <c>Disable</c> removes only that target's assignment and leaves the list and
-///         other targets alone. Without a target the toggle is global: <c>Enable</c> sets
+///         other targets alone. Without a target the toggle is global: <c>enable</c> sets
 ///         <see cref="DnsFilterListEntity.AppliesToAllClients" />, which blocks the service for
 ///         every client, including one that no group or client record matches. Client and group
 ///         toggles add to it, so a client or group cannot unblock a service that is blocked
@@ -57,10 +57,11 @@ namespace Ninlil.Web.Controllers;
 ///         <b>Cluster replication.</b> The managed list is an ordinary filter list, so creating or
 ///         re-enabling it stamps this node's id on it and publishes a
 ///         <see cref="DnsFilterListChangedEvent" />, and deleting it (untargeted <c>Disable</c>)
-///         publishes the same event with <c>IsDeleted</c>; <c>FilterListClusterSyncEventSubscriber</c>
-///         sends both to the peers, as for <see cref="FilterListsController" />. Client and
-///         client-group assignments are node-local and never replicate, so a targeted
-///         <c>Disable</c>, and an <c>Enable</c> that only adds an assignment, publish nothing.
+///         publishes the same event with <c>isDeleted</c>;
+///         <c>FilterListClusterSyncEventSubscriber</c> sends both to the peers, as for
+///         <see cref="FilterListsController" />. Client and client-group assignments are node-local
+///         and never replicate, so a targeted <c>Disable</c>, and an <c>enable</c> that only adds
+///         an assignment, publish nothing.
 ///     </para>
 /// </summary>
 /// <param name="filterListRepository">Reads and writes the managed filter lists.</param>
@@ -137,13 +138,12 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This action enables one catalog entry: it creates the entry's managed
-    ///     <see cref="DnsFilterListEntity" /> if none exists or re-enables a disabled one, and,
-    ///     with a <c>clientId</c> or <c>clientGroupId</c>, also assigns the list to that target if
-    ///     it is not already. Without a target it marks the list as applying to every client.
-    ///     Enabling an enabled entry just returns its state. Returns 400 when
-    ///     both targets are given or the target does not exist, and 404 for an unknown key.
-    ///     Requires <c>filterlists:write</c>.
+    ///     This action enables one catalog entry: it creates the entry's managed filter list if
+    ///     none exists or re-enables a disabled one, and, with a <c>clientId</c> or
+    ///     <c>clientGroupId</c>, also assigns the list to that target if it is not already. Without
+    ///     a target it marks the list as applying to every client. Enabling an enabled entry just
+    ///     returns its state. Returns 400 when both targets are given or the target does not exist,
+    ///     and 404 for an unknown key. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpPost("{key}")]
     [RequirePermission("filterlists:write")]
@@ -233,18 +233,16 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This action disables one catalog entry. Without a target it clears
-    ///     <see cref="DnsFilterListEntity.AppliesToAllClients" />, so the service is no longer
-    ///     blocked for every client, and tells the cluster peers. The managed
-    ///     <see cref="DnsFilterListEntity" /> stays while a client or client group is still
-    ///     assigned to it; when none is, the action deletes the list and its entries (as
+    ///     This action disables one catalog entry. Without a target it clears the list's
+    ///     applies-to-all-clients flag, so the service is no longer blocked for every client, and
+    ///     tells the cluster peers. The managed filter list stays while a client or client group is
+    ///     still assigned to it; when none is, the action deletes the list and its entries (as
     ///     <see cref="FilterListsController.Delete" /> does) and tells the peers to delete it. With
-    ///     a <c>clientId</c> or
-    ///     <c>clientGroupId</c> it removes only that target's assignment, which stays on this node,
-    ///     and leaves the list and every other target alone, so unblocking a service for one
-    ///     device does not unblock it for everyone. Having nothing to remove is not
-    ///     an error. Returns 400 when both targets are given and 404 for an unknown key. Requires
-    ///     <c>filterlists:write</c>.
+    ///     a <c>clientId</c> or <c>clientGroupId</c> it removes only that target's assignment,
+    ///     which stays on this node, and leaves the list and every other target alone, so
+    ///     unblocking a service for one device does not unblock it for everyone. Having nothing to
+    ///     remove is not an error. Returns 400 when both targets are given and 404 for an unknown
+    ///     key. Requires <c>filterlists:write</c>.
     /// </summary>
     [HttpDelete("{key}")]
     [RequirePermission("filterlists:write")]
@@ -385,7 +383,7 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This method checks an <c>Enable</c> request's target: not both kinds at once, and the
+    ///     This method checks an <c>enable</c> request's target: not both kinds at once, and the
     ///     one given must exist, so no assignment points at a missing client or group.
     /// </summary>
     private async Task ValidateTargetAsync(
@@ -457,7 +455,7 @@ public class BlockedServicesController(
     }
 
     /// <summary>
-    ///     This method loads every <see cref="DnsFilterListSourceEnum.Subscribed" /> list, among
+    ///     This method loads every <c>Subscribed</c> list, among
     ///     which the catalog's managed lists are found, through
     ///     <see cref="IRepository{TEntity}.ListAsync" />.
     /// </summary>
@@ -488,7 +486,7 @@ public class BlockedServicesController(
     /// <summary>
     ///     This method builds <see cref="BlockedServiceDetail" /> for an entry and its managed list
     ///     (or <see langword="null" />). Without a target,
-    ///     <see cref="BlockedServiceDetail.IsEnabled" /> is whether the list is enabled and
+    ///     <c>BlockedServiceDetail.isEnabled</c> is whether the list is enabled and
     ///     applies to every client; with one, whether that target has an assignment of it.
     /// </summary>
     private async Task<BlockedServiceDetail> ToDetailAsync(

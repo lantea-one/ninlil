@@ -194,6 +194,7 @@ public sealed class DnsCryptTcpListener(
         // batch of a pipelined connection waits for the client's delayed acknowledgement, which is
         // tens of milliseconds.
         connection.NoDelay = true;
+        bool lingeringClose = false;
 
         try
         {
@@ -246,6 +247,7 @@ public sealed class DnsCryptTcpListener(
                         : FrameOutcomeEnum.Handled;
                 }
             );
+            lingeringClose = session.ClosedAfterDrain;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -257,7 +259,17 @@ public sealed class DnsCryptTcpListener(
         }
         finally
         {
-            connection.Close();
+            // One transaction per connection: the client may have sent more that was never read,
+            // and a plain close would reset the connection and could destroy the answer.
+            if (lingeringClose)
+                await LingeringSocketClose.CloseAsync(
+                    connection,
+                    LingeringSocketClose.DefaultMaxWait,
+                    stoppingToken
+                );
+            else
+                connection.Close();
+
             _connectionLimiter.Release();
         }
     }

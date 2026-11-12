@@ -72,7 +72,8 @@ public sealed class DnsOverTlsListener(
     private readonly ZoneTransferRequestRunner _transferRunner = new(
         scopeFactory,
         rateLimiter,
-        eventPublisher
+        eventPublisher,
+        logger
     );
 
     /// <summary>
@@ -102,6 +103,15 @@ public sealed class DnsOverTlsListener(
     ///     registered or configured does not mean a transport is running.
     /// </summary>
     public bool IsListening { get; private set; }
+
+    /// <summary>
+    ///     This property contains the port of the first bound listen socket, or 0 while nothing is
+    ///     bound. It equals <see cref="DnsOverTlsOptions.Port" /> unless that is 0, which tests
+    ///     use to get an ephemeral port. With port 0 and several listen addresses each socket
+    ///     gets its own port, so only a single-address listener has one meaningful value. It is
+    ///     set before <see cref="IsListening" /> turns true.
+    /// </summary>
+    public int BoundPort { get; private set; }
 
     /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
@@ -168,6 +178,7 @@ public sealed class DnsOverTlsListener(
         if (_listenSockets.Sockets.Count == 0)
             return;
 
+        BoundPort = ((IPEndPoint)_listenSockets.Sockets[0].LocalEndPoint).Port;
         IsListening = true;
 
         await Task.WhenAll(
@@ -225,7 +236,9 @@ public sealed class DnsOverTlsListener(
     ///     to a <see cref="FramedDnsStreamSession" />. The session reads each length-prefixed query
     ///     and closes the connection when <see cref="DnsOverTlsOptions.IdleTimeout" /> passes with
     ///     no complete message, the client disconnects, a write to the client misses that same
-    ///     timeout, or a zone transfer on it completes. It owns the per-connection limits (16
+    ///     timeout, or a zone transfer on it completes. After a completed transfer it sends the
+    ///     TLS close alert and closes the socket with a bounded linger, so a query the client
+    ///     already sent does not turn the close into a reset. It owns the per-connection limits (16
     ///     queries in flight, one writer task); a query still outstanding when the connection goes
     ///     idle is answered first. A client that connects and never completes the handshake would
     ///     otherwise hold a connection slot until shutdown, so the handshake has its own deadline.
@@ -241,6 +254,7 @@ public sealed class DnsOverTlsListener(
         connection.NoDelay = true;
         NetworkStream networkStream = new(connection, ownsSocket: true);
         SslStream sslStream = null;
+        bool lingeringClose = false;
 
         try
         {
@@ -303,6 +317,7 @@ public sealed class DnsOverTlsListener(
                 (messageBytes, _, sessionToken) =>
                     HandleMessageAsync(messageBytes, remoteAddress, session, sessionToken)
             );
+            lingeringClose = session.ClosedAfterDrain;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -314,12 +329,71 @@ public sealed class DnsOverTlsListener(
         }
         finally
         {
-            if (sslStream is not null)
-                await sslStream.DisposeAsync();
-            else
-                await networkStream.DisposeAsync();
+            try
+            {
+                // After a transfer the client may have sent a message the session never read; a
+                // plain close would reset the connection, and on Windows the reset makes the
+                // client discard the last reply it had received but not yet read. RFC 8446 §6.1
+                // says each side MUST send close_notify before closing its write side, so TLS
+                // ends first and the socket then lingers (see LingeringSocketClose); each step
+                // has its own 2 s bound. The socket is closed here, before the streams are
+                // disposed: disposing NetworkStream(ownsSocket: true) closes it abruptly and
+                // would send the reset.
+                if (lingeringClose && sslStream is not null)
+                {
+                    await ShutdownTlsAsync(sslStream, stoppingToken);
+                    await LingeringSocketClose.CloseAsync(
+                        connection,
+                        LingeringSocketClose.DefaultMaxWait,
+                        stoppingToken
+                    );
+                }
 
-            _connectionLimiter.Release();
+                if (sslStream is not null)
+                    await sslStream.DisposeAsync();
+                else
+                    await networkStream.DisposeAsync();
+            }
+            catch (Exception exception)
+                when (exception is IOException or SocketException or ObjectDisposedException)
+            {
+                // Disposing a stream whose socket is already closed can fail; the connection is
+                // over either way and the limiter slot below must still be released.
+            }
+            finally
+            {
+                _connectionLimiter.Release();
+            }
+        }
+    }
+
+    /// <summary>
+    ///     This method sends the TLS close_notify alert (RFC 8446 §6.1) and gives up after
+    ///     <see cref="LingeringSocketClose.DefaultMaxWait" /> or when the host stops, so a dead
+    ///     peer cannot hold the connection. It never throws.
+    /// </summary>
+    private static async Task ShutdownTlsAsync(SslStream sslStream, CancellationToken stoppingToken)
+    {
+        using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(
+            stoppingToken
+        );
+        timeout.CancelAfter(LingeringSocketClose.DefaultMaxWait);
+
+        try
+        {
+            await sslStream.ShutdownAsync().WaitAsync(timeout.Token);
+        }
+        catch (Exception exception)
+            when (exception
+                    is IOException
+                        or SocketException
+                        or InvalidOperationException
+                        or ObjectDisposedException
+                        or OperationCanceledException
+            )
+        {
+            // The peer is gone, the wait ran out or the stream is not in a state to shut down.
+            // The lingering close that follows closes the socket anyway.
         }
     }
 
@@ -520,6 +594,7 @@ public sealed class DnsOverTlsListener(
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         IsListening = false;
+        BoundPort = 0;
         _listenSockets.Close();
         await base.StopAsync(cancellationToken);
 

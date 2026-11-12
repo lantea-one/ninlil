@@ -69,6 +69,13 @@ public sealed class DnsCryptUdpListener(
     public bool IsListening { get; private set; }
 
     /// <summary>
+    ///     This property contains the port of the first bound socket (0 while nothing is bound).
+    ///     A listener configured with port 0 gets its port from the operating system; this is how
+    ///     a caller reads it.
+    /// </summary>
+    public int BoundPort => _sockets.BoundPort;
+
+    /// <summary>
     ///     This property lists every configured listen address this listener is not serving, each
     ///     as "address (reason)", for the health check.
     /// </summary>
@@ -188,9 +195,17 @@ public sealed class DnsCryptUdpListener(
             }
             catch (SocketException exception)
             {
-                if (stoppingToken.IsCancellationRequested)
+                // Cancelling a pending receive (StopAsync closing the socket, or the token) can
+                // surface as a SocketException rather than OperationCanceledException or
+                // ObjectDisposedException. If we were asked to stop, that is what this is.
+                // StopAsync clears IsListening before it closes the sockets, and the token is
+                // cancelled only after that, so a receive aborted by the close sees IsListening
+                // false while the token is still live.
+                if (stoppingToken.IsCancellationRequested || !IsListening)
                     break;
 
+                // Otherwise it is an error on one datagram (for example an ICMP error from an
+                // unreachable sender), which must not stop the listener; log it and keep going.
                 logger.LogWarning(exception, "Error receiving a DNSCrypt UDP datagram.");
                 continue;
             }

@@ -1,3 +1,4 @@
+using System.Net.Mail;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -33,8 +34,10 @@ namespace Ninlil.Web.Controllers;
 ///         and <see cref="PatchMine" /> serve the admin console's Profile page and expose only
 ///         <see cref="UserEntity.DisplayName" />, <see cref="UserEntity.PhoneNumber" /> and a
 ///         read-only <see cref="UserEntity.Email" />, never roles, permissions or lockout state.
-///         <see cref="ChangeMyPassword" /> also requires the current password, because a bearer
-///         token proves who is signed in now, not that the caller knows the account's password.
+///         <see cref="ChangeMyPassword" /> and <see cref="ChangeMyEmail" /> also require the
+///         current password, because a bearer token proves who is signed in now, not that the
+///         caller knows the account's password. The address receives password-reset links and
+///         e-mailed two-factor codes, so redirecting it is as sensitive as a password change.
 ///         <see cref="ResetPassword" /> is the administrator's counterpart for an account that
 ///         cannot supply its current password, and needs <c>users:write</c>.
 ///     </para>
@@ -77,6 +80,19 @@ namespace Ninlil.Web.Controllers;
 /// <param name="identityOptions">
 ///     Supplies the live password policy an auto-generated password has to meet.
 /// </param>
+/// <param name="emailChangeOptions">
+///     Supplies the live <see cref="EmailChangeOptions.RequireConfirmation" /> that
+///     <see cref="ChangeMyEmail" /> follows and <see cref="GetMine" /> reports.
+/// </param>
+/// <param name="emailChangeLinkSender">
+///     Builds and sends the confirmation link and the notice to the old address for
+///     <see cref="ChangeMyEmail" />. <c>AuthController.ConfirmEmailChange</c> uses it for the notice.
+/// </param>
+/// <param name="passwordAttemptLimiter">
+///     Limits wrong current passwords per account for <see cref="ChangeMyPassword" /> and
+///     <see cref="ChangeMyEmail" /> (see <see cref="CurrentPasswordAttemptLimiter" />).
+/// </param>
+/// <param name="logger">Logs a notice to the old address that could not be delivered.</param>
 [ApiController]
 [Route("api/users")]
 public class UsersController(
@@ -89,7 +105,11 @@ public class UsersController(
     IDnsServerEventPublisher eventPublisher,
     IClusterUsernameUniquenessChecker usernameUniquenessChecker,
     IOptionsMonitor<ClusterOptions> clusterOptions,
-    IOptionsMonitor<IdentityOptions> identityOptions
+    IOptionsMonitor<IdentityOptions> identityOptions,
+    IOptionsMonitor<EmailChangeOptions> emailChangeOptions,
+    EmailChangeLinkSender emailChangeLinkSender,
+    CurrentPasswordAttemptLimiter passwordAttemptLimiter,
+    ILogger<UsersController> logger
 ) : ControllerBase
 {
     /// <summary>
@@ -143,8 +163,8 @@ public class UsersController(
     ///     whether the username exists there and returns 409 if one does; an unreachable peer is
     ///     skipped, so user management never blocks on one node being down. A collision that only
     ///     shows up later (after a network partition) is resolved when the nodes resync, by the
-    ///     last-write-wins handling in <c>UserClusterConfigSyncApplier</c>. Returns 400 when the
-    ///     username, e-mail address or password fails validation. Requires <c>users:write</c>.
+    ///     cluster user sync's last-write-wins handling. Returns 400 when the username, e-mail
+    ///     address or password fails validation. Requires <c>users:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("users:write")]
@@ -356,8 +376,9 @@ public class UsersController(
     }
 
     /// <summary>
-    ///     This action returns the caller's profile: display name, phone number and read-only
-    ///     e-mail address. Requires only a signed-in caller.
+    ///     This action returns the caller's profile: display name, phone number, read-only e-mail
+    ///     address and whether changing that address needs a confirmation. Requires only a
+    ///     signed-in caller.
     /// </summary>
     [HttpGet("me")]
     [Authorize]
@@ -373,9 +394,9 @@ public class UsersController(
 
     /// <summary>
     ///     This action updates the caller's display name and phone number as an RFC 7396 merge
-    ///     patch (see <see cref="JsonElementMergePatchExtension" />): an absent field is unchanged,
-    ///     a JSON <c>null</c> clears it, and a string sets it. The e-mail address cannot be changed
-    ///     here (see <see cref="UserProfileDetail" />). Requires only a signed-in caller.
+    ///     patch: an absent field is unchanged, a JSON <c>null</c> clears it, and a string sets it.
+    ///     An <c>email</c> field is ignored: the address changes only through
+    ///     <see cref="ChangeMyEmail" />. Requires only a signed-in caller.
     /// </summary>
     [HttpPatch("me")]
     [Authorize]
@@ -411,7 +432,10 @@ public class UsersController(
 
     /// <summary>
     ///     This action changes the caller's password. It requires the current password; a wrong one
-    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. A successful change replaces
+    ///     returns 400 with Identity's <c>PasswordMismatch</c> error. Wrong passwords are counted
+    ///     per account, together with those of the e-mail change: once 5 have been submitted within
+    ///     15 minutes, this returns 429 with a <c>Retry-After</c> header, even for the correct
+    ///     password, until the window ends. A successful change replaces
     ///     the account's security stamp and revokes every refresh token of the account, including
     ///     the caller's own session: every access token issued before the change, the caller's
     ///     included, answers 401 on its next request, and the caller signs in again with the new
@@ -428,6 +452,10 @@ public class UsersController(
         UserEntity user = await GetCurrentUserAsync();
         if (user is null)
             return Unauthorized();
+
+        IActionResult refused = await CheckCurrentPasswordAsync(user, request.CurrentPassword);
+        if (refused is not null)
+            return refused;
 
         IdentityResult result = await userManager.ChangePasswordAsync(
             user,
@@ -447,27 +475,180 @@ public class UsersController(
     }
 
     /// <summary>
+    ///     This method checks the current password a self-service action asks for. It returns
+    ///     <see langword="null" /> when the password is right, a 429 result while the account has
+    ///     used up its budget of wrong passwords, and throws a 400
+    ///     <see cref="ValidationException" /> with Identity's <c>PasswordMismatch</c> error for a
+    ///     wrong password.
+    /// </summary>
+    /// <remarks>
+    ///     The budget is per account and not Identity lockout: a wrong password at sign-in does
+    ///     not lock an account either, so a stranger can never lock anyone out. This check is
+    ///     reachable only with a valid access token, and without a limit that token could guess
+    ///     the password endlessly. The blocked check comes first, so the correct password is
+    ///     refused too until the window ends.
+    /// </remarks>
+    private async Task<IActionResult> CheckCurrentPasswordAsync(UserEntity user, string password)
+    {
+        if (passwordAttemptLimiter.IsBlocked(user.Id, out TimeSpan retryAfter))
+            return TwoFactorCodeAttemptLimiter.TooManyRequests(
+                this,
+                retryAfter,
+                "Too many wrong passwords",
+                "Too many wrong current passwords."
+            );
+
+        if (await userManager.CheckPasswordAsync(user, password))
+        {
+            passwordAttemptLimiter.RecordSuccess(user.Id);
+            return null;
+        }
+
+        passwordAttemptLimiter.RecordFailure(user.Id);
+        IdentityResult.Failed(userManager.ErrorDescriber.PasswordMismatch()).ThrowIfFailed();
+        return null;
+    }
+
+    /// <summary>
+    ///     This action changes the caller's own e-mail address. It requires the current password; a
+    ///     wrong one returns 400 with Identity's <c>PasswordMismatch</c> error. Wrong passwords are
+    ///     counted per account, together with those of the password change: once 5 have been
+    ///     submitted within 15 minutes, this returns 429 with a <c>Retry-After</c> header, even
+    ///     for the correct password, until the window ends. An invalid address
+    ///     or one another account uses returns 400 with Identity's error. Requires only a
+    ///     signed-in caller.
+    ///     <list type="bullet">
+    ///         <item>
+    ///             <b>Confirmation required</b> (the
+    ///             <c>Identity:EmailChange:RequireConfirmation</c> setting, the default): SMTP and
+    ///             the public base URL must be configured, otherwise this returns 400 naming what
+    ///             is missing. It e-mails a link to the new address and returns 202 with a body
+    ///             whose <c>confirmationSent</c> is true. Nothing on the account changes until the
+    ///             link is submitted to <see cref="AuthController.ConfirmEmailChange" />, which
+    ///             also marks the address confirmed.
+    ///         </item>
+    ///         <item>
+    ///             <b>Not required</b>: the address changes at once and the response is 200 with
+    ///             the profile. The account's confirmed state stays as it was, as after an
+    ///             administrator's change in <see cref="Update" />, so a mistyped address can cut
+    ///             off e-mailed two-factor codes, which go only to a confirmed address.
+    ///         </item>
+    ///     </list>
+    ///     When the address changes, the security stamp is replaced and every refresh token is
+    ///     revoked, so every session of the account, the caller's own included, must sign in
+    ///     again, and a notice goes to the old address if SMTP is configured.
+    /// </summary>
+    [HttpPost("me/email")]
+    [Authorize]
+    [SwaggerRequestExample(typeof(ChangeEmailRequest), typeof(ChangeEmailRequestExample))]
+    [SwaggerResponseExample(StatusCodes.Status200OK, typeof(UserProfileDetailExample))]
+    [SwaggerResponseExample(StatusCodes.Status202Accepted, typeof(ChangeEmailPendingResultExample))]
+    [ProducesResponseType<UserProfileDetail>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ChangeEmailPendingResult>(StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> ChangeMyEmail(
+        ChangeEmailRequest request,
+        CancellationToken stoppingToken
+    )
+    {
+        UserEntity user = await GetCurrentUserAsync();
+        if (user is null)
+            return Unauthorized();
+
+        // The password check comes first, so a stolen access token alone cannot learn which
+        // addresses are taken or trigger an e-mail.
+        IActionResult refused = await CheckCurrentPasswordAsync(user, request.CurrentPassword);
+        if (refused is not null)
+            return refused;
+
+        string newEmail = request.NewEmail?.Trim();
+        await ValidateNewEmailAsync(user, newEmail);
+
+        string oldEmail = user.Email;
+        bool smtpConfigured = !string.IsNullOrWhiteSpace(emailOptions.CurrentValue.SmtpHost);
+
+        if (emailChangeOptions.CurrentValue.RequireConfirmation)
+        {
+            // A clear message here beats the raw exception SmtpClient.ConnectAsync would throw.
+            if (!smtpConfigured)
+                throw new ValidationException(
+                    "SMTP is not configured, so the confirmation link for the new e-mail "
+                        + "address cannot be sent. Ask an administrator to configure SMTP, or to "
+                        + "change the address for you."
+                );
+
+            // Throws a ValidationException naming the setting when no public base URL is set.
+            string confirmationUrl = await emailChangeLinkSender.CreateConfirmationLinkAsync(
+                user,
+                newEmail
+            );
+            await emailChangeLinkSender.SendConfirmationAsync(
+                newEmail,
+                confirmationUrl,
+                stoppingToken
+            );
+
+            return Accepted(new ChangeEmailPendingResult(true));
+        }
+
+        // Assigning the property, as Update does, keeps EmailConfirmed as it is; SetEmailAsync
+        // would reset it. The two paths that skip confirmation therefore behave alike.
+        user.Email = newEmail;
+        user.OriginatingNodeId = clusterOptions.CurrentValue.NodeId;
+        IdentityResult result = await userManager.UpdateAsync(user);
+        result.ThrowIfFailed();
+
+        // The address receives reset links and two-factor codes, so every session ends.
+        (await userManager.UpdateSecurityStampAsync(user)).ThrowIfFailed();
+        await jwtTokenService.RevokeAllRefreshTokensAsync(user.Id, stoppingToken);
+
+        eventPublisher.Publish(new UserAccountChangedEvent(DateTimeOffset.UtcNow, user.Id));
+
+        // The change has happened and cannot be undone by a failing mail server, so a failed
+        // notice is logged and not returned.
+        if (!string.IsNullOrWhiteSpace(oldEmail) && smtpConfigured)
+        {
+            try
+            {
+                await emailChangeLinkSender.SendChangedNoticeAsync(
+                    oldEmail,
+                    newEmail,
+                    stoppingToken
+                );
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    exception,
+                    "The e-mail change notice for account {UserId} was not delivered.",
+                    user.Id
+                );
+            }
+        }
+
+        return Ok(ToProfileDetail(user));
+    }
+
+    /// <summary>
     ///     This action resets an account's password for an administrator, for an account that
     ///     cannot supply its current password as <see cref="ChangeMyPassword" /> requires.
-    ///     <see cref="AdminResetPasswordRequest.Mode" /> picks one of two modes (see
+    ///     <c>AdminResetPasswordRequest.mode</c> picks one of two modes (see
     ///     <see cref="AdminPasswordResetMode" />). Requires <c>users:write</c>.
     ///     <list type="bullet">
     ///         <item>
-    ///             <see cref="AdminPasswordResetMode.AutoGenerate" /> sets a generated strong
-    ///             password at once, through a reset token and
-    ///             <see cref="UserManager{TUser}.ResetPasswordAsync" /> so Identity's usual
-    ///             validation and hashing apply, and returns it in this response only. It also replaces
-    ///             the account's security stamp and revokes every refresh token of the account, so
+    ///             <c>AutoGenerate</c> sets a generated strong
+    ///             password at once, through a reset token, so Identity's usual validation and
+    ///             hashing apply, and returns it in this response only. It also replaces the
+    ///             account's security stamp and revokes every refresh token of the account, so
     ///             every access token issued before the reset answers 401 on its next request.
     ///         </item>
     ///         <item>
-    ///             <see cref="AdminPasswordResetMode.EmailLink" /> e-mails the account a link to
+    ///             <c>EmailLink</c> e-mails the account a link to
     ///             the admin console's "set new password" page, which submits to
     ///             <see cref="Controllers.AuthController.ResetPassword" />. The link carries an
     ///             Identity reset token, Base64Url-encoded for the query string (see
     ///             <see cref="ConfirmPasswordResetRequest" />). The account must have an e-mail
     ///             address, and SMTP and the public base URL the link points at must be
-    ///             configured (see <c>SmtpSettingsController</c>); otherwise this returns 400
+    ///             configured (see <c>/api/smtp-settings</c>); otherwise this returns 400
     ///             with a clear message.
     ///         </item>
     ///     </list>
@@ -535,10 +716,43 @@ public class UsersController(
     }
 
     /// <summary>
+    ///     This method checks that <paramref name="newEmail" /> is a valid address that no account
+    ///     uses, with the errors Identity's own validation reports (<c>InvalidEmail</c>,
+    ///     <c>DuplicateEmail</c>). The confirmation path needs the check before it sends anything;
+    ///     the immediate path repeats it inside <see cref="UserManager{TUser}.UpdateAsync" />.
+    ///     An address equal to the caller's current one counts as taken, because a link for it
+    ///     would change nothing.
+    /// </summary>
+    private async Task ValidateNewEmailAsync(UserEntity user, string newEmail)
+    {
+        if (
+            string.IsNullOrWhiteSpace(newEmail)
+            || !MailAddress.TryCreate(newEmail, out MailAddress parsed)
+            || parsed.Address != newEmail
+        )
+            IdentityResult
+                .Failed(userManager.ErrorDescriber.InvalidEmail(newEmail))
+                .ThrowIfFailed();
+
+        UserEntity owner = await userManager.FindByEmailAsync(newEmail);
+        if (owner is not null)
+            IdentityResult
+                .Failed(userManager.ErrorDescriber.DuplicateEmail(newEmail))
+                .ThrowIfFailed();
+    }
+
+    /// <summary>
     ///     This method builds <see cref="UserProfileDetail" /> for <paramref name="user" />.
     /// </summary>
-    private static UserProfileDetail ToProfileDetail(UserEntity user) =>
-        new(user.Id, user.UserName, user.Email, user.DisplayName, user.PhoneNumber);
+    private UserProfileDetail ToProfileDetail(UserEntity user) =>
+        new(
+            user.Id,
+            user.UserName,
+            user.Email,
+            user.DisplayName,
+            user.PhoneNumber,
+            emailChangeOptions.CurrentValue.RequireConfirmation
+        );
 
     /// <summary>
     ///     This method loads the signed-in caller's <see cref="UserEntity" />, or returns

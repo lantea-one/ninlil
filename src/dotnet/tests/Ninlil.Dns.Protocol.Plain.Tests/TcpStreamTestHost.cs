@@ -30,7 +30,7 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
     private DnsQueryProcessingPipeline _pipeline;
     private TcpDnsListener _tcp;
 
-    public int Port { get; private init; }
+    public int Port { get; private set; }
 
     /// <summary>
     ///     This property contains the gate the <c>slow</c> queries wait on; completing it lets
@@ -53,13 +53,18 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
     private int _maxSlowInFlight;
     private readonly SemaphoreSlim _slowArrived = new(0);
 
+    /// <summary>
+    ///     This method starts the pipeline and a <see cref="TcpDnsListener" /> on port 0, so the
+    ///     OS picks a free loopback port, and reads the port it chose from
+    ///     <see cref="TcpDnsListener.BoundPort" />.
+    /// </summary>
     public static async Task<TcpStreamTestHost> StartAsync(
         TimeSpan idleTimeout,
         IZoneTransferService transferService = null,
         IDnsRateLimiter rateLimiter = null
     )
     {
-        TcpStreamTestHost host = new() { Port = LocalAddresses.GetFreePort() };
+        TcpStreamTestHost host = new();
 
         host._pipeline = new DnsQueryProcessingPipeline(
             new DnsQueryDispatcher([new HostResolver(host)], new NoOpEventPublisher()),
@@ -81,7 +86,7 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
             new StaticOptionsMonitor<PlainProtocolOptions>(
                 new PlainProtocolOptions
                 {
-                    Port = host.Port,
+                    Port = 0,
                     ListenAddresses = "127.0.0.1",
                     TcpIdleTimeout = idleTimeout,
                 }
@@ -92,10 +97,25 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
         await host._tcp.StartAsync(CancellationToken.None);
 
         // BackgroundService runs ExecuteAsync (which binds) as a continuation after StartAsync
-        // returns; wait until the listener reports it is accepting.
-        while (!host._tcp.IsListening)
-            await Task.Delay(10);
+        // returns; wait until the listener reports it is accepting or that the bind failed.
+        using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
 
+        while (!host._tcp.IsListening && host._tcp.FailedListenAddresses.Count == 0)
+        {
+            Assert.False(
+                deadline.IsCancellationRequested,
+                "The listener did not report a bind outcome in time."
+            );
+            await Task.Delay(10);
+        }
+
+        if (!host._tcp.IsListening)
+        {
+            await host.DisposeAsync();
+            throw new InvalidOperationException("The TCP listener could not bind a loopback port.");
+        }
+
+        host.Port = host._tcp.BoundPort;
         return host;
     }
 

@@ -38,8 +38,22 @@ public class RecursiveSettingsDetailExample : IExamplesProvider<RecursiveSetting
             EnablePrefetch: true,
             PrefetchWindow: TimeSpan.FromSeconds(10),
             PrefetchRecentAccessWindow: TimeSpan.FromMinutes(5),
-            InsecureDomains: ["home.arpa", "internal", "10.in-addr.arpa"],
+            InsecureDomains:
+            [
+                "home.arpa",
+                "resolver.arpa",
+                "service.arpa",
+                "internal",
+                "10.in-addr.arpa",
+            ],
             UseCustomInsecureDomains: false,
-            BuiltInInsecureDomains: ["home.arpa", "internal", "10.in-addr.arpa"]
+            BuiltInInsecureDomains:
+            [
+                "home.arpa",
+                "resolver.arpa",
+                "service.arpa",
+                "internal",
+                "10.in-addr.arpa",
+            ]
         );
 }

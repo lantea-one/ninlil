@@ -8,7 +8,7 @@ using Ninlil.Dhcp.Common.Enum;
 namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
-///     This class represents RFC 8415 Section 21.6's IA Address (IAADDR) option: one address a
+///     This class represents RFC 9915 Section 21.6's IA Address (IAADDR) option: one address a
 ///     server has assigned (or a client is requesting or renewing) with its preferred and valid
 ///     lifetimes. It only appears nested inside a
 ///     <see cref="Dhcpv6IdentityAssociationForNonTemporaryAddresses" /> or
@@ -29,7 +29,7 @@ public class Dhcpv6IdentityAssociationAddress
 
     /// <summary>
     ///     This property contains how long after this option is sent the address stays preferred
-    ///     (usable for new connections). This is RFC 8415 Section 21.6's "preferred-lifetime"
+    ///     (usable for new connections). This is RFC 9915 Section 21.6's "preferred-lifetime"
     ///     field, in whole seconds on the wire.
     /// </summary>
     public TimeSpan PreferredLifetime { get; set; }
@@ -37,13 +37,13 @@ public class Dhcpv6IdentityAssociationAddress
     /// <summary>
     ///     This property contains how long after this option is sent the address stays valid at
     ///     all (once it is no longer preferred, existing connections may keep using it but new
-    ///     ones should not). This is RFC 8415 Section 21.6's "valid-lifetime" field, in whole
+    ///     ones should not). This is RFC 9915 Section 21.6's "valid-lifetime" field, in whole
     ///     seconds on the wire.
     /// </summary>
     public TimeSpan ValidLifetime { get; set; }
 
     /// <summary>
-    ///     This property contains the nested options RFC 8415 Section 21.6 allows, usually a
+    ///     This property contains the nested options RFC 9915 Section 21.6 allows, usually a
     ///     Status Code option (<see cref="Dhcpv6StatusCodeEnum" />) about this address. It is
     ///     normally empty.
     /// </summary>
@@ -116,7 +116,7 @@ public class Dhcpv6IdentityAssociationAddress
     }
 
     /// <summary>
-    ///     This method converts a lifetime or timer to the unsigned 32-bit seconds RFC 8415 uses.
+    ///     This method converts a lifetime or timer to the unsigned 32-bit seconds RFC 9915 uses.
     ///     A negative or too-large value throws instead of being truncated; fractional seconds are
     ///     dropped.
     /// </summary>

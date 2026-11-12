@@ -8,6 +8,7 @@ using Ninlil.Dns.Data.EntityFrameworkCore;
 using Ninlil.Dns.Data.EntityFrameworkCore.Extension;
 using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 using Ninlil.Dns.Server.Cluster.Options;
+using Ninlil.Dns.Server.ClusterSync.Extension;
 using Ninlil.Dns.Server.ClusterSync.Rewrites;
 using Ninlil.Dns.Server.Core.ClusterSync;
 
@@ -34,12 +35,19 @@ public sealed class RewriteClusterSyncEventSubscriberTests : IDisposable
 
     public RewriteClusterSyncEventSubscriberTests()
     {
+        FixedClusterOptions clusterOptions = new(new ClusterOptions { NodeId = Guid.NewGuid() });
         ServiceCollection collection = new();
         collection.AddDbContext<NinlilDnsContext>(options =>
             options.UseNinlilDnsSqlite($"Data Source={_databasePath}")
         );
         collection.AddScoped<IDnsRewriteRepository, DnsRewriteRepository>();
         collection.AddScoped<IUnitOfWork, EntityFrameworkUnitOfWork>();
+
+        // The subscriber builds its envelope through the rewrite source, which the host
+        // registers with the rest of cluster sync.
+        collection.AddLogging();
+        collection.AddSingleton<IOptionsMonitor<ClusterOptions>>(clusterOptions);
+        collection.AddNinlilDnsServerClusterSync();
         _services = collection.BuildServiceProvider();
 
         using (IServiceScope scope = _services.CreateScope())
@@ -48,7 +56,7 @@ public sealed class RewriteClusterSyncEventSubscriberTests : IDisposable
         _subscriber = new Probe(
             _services.GetRequiredService<IServiceScopeFactory>(),
             _broadcaster,
-            new FixedClusterOptions(new ClusterOptions { NodeId = Guid.NewGuid() })
+            clusterOptions
         );
     }
 

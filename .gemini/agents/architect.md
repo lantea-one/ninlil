@@ -18,7 +18,7 @@ Before you design:
 - Clean-room: protocol facts come from IETF RFCs and IANA registries only (or, for a protocol with
   no RFC, its own published specification). Never read or describe another DNS, DHCP or
   ad-blocking project's source, UI or docs, and never name one in a work package. Cite RFC
-  sections ("RFC 8415 §18.2.10"); do not restate them.
+  sections ("RFC 9915 §18.2.10"); do not restate them.
 
 Write the design to the path the prompt names. Without one, use
 `.work-packages/<short-name>.md` (git-ignored). It holds:
@@ -36,5 +36,10 @@ Write the design to the path the prompt names. Without one, use
   an option (`OptionsEnvironmentVariableRegistry`, `ENVIRONMENT.md`) or user-visible behaviour
   (`README.md`).
 - Backend, snapshot plus client, and UI are separate packages, in that order.
+- The file ends with one issue draft per package, in the work-package template format
+  (`.forgejo/ISSUE_TEMPLATE/work-package.md`): Kind, Area, Priority, Milestone (`Release: <scope>`
+  when it must ship in that release, otherwise none), Theme (exactly one `theme/` label), Agent
+  (becomes an `agent/` label), Depends on and Decisions, then Why, What changes, Acceptance, Source. An epic
+  plus children, with "Depends on" between drafts. You never publish; the dispatcher does.
 
 Final reply: the file path, a summary of five lines or fewer, and the open owner decisions.

@@ -19,6 +19,9 @@ public sealed class SecondHostTests(NinlilDnsWebApplicationFactory factory)
     ///     answers after the second one is disposed, and that the two hosts hold different
     ///     service providers. A second host that shares the first host's listener ports stops
     ///     itself at start-up and answers 500 with an <see cref="ObjectDisposedException" />.
+    ///     The probe is <c>GET /status</c>, a real anonymous endpoint that answers 200 whatever the
+    ///     component health. A path the host does not map (such as <c>/health</c>) answers 200 only
+    ///     when a built admin console in <c>wwwroot</c> lets the SPA fallback serve index.html.
     /// </summary>
     [Fact]
     public async Task CreateSecondHost_NextToTheSharedHost_BothAnswerRequests()
@@ -30,14 +33,14 @@ public sealed class SecondHostTests(NinlilDnsWebApplicationFactory factory)
 
         using (HttpClient secondClient = second.CreateClient())
         {
-            HttpResponseMessage response = await secondClient.GetAsync("/health");
+            HttpResponseMessage response = await secondClient.GetAsync("/status");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
         second.Dispose();
 
         using HttpClient sharedClient = factory.CreateClient();
-        HttpResponseMessage sharedResponse = await sharedClient.GetAsync("/health");
+        HttpResponseMessage sharedResponse = await sharedClient.GetAsync("/status");
         Assert.Equal(HttpStatusCode.OK, sharedResponse.StatusCode);
     }
 }

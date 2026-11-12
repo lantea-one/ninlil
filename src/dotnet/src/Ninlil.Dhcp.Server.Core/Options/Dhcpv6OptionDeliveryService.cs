@@ -9,7 +9,7 @@ namespace Ninlil.Dhcp.Server.Core.Options;
 /// <summary>
 ///     This static class puts the standard DHCPv6 options on a reply, the narrower counterpart of
 ///     <see cref="Dhcpv4OptionDeliveryService" />: the Server Identifier (the server's DUID) and
-///     the echoed Client Identifier that RFC 8415 Section 18.3 requires, and the RFC 3646 Section 3
+///     the echoed Client Identifier that RFC 9915 Section 18.3 requires, and the RFC 3646 Section 3
 ///     DNS Recursive Name Server option from <see cref="DhcpScopeEntity.DnsServerAddresses" />
 ///     (the list the DHCPv4 Domain Name Server option also uses), sent only if the Option Request
 ///     Option lists it when the client sent one.

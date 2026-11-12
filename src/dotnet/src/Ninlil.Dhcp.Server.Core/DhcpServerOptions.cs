@@ -33,13 +33,13 @@ public sealed class DhcpServerOptions
     public string ServerIdentifierAddress { get; set; }
 
     /// <summary>
-    ///     This property contains the server's DHCPv6 DUID (DHCP Unique Identifier, RFC 8415
+    ///     This property contains the server's DHCPv6 DUID (DHCP Unique Identifier, RFC 9915
     ///     Section 11) as hex, with or without separators. It is the DHCPv6 counterpart of
     ///     <see cref="ServerIdentifierAddress" />: sent in every reply's Server Identifier option
     ///     and compared with the server DUID a client's REQUEST or RENEW names.
     ///     <para>
     ///         Left <see langword="null" /> (the default), or not valid hex, it is derived once at
-    ///         startup as a DUID-LL (RFC 8415 Section 11.4) from the link-layer address of the
+    ///         startup as a DUID-LL (RFC 9915 Section 11.4) from the link-layer address of the
     ///         first interface that is up, not loopback and has one (see
     ///         <see cref="Identity.Dhcpv6ServerIdentifierProvider" />); that is not necessarily the
     ///         interface the IPv4 server identifier comes from. A DUID-LL needs no storage: the
@@ -67,9 +67,9 @@ public sealed class DhcpServerOptions
 
     /// <summary>
     ///     This property controls whether the server answers a SOLICIT carrying a Rapid Commit
-    ///     option (RFC 8415 Section 21.14) with an immediate REPLY that commits the lease,
+    ///     option (RFC 9915 Section 21.14) with an immediate REPLY that commits the lease,
     ///     skipping ADVERTISE and REQUEST. It is off by default: with more than one DHCPv6 server
-    ///     on a link, each may commit a lease for the same client, so RFC 8415 advises enabling it
+    ///     on a link, each may commit a lease for the same client, so RFC 9915 advises enabling it
     ///     only when that cannot happen. On a single-server home network it is safe to turn on.
     /// </summary>
     public bool EnableDhcpv6RapidCommit { get; set; }

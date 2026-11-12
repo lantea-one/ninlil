@@ -11,11 +11,11 @@ import { TlsCertificateSettingsDetail } from './tlsCertificateSettingsDetail';
 
 
 /**
- * This record is the DNS-over-QUIC settings (`DnsOverQuicOptions`) that `GET /api/transport-settings/dns-over-quic` returns.
+ * This record is the DNS-over-QUIC settings (configuration section `DnsServer:Protocol:DnsOverQuic`) that `GET /api/transport-settings/dns-over-quic` returns.
  */
 export interface DnsOverQuicSettingsDetail { 
     /**
-     * Whether the transport listens. A change applies at once: it starts or stops the `dns-over-quic` listener through `IManagedServiceRegistry`.
+     * Whether the transport listens. A change applies at once: it starts or stops the `dns-over-quic` service listed by `GET /api/services`.
      */
     enable?: boolean;
     /**
@@ -23,7 +23,7 @@ export interface DnsOverQuicSettingsDetail {
      */
     port?: number;
     /**
-     * The local IP addresses the transport binds to, one socket per address. An empty list (the default) means every address, through one dual-stack socket. A change needs a listener restart. QUIC answers only on these addresses, but its library still reserves the UDP port on every address, and `::` also answers IPv4 (see `DnsOverQuicOptions.ListenAddresses`).
+     * The local IP addresses the transport binds to, one socket per address. An empty list (the default) means every address, through one dual-stack socket. A change needs a listener restart. QUIC answers only on these addresses, but its library still reserves the UDP port on every address, and `::` also answers IPv4 (see `DnsServer:Protocol:DnsOverQuic:ListenAddresses`).
      */
     listenAddresses?: Array<string> | null;
     /**

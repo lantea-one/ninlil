@@ -91,6 +91,17 @@ public static class ConfigurationSecretSettings
     public static IReadOnlyList<ConfigurationSecretSetting> All => Entries;
 
     /// <summary>
+    ///     This method finds the catalogued secret whose plaintext key is
+    ///     <paramref name="key" /> in <paramref name="sectionPath" />. Configuration keys are
+    ///     case-insensitive, so the match is too.
+    /// </summary>
+    /// <param name="sectionPath">The configuration section the key sits in.</param>
+    /// <param name="key">The key name.</param>
+    /// <returns>The catalog entry, or <see langword="null" /> when the key is not a secret.</returns>
+    public static ConfigurationSecretSetting FindByPlainKey(string sectionPath, string key) =>
+        Find(new PresetConfigurationSetting(sectionPath, key, null), secret => secret.PlainKey);
+
+    /// <summary>
     ///     This method encrypts a plaintext secret with the key ring of this node.
     /// </summary>
     /// <param name="secret">The catalog entry that names the purpose.</param>

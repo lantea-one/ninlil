@@ -4,7 +4,7 @@ using Ninlil.Dns.Server.Core.Services;
 namespace Ninlil.Web.Models;
 
 /// <summary>
-///     This record describes one <see cref="IManagedServiceRegistration" />, as listed by
+///     This record describes one managed service, as listed by
 ///     <c>GET /api/services</c>: a DNS transport listener or background maintenance loop, and
 ///     whether it is running.
 /// </summary>
@@ -16,7 +16,7 @@ namespace Ninlil.Web.Models;
 /// <param name="IsRunning">
 ///     Whether the service is running. For a DNS transport listener this is observed from the
 ///     listener; for a maintenance loop with no such signal, it means start was called more
-///     recently than stop (see <see cref="IManagedServiceRegistration.IsRunning" />).
+///     recently than stop.
 /// </param>
 public record ManagedServiceSummary(
     string Name,

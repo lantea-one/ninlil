@@ -87,7 +87,9 @@ public class TlsZoneTransferClientTests
     ///     primary's TLS side -- <see cref="ZoneTransferClientOptions.ValidateServerCertificate" />
     ///     is set <see langword="false" /> on the client side below rather than trying to get this
     ///     test process to trust it, the same documented escape hatch a real homelab
-    ///     operator would use for an untrusted primary.
+    ///     operator would use for an untrusted primary. The certificate is exported and re-imported
+    ///     so its private key is a persisted one: Schannel (Windows) cannot use the ephemeral key
+    ///     of <see cref="CertificateRequest.CreateSelfSigned" /> for a server handshake.
     /// </summary>
     private static X509Certificate2 CreateSelfSignedCertificate()
     {
@@ -98,10 +100,11 @@ public class TlsZoneTransferClientTests
             HashAlgorithmName.SHA256,
             RSASignaturePadding.Pkcs1
         );
-        return request.CreateSelfSigned(
+        using X509Certificate2 ephemeral = request.CreateSelfSigned(
             DateTimeOffset.UtcNow.AddMinutes(-5),
             DateTimeOffset.UtcNow.AddMinutes(5)
         );
+        return X509CertificateLoader.LoadPkcs12(ephemeral.Export(X509ContentType.Pfx), null);
     }
 
     [Fact]

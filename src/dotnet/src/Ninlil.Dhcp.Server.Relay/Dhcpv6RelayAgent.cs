@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Sockets;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
@@ -14,7 +15,7 @@ using Ninlil.Dns.Common.Net;
 namespace Ninlil.Dhcp.Server.Relay;
 
 /// <summary>
-///     This class is the DHCPv6 relay agent (RFC 8415): the
+///     This class is the DHCPv6 relay agent (RFC 9915): the
 ///     <see cref="IDhcpv6RequestHandler" /> and <see cref="IDhcpv6RelayMessageHandler" /> that
 ///     <see cref="Dhcpv6UdpListener" /> uses instead of the local engine when
 ///     <see cref="Dhcpv6RelayOptions.Enable" /> is set. It is the DHCPv6 counterpart of
@@ -113,9 +114,14 @@ public sealed class Dhcpv6RelayAgent
             SocketType.Dgram,
             ProtocolType.Udp
         );
+
+        // The relay receives server replies on this socket. On Windows an ICMP port-unreachable
+        // for an earlier send (a server that is down) would fail the next receive with
+        // WSAECONNRESET and log a warning for each one.
+        _outboundSocket.IgnoreIcmpPortUnreachable();
         _outboundSocket.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
 
-        // The link-address names the client link (RFC 8415 Section 19.1.1), so its interface is the
+        // The link-address names the client link (RFC 9915 Section 19.1.1), so its interface is the
         // one a client's link-local address belongs to. Found once: the address is fixed until a
         // restart.
         _clientInterfaceIndex = interfaceIndexOf(addressProvider.Value);
@@ -376,7 +382,7 @@ public sealed class Dhcpv6RelayAgent
             return null;
         }
 
-        // The server copies link-address from the RELAY-FORW (RFC 8415 Section 9.2), so a
+        // The server copies link-address from the RELAY-FORW (RFC 9915 Section 9.2), so a
         // different value means the packet does not answer a message this relay sent.
         if (!ClientAddress.IsSameAddress(message.LinkAddress, _addressProvider.Value))
         {
@@ -445,7 +451,7 @@ public sealed class Dhcpv6RelayAgent
         }
 
         // The server copies peer-address from the RELAY-FORW, so it is the client's address. The
-        // relay sends the unwrapped message there (RFC 8415). The wire address carries no scope
+        // relay sends the unwrapped message there (RFC 9915). The wire address carries no scope
         // ID, so a link-local one is scoped with the client link's interface.
         int clientPort = _protocolOptions.Value.ClientPort;
         IPEndPoint clientDestination = BuildClientDestination(

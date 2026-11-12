@@ -17,6 +17,18 @@ namespace Ninlil.Benchmarks.Storage;
 [Config(typeof(StorageConfig))]
 public class LeaseBenchmarks : StorageBenchmarkBase
 {
+    private Guid _scopeId;
+
+    /// <inheritdoc />
+    protected override async Task OnSetupAsync() =>
+        _scopeId = (
+            await InScopeAsync(provider =>
+                provider
+                    .GetRequiredService<IDhcpScopeRepository>()
+                    .FindByNameAsync($"{BenchmarkDataSet.ScopeNamePrefix}0")
+            )
+        ).Id;
+
     /// <summary>The active-lease snapshot (<c>ListActiveAsync</c>).</summary>
     [Benchmark]
     public Task<int> ListActive() =>
@@ -30,12 +42,10 @@ public class LeaseBenchmarks : StorageBenchmarkBase
 
     /// <summary>Every lease of one scope.</summary>
     [Benchmark]
-    public Task<int> ListByScopeName() =>
+    public Task<int> ListByScopeId() =>
         InScopeAsync(async provider =>
             (
-                await provider
-                    .GetRequiredService<ILeaseRepository>()
-                    .ListByScopeNameAsync($"{BenchmarkDataSet.ScopeNamePrefix}0")
+                await provider.GetRequiredService<ILeaseRepository>().ListByScopeIdAsync(_scopeId)
             ).Count
         );
 

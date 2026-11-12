@@ -6,9 +6,9 @@
 # Covers: --dry-run lists old -> new and edits nothing; a real run rewrites exactly the pins whose
 # digest or tag changed (in every file that holds them) and leaves unchanged pins and every other
 # line alone; a second run finds nothing to bump; an image that resolves to a single-architecture
-# manifest, or a lookup that fails, exits non-zero without editing any file; the checkout pin
-# moves to the newest tag of its major version, resolves an annotated tag to its commit, and
-# ignores tags of other majors and pre-release tags; the native-libraries lock is replaced only
+# manifest, or a lookup that fails, exits non-zero without editing any file; the checkout and
+# upload-artifact pins each move to the newest tag of their major version, resolve an annotated
+# tag to its commit, and ignore tags of other majors and pre-release tags; the native-libraries lock is replaced only
 # when the refresh command's result differs (a failing refresh edits nothing), and the Microsoft
 # repository package sum in ci.Dockerfile follows the downloaded file.
 #
@@ -80,6 +80,16 @@ git -C "${work}/seed" -c user.name=t -c user.email=t@t tag -a -m annotated v7.0.
 mkdir -p "${mirror}/actions"
 git clone -q --bare "${work}/seed" "${mirror}/actions/checkout"
 
+# The Forgejo mirror: forgejo/upload-artifact with v4.3.0 (old), v4.3.1 (new) and v5.0.0 (another
+# major, never chosen for a v4 pin).
+forgejo_mirror="${work}/forgejo-mirror"
+mkdir -p "${forgejo_mirror}/forgejo"
+git -C "${work}/seed" tag v4.3.0 "${commit_old}"
+git -C "${work}/seed" tag v4.3.1 "${commit_new}"
+git -C "${work}/seed" tag v5.0.0 "${commit_new}"
+git clone -q --bare "${work}/seed" "${forgejo_mirror}/forgejo/upload-artifact"
+upload_action='https://code.forgejo.org/forgejo/upload-artifact'
+
 write_tree() {
     cat > "${tree}/Dockerfile" <<DOCKERFILE
 ARG RUNTIME_IMAGE=example.test/runtime:1.0@${old_a}
@@ -104,6 +114,7 @@ DOCKERFILE
 steps:
   - uses: 'actions/checkout@${commit_old}' # v7.0.0
   - uses: 'actions/other@v1'
+  - uses: '${upload_action}@${commit_old}' # v4.3.0
 YAML
     cp "${tree}/.forgejo/workflows/one.yml" "${tree}/.forgejo/workflows/two.yml"
 }
@@ -113,7 +124,7 @@ run_bump() {
     output="$(env PATH="${work}/bin:${PATH}" BUMP_PINS_ROOT="${tree}" BUMP_PINS_DOCKER="${work}/bin/docker" \
         FAKE_DIGESTS="${digests}" LOCK_ANSWER="${work}/lock-answer" LOCK_FAILS="${work}/lock-fails" \
         BUMP_PINS_LOCK_REFRESH="${work}/bin/refresh" BUMP_PINS_MICROSOFT_DEB_URL="file://${work}/microsoft.deb" \
-        ACTIONS_MIRROR_URL="${mirror}" bash "${scripts}/bump-pins.sh" "$@" 2>&1)"
+        ACTIONS_MIRROR_URL="${mirror}" FORGEJO_ACTIONS_MIRROR_URL="${forgejo_mirror}" bash "${scripts}/bump-pins.sh" "$@" 2>&1)"
     status=$?
 }
 
@@ -131,6 +142,7 @@ assert_eq 'bump: dry run exits 0' 0 "${status}"
 assert_contains 'bump: dry run lists the changed image as old -> new' "${output}" "example.test/runtime:1.0: ${old_a} -> ${new_a}"
 assert_contains 'bump: dry run lists the unchanged image' "${output}" "example.test/fetch:2: unchanged"
 assert_contains 'bump: dry run lists the checkout move' "${output}" "v7.0.0 ${commit_old} -> v7.0.1 ${commit_new}"
+assert_contains 'bump: dry run lists the upload action move' "${output}" "v4.3.0 ${commit_old} -> v4.3.1 ${commit_new}"
 assert_eq 'bump: dry run edits no file' "${before}" "$(checksum)"
 
 # --- Real run ----------------------------------------------------------------------------------
@@ -140,6 +152,7 @@ assert_eq 'bump: every file holding the moved image is rewritten (including the 
 assert_eq 'bump: the old digest of the moved image is gone' 0 "$(grep -rlF "${old_a}" "${tree}" | wc -l)"
 assert_eq 'bump: the unchanged image keeps its digest in all three files' 3 "$(grep -rlF "example.test/fetch:2@${old_b}" "${tree}" | wc -l)"
 assert_eq 'bump: both workflows move to the annotated tag peeled commit' 2 "$(grep -rlF "actions/checkout@${commit_new}' # v7.0.1" "${tree}/.forgejo" | wc -l)"
+assert_eq 'bump: both workflows move the upload action to the newest tag of its major' 2 "$(grep -rlF "${upload_action}@${commit_new}' # v4.3.1" "${tree}/.forgejo" | wc -l)"
 assert_eq 'bump: unrelated lines are untouched' 'image: other' "$(grep -o 'image: other' "${tree}/docker-compose.yml")"
 assert_eq 'bump: an unrelated action is untouched' 2 "$(grep -rlF "actions/other@v1" "${tree}/.forgejo" | wc -l)"
 
@@ -194,7 +207,8 @@ git -C "${work}/seed" tag -d v7.0.10 > /dev/null
 rm -rf "${mirror}/actions/checkout"
 git clone -q --bare "${work}/seed" "${mirror}/actions/checkout"
 # Pin the checkout to the newest tag so only the lock and the sum can move.
-sed -i "s/actions\/checkout@${commit_old}' # v7.0.0/actions\/checkout@${commit_new}' # v7.0.1/" "${tree}/.forgejo/workflows/"*.yml
+sed -i -e "s/actions\/checkout@${commit_old}' # v7.0.0/actions\/checkout@${commit_new}' # v7.0.1/" \
+    -e "s/upload-artifact@${commit_old}' # v4.3.0/upload-artifact@${commit_new}' # v4.3.1/" "${tree}/.forgejo/workflows/"*.yml
 run_bump
 assert_contains 'bump: an identical lock is unchanged' "${output}" 'docker/native-libraries.lock: unchanged'
 assert_contains 'bump: an identical sum is unchanged' "${output}" 'packages-microsoft-prod.deb: unchanged'

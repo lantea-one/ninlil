@@ -44,9 +44,13 @@ reachable through `appsettings.json`, the REST API and the admin console.
 `EnvironmentVariableDocumentationTests` (in `Ninlil.Web.Tests`) fails when a row is missing, when a
 row names a variable that does not exist, when a variable has two rows, or when a number in the
 totals sentence below is wrong. It builds the expected list from the same mapping code that
-`Program.cs` runs at startup (`OptionsEnvironmentVariableMap.BuildMappings`). The test does not
-check the Default column or the descriptions. When you change an option's default or behavior,
-update its row by hand, then run:
+`Program.cs` runs at startup (`OptionsEnvironmentVariableMap.BuildMappings`). It also compares the
+Default column with the value a new instance of the options class has: a plain default (a number,
+a boolean, an enum, a `TimeSpan`, a non-empty string) must be the first value in code font in the
+cell, and an empty or missing default must be a cell that starts with `*(empty` or `*(none`. A few
+rows whose default is set at startup or differs per host are listed, with a reason, in the test.
+It does not check the descriptions. When you change an option's default or behavior, update its
+row by hand, then run:
 
 ```bash
 dotnet test src/dotnet/tests/Ninlil.Web.Tests --filter "FullyQualifiedName~EnvironmentVariableDocumentationTests|FullyQualifiedName~OptionsEnvironmentVariableRegistryTests"
@@ -57,10 +61,10 @@ mapping, not from hand arithmetic.
 
 <!-- EnvironmentVariableDocumentationTests matches the "Total:" sentence with a regular expression
 (TotalsPattern). Keep its wording and change only the numbers. -->
-Total: **332 individual settings** across 58 bound configuration classes, plus **3 standalone**
+Total: **329 individual settings** across 60 bound configuration classes, plus **3 standalone**
 variables read directly by configuration key (the two bootstrap administrator credentials and
 `NINLIL_ALLOWED_HOSTS`), plus **7 framework-level** variables that redirect onto .NET's unprefixed
-equivalents, giving **342 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
+equivalents, giving **339 environment variables in total**. The `NINLIL_DOTNET_*` runtime settings
 in the [.NET runtime settings](#net-runtime-settings) section are recognized names, not part of that
 total.
 
@@ -86,6 +90,7 @@ total.
 - [Webhooks, backup, self-update & clustering](#webhooks-backup-self-update--clustering)
 - [DHCP, DHCPv6, Router Advertisement & TFTP](#dhcp-dhcpv6-router-advertisement--tftp)
 - [Web host (Kestrel, reverse proxy, branding)](#web-host-kestrel-reverse-proxy-branding)
+- [Data Protection key ring](#data-protection-key-ring)
 - [Framework-level variables](#framework-level-variables)
   - [.NET runtime settings](#net-runtime-settings)
 - [Bootstrap administrator credentials](#bootstrap-administrator-credentials)
@@ -145,9 +150,9 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 | `NINLIL_IDENTITY_PASSWORD_REQUIRE_LOWERCASE` | Whether a password must contain a lowercase letter. | `true` |
 | `NINLIL_IDENTITY_PASSWORD_REQUIRE_UPPERCASE` | Whether a password must contain an uppercase letter. | `true` |
 | `NINLIL_IDENTITY_PASSWORD_REQUIRE_NON_ALPHANUMERIC` | Whether a password must contain a non-alphanumeric character. | `true` |
-| `NINLIL_IDENTITY_LOCKOUT_ALLOWED_FOR_NEW_USERS` | No effect. Sign-in does not count failed passwords and nothing else starts a lockout, so this flag is never acted on. The admin console does not show it; the identity settings API still accepts it. | `true` |
-| `NINLIL_IDENTITY_LOCKOUT_MAX_FAILED_ACCESS_ATTEMPTS` | No effect. Sign-in does not count failed passwords, so no account reaches this limit. The admin console does not show it; the identity settings API still accepts it. | `5` |
-| `NINLIL_IDENTITY_LOCKOUT_DEFAULT_LOCKOUT_TIME_SPAN` | No effect. Sign-in does not count failed passwords, so no account is locked out for this time. The admin console does not show it; the identity settings API still accepts it. To slow password guessing, use the admin login rate limit below. Ninlil sets this to 15 minutes at startup before it reads your configuration. | `00:15:00` |
+| `NINLIL_IDENTITY_LOCKOUT_ALLOWED_FOR_NEW_USERS` | Deprecated, no effect; a later release removes it. Sign-in does not count failed passwords and nothing else starts a lockout, so this flag is never acted on. The admin console does not show it; the identity settings API still accepts it. | `true` |
+| `NINLIL_IDENTITY_LOCKOUT_MAX_FAILED_ACCESS_ATTEMPTS` | Deprecated, no effect; a later release removes it. Sign-in does not count failed passwords, so no account reaches this limit. The admin console does not show it; the identity settings API still accepts it. | `5` |
+| `NINLIL_IDENTITY_LOCKOUT_DEFAULT_LOCKOUT_TIME_SPAN` | Deprecated, no effect; a later release removes it. Sign-in does not count failed passwords, so no account is locked out for this time. The admin console does not show it; the identity settings API still accepts it. To slow password guessing, use the admin login rate limit below. Ninlil sets this to 15 minutes at startup before it reads your configuration. | `00:15:00` |
 | `NINLIL_IDENTITY_SIGN_IN_REQUIRE_CONFIRMED_ACCOUNT` | Whether sign-in is blocked until the account is confirmed. | `false` |
 | `NINLIL_IDENTITY_SIGN_IN_REQUIRE_CONFIRMED_EMAIL` | Whether sign-in is blocked until the account's email is confirmed. | `false` |
 | `NINLIL_IDENTITY_SIGN_IN_REQUIRE_CONFIRMED_PHONE_NUMBER` | Whether sign-in is blocked until the account's phone number is confirmed. | `false` |
@@ -189,14 +194,15 @@ password-reset links), admin-login brute-force protection, and OpenID Connect si
 | `NINLIL_IDENTITY_SSO_CLIENT_SECRET` | The OIDC client secret in plaintext, for container and secret-store deployments. When set, it overrides a secret saved in the admin console, which then shows that it is overridden. The admin console never writes it. A value typed into the configuration file is encrypted at startup; a value from the environment is never written to disk. | *(empty)* |
 | `NINLIL_IDENTITY_SSO_CLIENT_SECRET_ENCRYPTED` | The OIDC client secret encrypted with this installation's Data Protection key ring. Written by the admin console; do not set it by hand, use `NINLIL_IDENTITY_SSO_CLIENT_SECRET` instead. A plaintext value here cannot be decrypted: SSO sign-in then fails and the server logs an Error, but the rest of the server keeps working. | *(empty)* |
 | `NINLIL_IDENTITY_SSO_DISPLAY_NAME` | The label shown on the "sign in with SSO" button. | `Single Sign-On` |
+| `NINLIL_IDENTITY_EMAIL_CHANGE_REQUIRE_CONFIRMATION` | Whether a user who changes their own e-mail address must first confirm the new address through an e-mailed link (needs SMTP and the public base URL). With `false`, the address changes at once and a mistyped address can cut off e-mailed two-factor codes. | `true` |
 
 ## DNS transports
 
 Each transport beyond plain UDP/TCP is off by default. `Certificate*` settings appear once per
-TLS-based transport (DNS-over-TLS, DNS-over-HTTPS, DNS-over-QUIC). DNS-over-TLS and DNS-over-QUIC
-each have an independent listener configuration. The DNS-over-HTTPS `Port` and `Certificate*`
-settings have no effect: it is served by the web listener, on its port and certificate. While
-their PFX paths are empty, DNS-over-TLS and DNS-over-QUIC load the self-signed certificate Ninlil
+TLS-based transport (DNS-over-TLS and DNS-over-QUIC), each with an independent listener
+configuration. DNS-over-HTTPS has no port or certificate setting: it is served by the web listener,
+on its port and certificate. While their PFX paths are empty, DNS-over-TLS and DNS-over-QUIC load
+the self-signed certificate Ninlil
 generates on first run and saves at the default state path, so they share one file. An ACME
 certificate reaches a transport only when you set its PFX path to that
 certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
@@ -213,20 +219,14 @@ certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_MAX_CONCURRENT_CONNECTIONS` | Max simultaneous DoT connections. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_IDLE_TIMEOUT` | Idle timeout before an inactive DoT connection is closed. | `00:00:30` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PATH` | Path to a PFX certificate file for DoT. Leave empty to use the self-signed certificate saved at the state path below. To use an ACME certificate, set this to its file in the ACME certificate directory. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PASSWORD` | The password of the PFX file named by `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_PFX_PATH`. Leave it empty for a file without a password. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override (`None` = OS/runtime default negotiation). | `None` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | How often the certificate file's mtime is polled for an ACME-renewed replacement. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_TLS_PROXY_PROTOCOL_ENABLE` | Whether this DoT listener accepts a PROXY protocol (v1/v2) preamble from a trusted upstream load balancer. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_ENABLE` | Whether DNS-over-HTTPS (RFC 8484) is enabled. | `false` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT` | No effect in Ninlil: DNS-over-HTTPS is served by the web listener, on its port and certificate (`NINLIL_DNS_SERVER_WEB_HTTPS_PORT`). | `443` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PATH` | The URL path DoH queries are served from. | `/dns-query` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_MAX_MESSAGE_SIZE_BYTES` | Maximum accepted DoH request/response message size. | `65535` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `data/protocol-tls-certificate.pfx` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_ALLOWED_PROTOCOLS` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `None` |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | `00:05:00` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_ENABLE` | Whether DNS-over-QUIC (RFC 9250) is enabled. Needs `libmsquic` — included in the Docker image; install it yourself on a bare-metal host. | `false` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_PORT` | The DoQ listen port. | `853` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_LISTEN_ADDRESSES` | Comma-separated IP addresses this transport listens on (for example `192.168.1.1, ::1`); empty listens on every address. An address this host doesn't have is logged and skipped while the others keep serving. | *(empty — every address)* |
@@ -234,7 +234,7 @@ certificate's file in `NINLIL_DNS_SERVER_ACME_CERTIFICATE_DIRECTORY_PATH`.
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_BIDIRECTIONAL_STREAMS` | Max concurrent bidirectional QUIC streams per connection. | `100` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_MAX_CONCURRENT_CONNECTIONS` | Max concurrent QUIC connections; one over the limit is closed with `DOQ_EXCESSIVE_LOAD`. | `512` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PATH` | Custom PFX certificate path for DoQ. | *(empty)* |
-| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PASSWORD` | No effect in Ninlil: DNS-over-HTTPS uses the web listener's certificate. | *(empty)* |
+| `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PASSWORD` | The password of the PFX file named by `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_PFX_PATH`. Leave it empty for a file without a password. | *(empty)* |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH` | Where the auto-generated self-signed certificate is persisted. | `data/protocol-tls-certificate.pfx` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_ALLOWED_PROTOCOLS` | Explicit TLS protocol version override. | `None` |
 | `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_QUIC_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL` | Certificate reload poll interval. | `00:05:00` |
@@ -323,7 +323,7 @@ and RFC 5011 automated trust-anchor rollover.
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_RECURSION` | Whether this server offers recursive service to every client, by iteration and by forwarding (off by default — capability-expanding; an access rule granting recursion access allows single clients while it is off). | `false` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_QNAME_MINIMIZATION` | Whether RFC 9156 QNAME minimization is used during iterative resolution. | `true` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION` | Whether recursively resolved and forwarded answers are DNSSEC-validated. | `true` |
-| `NINLIL_DNS_SERVER_RECURSIVE_USE_CUSTOM_INSECURE_DOMAINS` | Whether the Insecure domain list (`DnsServer:Recursive:InsecureDomains`, the names that skip DNSSEC validation and are never answered with AD) replaces the built-in list. Off: the built-in list applies (`home.arpa`, `internal`, and the RFC 6303 / RFC 7793 locally-served reverse zones). On: only `InsecureDomains` applies, and an empty list exempts nothing. The list itself has no variable; edit it in the admin console, through `PATCH /api/recursive-settings` or in the configuration file. | `false` |
+| `NINLIL_DNS_SERVER_RECURSIVE_USE_CUSTOM_INSECURE_DOMAINS` | Whether the Insecure domain list (`DnsServer:Recursive:InsecureDomains`, the names that skip DNSSEC validation and are never answered with AD) replaces the built-in list. Off: the built-in list applies (`home.arpa`, `resolver.arpa`, `service.arpa`, `internal`, and the RFC 6303 / RFC 7793 locally-served reverse zones). On: only `InsecureDomains` applies, and an empty list exempts nothing. The list itself has no variable; edit it in the admin console, through `PATCH /api/recursive-settings` or in the configuration file. | `false` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_SERVE_STALE` | Whether RFC 8767 serve-stale (answering from an expired cache entry when upstream is unreachable) is enabled. | `true` |
 | `NINLIL_DNS_SERVER_RECURSIVE_MAX_STALE_SERVE_AGE` | The maximum age of a stale cache entry still eligible to be served. | `1.00:00:00` |
 | `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_PREFETCH` | Whether a soon-to-expire, recently-popular cache entry is proactively refreshed before it expires. | `true` |
@@ -470,9 +470,7 @@ self-update service, and multi-node clustering.
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_MAX_RETRY_DELAY` | Maximum backoff delay between retries. | `00:00:30` |
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_SWEEP_INTERVAL` | How often the persisted retry-sweep background service looks for deliveries due for another attempt. | `00:00:05` |
 | `NINLIL_DNS_SERVER_WEBHOOKS_DELIVERY_ATTEMPT_RETENTION_PERIOD` | How long a completed delivery attempt's history is retained before it's aged out. | `30.00:00:00` |
-| `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY` | The directory a backup reads the Data Protection key ring (`key-*.xml`) from. A backup bundles these files because every encrypted secret in the database can be decrypted only with them. Startup sets this to the `data/` directory and replaces any value you configure, so changing it has no effect. | `data/` |
 | `NINLIL_DNS_SERVER_BACKUP_MINIMUM_PASSPHRASE_LENGTH` | Minimum required length for a backup archive's own encryption passphrase. | `12` |
-| `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH` | The runtime settings JSON file a backup bundles and a restore writes back. Startup sets this to the file named by `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` and replaces any value you configure, so changing it has no effect. | *(empty — set at startup)* |
 | `NINLIL_DNS_SERVER_BACKUP_MAXIMUM_RESTORED_PAYLOAD_BYTES` | The most decompressed bytes a restore reads from one archive, summed over all entries. It stops a zip bomb; there is no reason to change it in production. | `4294967296` (4 GiB) |
 | `NINLIL_DNS_SERVER_SELF_UPDATE_ENABLE_AUTOMATIC_CHECK` | Whether the self-update checker runs automatically, at startup and then on the interval below. It only checks and shows a notice; it never applies an update. With no feed URL (the row after next) each check records an "unconfigured" status and fetches nothing. A manual check (`POST /api/self-update/check`) runs whatever this says. | `true` |
 | `NINLIL_DNS_SERVER_SELF_UPDATE_CHECK_INTERVAL` | How long to wait after a successful check before the next automatic one. The checker wakes every 15 minutes, so the wait rounds up to the next 15-minute tick. A failed check is retried at the next tick, not after the full interval. | `1.00:00:00` |
@@ -512,8 +510,8 @@ Advertisement content, and the PXE-boot TFTP server. Every DHCP-family transport
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV4_UPSTREAM_SERVER_PORT` | The port the upstream real DHCPv4 server is reached on. | `67` |
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV6_ENABLE` | Whether the DHCPv6 relay-agent engine is active instead of the local engine (mutually exclusive with it). | `false` |
 | `NINLIL_DHCP_SERVER_RELAY_DHCPV6_UPSTREAM_SERVER_PORT` | The port the upstream real DHCPv6 server is reached on. | `547` |
-| `NINLIL_DHCP_SERVER_RELAY_DHCPV6_RELAY_LINK_ADDRESS` | The RFC 8415 `link-address` this relay inserts into RELAY-FORW messages; a global or unique-local address on the client-facing link. When unset, the first IPv6 address that is neither loopback nor link-local is detected at startup. | *(none)* |
-| `NINLIL_DHCP_SERVER_RELAY_DHCPV6_INTERFACE_ID` | The RFC 8415 Section 21.18 Interface-ID, as ASCII text, added to every RELAY-FORW; when unset, no Interface-ID option is added. | *(none)* |
+| `NINLIL_DHCP_SERVER_RELAY_DHCPV6_RELAY_LINK_ADDRESS` | The RFC 9915 `link-address` this relay inserts into RELAY-FORW messages; a global or unique-local address on the client-facing link. When unset, the first IPv6 address that is neither loopback nor link-local is detected at startup. | *(none)* |
+| `NINLIL_DHCP_SERVER_RELAY_DHCPV6_INTERFACE_ID` | The RFC 9915 Section 21.18 Interface-ID, as ASCII text, added to every RELAY-FORW; when unset, no Interface-ID option is added. | *(none)* |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_ENABLE` | Whether the raw-socket Router Advertisement/Solicitation transport is active. | `false` |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_MIN_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's shortest interval between unsolicited advertisements (MinRtrAdvInterval). The default is about a third of the default maximum. The settings API requires at least 3 seconds and at most 0.75 times the maximum below. | `00:03:18` |
 | `NINLIL_DHCP_SERVER_PROTOCOL_RA_MAX_ROUTER_ADVERTISEMENT_INTERVAL` | RFC 4861's longest interval between unsolicited advertisements (MaxRtrAdvInterval). Each interval is a random time between the minimum and the maximum. The settings API requires 4 to 65535 seconds. | `00:10:00` |
@@ -556,7 +554,24 @@ appearance/branding.
 | `NINLIL_DNS_SERVER_APPEARANCE_PALETTE` | The admin console's default color palette: `Teal`, `Indigo`, `Amber`, `Rose`, or `Emerald`. | `Teal` |
 | `NINLIL_DNS_SERVER_BRANDING_SITE_TITLE` | A custom browser-tab/header title overriding the default "Ninlil". | *(none)* |
 | `NINLIL_DNS_SERVER_BRANDING_LOGO_DATA_URI` | A custom logo, as a `data:` URI, overriding the default. | *(none)* |
-| `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` | Path of the JSON file that the settings pages merge their changes into at runtime, so a change survives a restart without editing the file by hand. | *(empty — startup uses `appsettings.json` in the content root)* |
+| `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` | Path of the JSON file that the settings pages merge their changes into at runtime, so a change survives a restart without editing the file by hand. A path other than `appsettings.json` is loaded and watched as a configuration source too, below `NINLIL_*` variables in precedence. | *(empty — startup uses `appsettings.json` in the content root)* |
+
+## Data Protection key ring
+
+The certificate that encrypts the key ring Ninlil keeps in the `data/` folder. The key ring unlocks
+every stored secret (TSIG secrets, DNSSEC private keys, TOTP keys, the SSO client secret, the SMTP
+password, cloud and webhook credentials, the ACME account key). A certificate set here wins on every
+platform; with none, Windows encrypts the key ring with DPAPI for the account that runs Ninlil and
+other platforms leave it unencrypted in an owner-only folder. A path or password that does not work
+stops the start with exit code 78. How to choose, how to change certificate and what a backup
+needs: [README: Security](./README.md#security).
+
+| Variable | Controls | Default |
+|---|---|---|
+| `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH` | Path of a PKCS#12 (`.pfx`) file with an RSA certificate and its private key. New key ring entries are encrypted with it. Back the certificate up separately from the data folder: without it the key ring cannot be read. | *(empty — DPAPI on Windows, no encryption elsewhere)* |
+| `NINLIL_DATA_PROTECTION_CERTIFICATE_PASSWORD` | The password of the file named by `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH`. It is a secret: set it from outside the application. Leave it empty for a file without a password. | *(empty)* |
+| `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PATH` | Path of the certificate that was in use before the one above, so entries written under it stay readable. Needs `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH`. Remove it once no entry uses it. | *(empty)* |
+| `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PASSWORD` | The password of the previous certificate file. It is a secret. | *(empty)* |
 
 ## Framework-level variables
 

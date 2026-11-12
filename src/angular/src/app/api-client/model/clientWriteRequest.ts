@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the editable fields of a known client, replaced in full by `PUT /api/clients/{id}`. It has no `ClientCreateRequest.ClientIdentifier` or `ClientCreateRequest.ProtocolVersion`, because `ClientsController` never lets an address\'s identity change. To change one, add a new address and delete the old one, as with the shared secret of a `TsigKeyEntity`.
+ * This class carries the editable fields of a known client, replaced in full by `PUT /api/clients/{id}`. It has no `ClientCreateRequest.clientIdentifier` or `ClientCreateRequest.protocolVersion`, because an address\'s identity never changes. To change one, add a new address and delete the old one, as with the shared secret of a TSIG key.
  */
 export interface ClientWriteRequest { 
     /**
@@ -18,7 +18,7 @@ export interface ClientWriteRequest {
      */
     displayName?: string | null;
     /**
-     * The `DnsClientGroupEntity` the client is explicitly assigned to, or null for none.
+     * The client group the client is explicitly assigned to, or null for none.
      */
     clientGroupId?: string | null;
     /**

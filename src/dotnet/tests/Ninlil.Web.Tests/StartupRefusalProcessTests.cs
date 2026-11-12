@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -35,8 +33,7 @@ public sealed class StartupRefusalProcessTests : IDisposable
     /// </summary>
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
-        Directory.Delete(_directory, recursive: true);
+        TemporaryFiles.DeleteDirectory(_directory);
     }
 
     /// <summary>
@@ -91,6 +88,53 @@ public sealed class StartupRefusalProcessTests : IDisposable
     }
 
     /// <summary>
+    ///     A key ring certificate file that does not exist stops the process with exit code 78
+    ///     and a message that names the setting, instead of starting with unencrypted keys.
+    /// </summary>
+    [Fact]
+    public async Task Startup_WithAMissingKeyRingCertificate_ExitsWith78NamingTheSetting()
+    {
+        (int exitCode, string text) = await RunUntilExitAsync(
+            Path.Combine(_directory, "unused.sqlite3"),
+            new Dictionary<string, string>
+            {
+                ["NINLIL_DATA_PROTECTION_CERTIFICATE_PATH"] = Path.Combine(
+                    _directory,
+                    "missing.pfx"
+                ),
+            }
+        );
+
+        Assert.True(exitCode == 78, $"Exit code {exitCode}. Output: {text}");
+        Assert.Contains("DataProtection:CertificatePath", text);
+    }
+
+    /// <summary>
+    ///     A key ring certificate with the wrong password stops the process with exit code 78,
+    ///     names both settings and prints neither password.
+    /// </summary>
+    [Fact]
+    public async Task Startup_WithAWrongKeyRingCertificatePassword_ExitsWith78WithoutThePassword()
+    {
+        string pfx = Path.Combine(_directory, "ring.pfx");
+        Fakes.KeyRingTestCertificates.WriteRsaPfx(pfx, "correct-horse");
+
+        (int exitCode, string text) = await RunUntilExitAsync(
+            Path.Combine(_directory, "unused.sqlite3"),
+            new Dictionary<string, string>
+            {
+                ["NINLIL_DATA_PROTECTION_CERTIFICATE_PATH"] = pfx,
+                ["NINLIL_DATA_PROTECTION_CERTIFICATE_PASSWORD"] = "battery-staple",
+            }
+        );
+
+        Assert.True(exitCode == 78, $"Exit code {exitCode}. Output: {text}");
+        Assert.Contains("DataProtection:CertificatePassword", text);
+        Assert.DoesNotContain("battery-staple", text);
+        Assert.DoesNotContain("correct-horse", text);
+    }
+
+    /// <summary>
     ///     This method starts the built host as a child process on a SQLite database, waits for it
     ///     to exit and returns the exit code with everything it printed.
     /// </summary>
@@ -120,9 +164,14 @@ public sealed class StartupRefusalProcessTests : IDisposable
         startInfo.Environment["NINLIL_JWT_SIGNING_KEY"] = Convert.ToBase64String(
             RandomNumberGenerator.GetBytes(64)
         );
-        startInfo.Environment["NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT"] = GetFreePort().ToString();
-        startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTP_PORT"] = GetFreePort().ToString();
-        startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTPS_PORT"] = GetFreePort().ToString();
+        startInfo.Environment["NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT"] =
+            NinlilDnsWebApplicationFactory.GetFreePort().ToString();
+        startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTP_PORT"] = NinlilDnsWebApplicationFactory
+            .GetFreePort()
+            .ToString();
+        startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTPS_PORT"] = NinlilDnsWebApplicationFactory
+            .GetFreePort()
+            .ToString();
         startInfo.Environment["NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH"] =
             Path.Combine(_directory, "runtime.json");
         startInfo.Environment["NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_ENABLE"] = "false";
@@ -163,12 +212,5 @@ public sealed class StartupRefusalProcessTests : IDisposable
         lock (output)
             text = output.ToString();
         return (process.ExitCode, text);
-    }
-
-    private static int GetFreePort()
-    {
-        using TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

@@ -24,12 +24,20 @@ namespace Ninlil.Dns.Server.Cluster.Join;
 ///     the joining node. On the inviting node, <see cref="HandleJoinCompleteAsync" /> records the
 ///     joiner when that callback arrives.
 ///     <para>
+///         The inviting node also records that the new peer is owed a config backfill, in the
+///         same save as the peer row; <see cref="Backfill.ClusterConfigBackfillRunner" /> sends it
+///         after the next heartbeat that reaches the peer. Only the inviter records one: the
+///         joining node receives the backfill and sends none (it would otherwise push its own
+///         bootstrap account into the cluster).
+///     </para>
+///     <para>
 ///         The joining node writes nothing until the callback has succeeded, so a failed join (an
 ///         unreachable inviter, a rejected callback, an expired invite) leaves no key or peer row
 ///         behind and can be retried.
 ///     </para>
 /// </summary>
 /// <param name="clusterNodeRepository">The repository the new peer row is persisted through.</param>
+/// <param name="backfillRepository">The repository the new peer's config backfill request is persisted through.</param>
 /// <param name="tsigKeyRepository">The repository used to check for, and then store, the shared key.</param>
 /// <param name="unitOfWork">The unit of work the new key and peer row are committed through together.</param>
 /// <param name="secretProtector">The protector used to encrypt the shared secret at rest.</param>
@@ -38,6 +46,7 @@ namespace Ninlil.Dns.Server.Cluster.Join;
 /// <param name="certificateProvider">The provider of this node's TLS certificate, whose thumbprint goes into the callback.</param>
 public class ClusterJoinService(
     IClusterNodeRepository clusterNodeRepository,
+    IClusterPeerConfigBackfillRepository backfillRepository,
     ITsigKeyRepository tsigKeyRepository,
     IUnitOfWork unitOfWork,
     TsigSecretProtector secretProtector,
@@ -297,6 +306,21 @@ public class ClusterJoinService(
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         await clusterNodeRepository.AddAsync(node, stoppingToken);
+
+        // The joiner holds none of this node's config yet. The request is saved with the peer
+        // row, so a crash cannot leave a peer without its request. The repeated-callback branch
+        // above adds none: the request already exists, or the backfill already completed.
+        DateTimeOffset requestedAtUtc = DateTimeOffset.UtcNow;
+        await backfillRepository.AddAsync(
+            new ClusterPeerConfigBackfillEntity
+            {
+                Id = Guid.NewGuid(),
+                ClusterNodeId = node.Id,
+                RequestedAtUtc = requestedAtUtc,
+                CreatedAtUtc = requestedAtUtc,
+            },
+            stoppingToken
+        );
 
         // The invite is used up: the key now belongs to this peer alone.
         key.ClusterNodeId = node.Id;

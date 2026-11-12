@@ -59,7 +59,7 @@ public class ZoneSigningSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Authoritative:ZoneSigning</c> as
-    ///     an RFC 7396 merge patch, through <see cref="PresetConfigurationFileApplier" />. Every
+    ///     an RFC 7396 merge patch, written to the configuration file. Every
     ///     field takes effect at once. Returns 400 for a malformed duration, a negative inception
     ///     offset, or a non-positive validity period, refresh margin or poll interval. Requires
     ///     <c>zonesigningsettings:write</c>.

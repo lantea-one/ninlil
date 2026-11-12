@@ -10,7 +10,7 @@
 
 
 /**
- * This record carries the `ActiveMqEventBrokerOptions` settings without `Password`, for the reason given on `RabbitMqBrokerSettingsDetail`.
+ * This record carries the ActiveMQ event broker settings (configuration section `DnsServer:Events:ActiveMq`) without `Password`, for the reason given on `RabbitMqBrokerSettingsDetail`.
  */
 export interface ActiveMqBrokerSettingsDetail { 
     hostName?: string | null;

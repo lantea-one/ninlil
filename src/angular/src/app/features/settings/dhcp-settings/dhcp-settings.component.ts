@@ -97,7 +97,7 @@ type RaInterfaceOverrideFormGroup = FormGroup<{
  * `dhcpv6-protocol`, `relay`, `dhcpv6-relay`, `tftp`, `ra-protocol`, `ra`), each with its own
  * `PATCH`, all needing `dhcpsettings:read` to view and `dhcpsettings:write` to save. The DHCPv6
  * cards match their DHCPv4 counterparts, except that the DHCPv6 relay has one Interface-ID field
- * (RFC 8415) where the DHCPv4 relay has Agent Circuit ID and Remote ID.
+ * (RFC 9915) where the DHCPv4 relay has Agent Circuit ID and Remote ID.
  *
  * <p><b>Most DHCP settings need a restart.</b> `DhcpSettingsController` returns the restart note
  * (for example, the relay `Enable` flags choose in `Program.cs`, at startup, whether the local
@@ -461,7 +461,7 @@ export class DhcpSettingsComponent implements OnInit {
     }
   }
 
-  /** This method PATCHes the RFC 8415 DHCPv6 relay agent settings. */
+  /** This method PATCHes the RFC 9915 DHCPv6 relay agent settings. */
   async saveDhcpv6Relay(): Promise<void> {
     if (this.dhcpv6RelayForm.invalid || this.dhcpv6RelaySubmitting()) return;
 

@@ -122,7 +122,8 @@ public sealed class DnsOverHttpsDropTests
 
         DnsOverHttpsHostedService service = new(
             pipeline,
-            Options.Create(new DnsOverHttpsOptions { Enable = true, Port = port }),
+            Options.Create(new DnsOverHttpsOptions { Enable = true }),
+            Options.Create(new DnsOverHttpsListenerOptions { Port = port }),
             NullLogger<DnsOverHttpsHostedService>.Instance
         );
 

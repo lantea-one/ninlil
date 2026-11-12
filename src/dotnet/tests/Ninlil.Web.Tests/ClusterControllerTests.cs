@@ -6,6 +6,8 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
+using Ninlil.Dns.Data.EntityFrameworkCore;
+using Ninlil.Dns.Data.EntityFrameworkCore.Repository;
 using Ninlil.Dns.Server.Cluster.Invite;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
@@ -260,6 +262,143 @@ public class ClusterControllerTests(NinlilDnsWebApplicationFactory factory)
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 ClusterNodeId = clusterNodeId,
             };
+    }
+
+    /// <summary>
+    ///     Deleting a peer through the endpoint removes its pending config backfill request and
+    ///     leaves the request of another peer. The host runs on SQLite, where the foreign key
+    ///     cascade removes the request, so this covers the relational cascade path end to end. It
+    ///     does not guard the controller's own removal; see
+    ///     <see cref="RemoveNode_WithAPendingBackfill_RemovesTheRequestExplicitly" />.
+    /// </summary>
+    [Fact]
+    public async Task Delete_OfAPeerWithAPendingBackfill_RemovesTheRequest()
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+        Guid nodeId = Guid.NewGuid();
+        Guid otherNodeId = Guid.NewGuid();
+
+        using (IServiceScope scope = factory.Services.CreateScope())
+        {
+            IClusterNodeRepository nodes =
+                scope.ServiceProvider.GetRequiredService<IClusterNodeRepository>();
+            IClusterPeerConfigBackfillRepository backfills =
+                scope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
+            foreach (Guid id in new[] { nodeId, otherNodeId })
+            {
+                await nodes.AddAsync(
+                    new ClusterNodeEntity
+                    {
+                        Id = id,
+                        Name = $"backfill-peer-{id:N}",
+                        RemoteNodeId = Guid.NewGuid(),
+                        Host = "192.168.1.53",
+                        Port = 443,
+                        TsigKeyName = $"backfill-key-{id:N}",
+                        TlsCertificateThumbprint = new string('c', 64),
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+                await backfills.AddAsync(
+                    new ClusterPeerConfigBackfillEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        ClusterNodeId = id,
+                        RequestedAtUtc = DateTimeOffset.UtcNow,
+                        CreatedAtUtc = DateTimeOffset.UtcNow,
+                    }
+                );
+            }
+            await scope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        (await client.DeleteAsync($"/api/cluster/nodes/{nodeId}")).EnsureSuccessStatusCode();
+
+        using IServiceScope checkScope = factory.Services.CreateScope();
+        IClusterPeerConfigBackfillRepository check =
+            checkScope.ServiceProvider.GetRequiredService<IClusterPeerConfigBackfillRepository>();
+        Assert.Null(await check.FindByClusterNodeIdAsync(nodeId));
+        Assert.NotNull(await check.FindByClusterNodeIdAsync(otherNodeId));
+
+        (await client.DeleteAsync($"/api/cluster/nodes/{otherNodeId}")).EnsureSuccessStatusCode();
+    }
+
+    /// <summary>
+    ///     This test calls <see cref="ClusterController.RemoveNode" /> directly with a backfill
+    ///     repository that records the removals it is asked to stage. MongoDB has no foreign key
+    ///     cascade, so the controller must stage the request's removal itself; the SQLite cascade
+    ///     would hide a missing call in an end-to-end test.
+    /// </summary>
+    [Fact]
+    public async Task RemoveNode_WithAPendingBackfill_RemovesTheRequestExplicitly()
+    {
+        Guid nodeId = Guid.NewGuid();
+        using IServiceScope scope = factory.Services.CreateScope();
+        IServiceProvider services = scope.ServiceProvider;
+        NinlilDnsContext context = services.GetRequiredService<NinlilDnsContext>();
+        RecordingBackfillRepository backfills = new(context);
+        IClusterNodeRepository nodes = services.GetRequiredService<IClusterNodeRepository>();
+        IUnitOfWork unitOfWork = services.GetRequiredService<IUnitOfWork>();
+        await nodes.AddAsync(
+            new ClusterNodeEntity
+            {
+                Id = nodeId,
+                Name = $"explicit-peer-{nodeId:N}",
+                RemoteNodeId = Guid.NewGuid(),
+                Host = "192.168.1.54",
+                Port = 443,
+                TsigKeyName = $"explicit-key-{nodeId:N}",
+                TlsCertificateThumbprint = new string('d', 64),
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
+        await backfills.AddAsync(
+            new ClusterPeerConfigBackfillEntity
+            {
+                Id = Guid.NewGuid(),
+                ClusterNodeId = nodeId,
+                RequestedAtUtc = DateTimeOffset.UtcNow,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }
+        );
+        await unitOfWork.SaveChangesAsync();
+
+        ClusterController controller = new(
+            nodes,
+            services.GetRequiredService<ITsigKeyRepository>(),
+            backfills,
+            unitOfWork,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+        await controller.RemoveNode(nodeId, CancellationToken.None);
+
+        Assert.Equal([nodeId], backfills.Removed);
+    }
+
+    /// <summary>
+    ///     This class is the EF backfill repository with a record of the entities passed to
+    ///     <c>Remove</c>, so <see cref="RemoveNode_WithAPendingBackfill_RemovesTheRequestExplicitly" />
+    ///     can see the controller's call even where a foreign key would remove the row anyway.
+    /// </summary>
+    /// <param name="context">The database context the base repository stages onto.</param>
+    private sealed class RecordingBackfillRepository(NinlilDnsContext context)
+        : ClusterPeerConfigBackfillRepository(context)
+    {
+        /// <summary>
+        ///     This property contains the peer ids of the requests staged for removal.
+        /// </summary>
+        public List<Guid> Removed { get; } = [];
+
+        /// <inheritdoc />
+        public override void Remove(ClusterPeerConfigBackfillEntity entity)
+        {
+            Removed.Add(entity.ClusterNodeId);
+            base.Remove(entity);
+        }
     }
 
     [Fact]

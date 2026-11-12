@@ -17,8 +17,7 @@ public class FilterListEntryWriteRequestExample
     ///     This method returns one entry of each <see cref="DnsFilterEntryKindEnum" />, since the
     ///     syntax of <see cref="FilterListEntryWriteRequest.Value" /> depends on
     ///     <see cref="FilterListEntryWriteRequest.Kind" />. A wildcard or regex entry is accepted
-    ///     only in a <see cref="DnsFilterListKindEnum.Domain" /> list (see
-    ///     <see cref="Controllers.FilterListEntriesController" />).
+    ///     only in a <see cref="DnsFilterListKindEnum.Domain" /> list.
     /// </summary>
     public IEnumerable<SwaggerExample<FilterListEntryWriteRequest>> GetExamples() =>
         [

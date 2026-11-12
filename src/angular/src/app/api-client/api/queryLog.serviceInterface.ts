@@ -37,7 +37,7 @@ export interface QueryLogServiceInterface {
     configuration: Configuration;
 
     /**
-     * This action deletes every entry in the query log and returns how many were removed. It is separate from the retention-based pruning of &#x60;DnsQueryLogCleanupService&#x60;. Requires &#x60;querylog:write&#x60;.
+     * This action deletes every entry in the query log and returns how many were removed. It is separate from the retention-based pruning that the query log cleanup job does. Requires &#x60;querylog:write&#x60;.
      * 
      * @endpoint delete /api/query-log
 */

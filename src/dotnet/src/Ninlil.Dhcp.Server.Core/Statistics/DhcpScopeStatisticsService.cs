@@ -33,8 +33,8 @@ public sealed class DhcpScopeStatisticsService(
 
         BigInteger totalSlots = ComputeTotalSlots(scope);
 
-        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeNameAsync(
-            scope.Name,
+        IReadOnlyList<LeaseEntity> leases = await leaseRepository.ListByScopeIdAsync(
+            scope.Id,
             cancellationToken
         );
         IReadOnlyList<DhcpReservationEntity> reservations = await reservationRepository.ListAsync(

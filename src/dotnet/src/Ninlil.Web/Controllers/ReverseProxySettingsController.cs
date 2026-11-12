@@ -50,8 +50,8 @@ namespace Ninlil.Web.Controllers;
 /// </param>
 /// <param name="stateRepository">
 ///     Supplies the last-write-wins bookkeeping that <see cref="Get" /> reports as
-///     <see cref="ReverseProxySettingsDetail.LastModifiedUtc" /> and
-///     <see cref="ReverseProxySettingsDetail.OriginatingNodeId" />.
+///     <c>ReverseProxySettingsDetail.lastModifiedUtc</c> and
+///     <c>ReverseProxySettingsDetail.originatingNodeId</c>.
 /// </param>
 /// <param name="dataProtectionProvider">
 ///     Supplies this node's key ring, which encrypts the shared secret before it is written to
@@ -72,7 +72,7 @@ public class ReverseProxySettingsController(
     ///     This action returns the reverse-proxy trust settings for the HTTP listener and
     ///     DNS-over-TLS as loaded at startup, plus which node last changed them. The shared secret
     ///     is never returned, only whether one is set
-    ///     (<see cref="ReverseProxySettingsDetail.SharedSecretConfigured" />). Requires
+    ///     (<c>ReverseProxySettingsDetail.sharedSecretConfigured</c>). Requires
     ///     <c>reverseproxy:read</c>.
     /// </summary>
     [HttpGet]
@@ -105,7 +105,7 @@ public class ReverseProxySettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:ReverseProxy</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value, including <c>sharedSecret</c>, which is
     ///     always operator-supplied and so can be replaced in place. The secret is stored
     ///     encrypted with this node's key ring (<c>sharedSecretEncrypted</c> in the file) and is
@@ -278,14 +278,11 @@ public class ReverseProxySettingsController(
         // instead (over the TLS and TSIG protected cluster channel only, never the message
         // broker), because they can open only what their own key ring protected: each peer
         // encrypts it again on arrival.
-        await PresetConfigurationFileApplier.ApplyAsync(
-            ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
-            runtimeConfigurationOptions.ConfigurationFilePath
-        );
-
-        await clusterSyncRecorder.RecordAndPublishAsync(
+        await clusterSyncRecorder.ApplyAndRecordAsync(
             ReverseProxyOptions.SectionName,
             settings,
+            ConfigurationSecretSettings.ProtectForFile(settings, dataProtectionProvider),
+            runtimeConfigurationOptions.ConfigurationFilePath,
             HttpContext.RequestAborted
         );
 

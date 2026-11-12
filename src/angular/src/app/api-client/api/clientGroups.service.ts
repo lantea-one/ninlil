@@ -321,7 +321,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action pauses a client group now: the DNS queries of every known client whose &#x60;ClientGroupId&#x60; is this group are blocked, whatever schedules, filter lists or rewrites would apply, for &#x60;InstantPauseRequest.DurationMinutes&#x60; minutes, as &#x60;POST /api/clients/{id}/pause&#x60; does for one client. Calling it during a pause replaces the pause. Returns 400 for a duration that is not positive and 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
+     * This action pauses a client group now: the DNS queries of every known client whose &#x60;clientGroupId&#x60; is this group are blocked, whatever schedules, filter lists or rewrites would apply, for &#x60;InstantPauseRequest.durationMinutes&#x60; minutes, as &#x60;POST /api/clients/{id}/pause&#x60; does for one client. Calling it during a pause replaces the pause. Returns 400 for a duration that is not positive and 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint post /api/client-groups/{id}/pause
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -462,7 +462,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action ends a client group\&#39;s pause now by clearing &#x60;DnsClientGroupEntity.PausedUntilUtc&#x60;. Resuming a group that is not paused is not an error. Returns 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
+     * This action ends a client group\&#39;s pause now by clearing the group\&#39;s pause time. Resuming a group that is not paused is not an error. Returns 404 for an unknown id. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint post /api/client-groups/{id}/resume
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -522,7 +522,7 @@ export class ClientGroupsService extends BaseService implements ClientGroupsServ
     }
 
     /**
-     * This action creates a client group. When &#x60;ClientGroupWriteRequest.IsDefault&#x60; is true, the group that currently holds &#x60;DnsClientGroupEntity.IsDefault&#x60; loses it (see &#x60;ClientGroupsController.DemoteExistingDefaultAsync&#x60;). Returns 400 for a missing name and 409 when the name is taken. Requires &#x60;clientgroups:write&#x60;.
+     * This action creates a client group. When &#x60;ClientGroupWriteRequest.isDefault&#x60; is true, the group that currently is the default loses that flag. Returns 400 for a missing name and 409 when the name is taken. Requires &#x60;clientgroups:write&#x60;.
      * @endpoint post /api/client-groups
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.

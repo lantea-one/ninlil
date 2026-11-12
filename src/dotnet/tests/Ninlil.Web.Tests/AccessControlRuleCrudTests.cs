@@ -165,6 +165,51 @@ public class AccessControlRuleCrudTests(NinlilDnsWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("1")]
+    [InlineData("2")]
+    [InlineData("3")]
+    [InlineData("0")]
+    [InlineData("recursionaccess")]
+    public async Task Create_WithADigitStringOrWrongCase_ReturnsBadRequest(string entry)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        // "1" and "2" equal the value of a single member, so Enum.TryParse plus Enum.IsDefined
+        // would accept them; the API takes member names only.
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/access-control-rules",
+            new
+            {
+                name = $"digits-{Guid.NewGuid():N}",
+                cidr = "203.0.113.0/24",
+                capabilities = new[] { entry },
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("RecursionAccess")]
+    [InlineData("RateLimitBypass")]
+    public async Task Create_WithEachMemberName_ReturnsCreated(string entry)
+    {
+        HttpClient client = await CreateAuthenticatedClientAsync();
+
+        HttpResponseMessage response = await client.PostAsJsonAsync(
+            "/api/access-control-rules",
+            new
+            {
+                name = $"member-{Guid.NewGuid():N}",
+                cidr = "203.0.113.0/24",
+                capabilities = new[] { entry },
+            }
+        );
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
     [Fact]
     public async Task Create_WithAnInvalidCidr_ReturnsBadRequest()
     {

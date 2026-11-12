@@ -15,7 +15,7 @@ Clean-room, strictly:
   read, port, quote or compare against another DNS, DHCP or ad-blocking project's source, docs,
   tests or captures from its test suite.
 - Cite the rule in a comment at the code that implements it, with the section: "RFC 2308 §5",
-  "RFC 8415 §21.14". Check every section you cite against the RFC text and quote the sentence in
+  "RFC 9915 §21.14". Check every section you cite against the RFC text and quote the sentence in
   your report. Without network access, mark the citation unverified and say so.
 - If the code contradicts an RFC outside your package, do not change it: report it with the RFC
   sentence and `path:line`.
@@ -42,6 +42,8 @@ Rules:
 Tests:
 - Real sockets on loopback with OS-assigned free ports; no root, no fixed ports, no internet (use
   a fake upstream on loopback).
+- In a test project you touch, convert reserve-and-release port calls (AGENTS.md "Test", the
+  bullet after "OS-assigned free ports").
 - IPv6: guard with `if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback)) return;` (the
   `Fakes/LocalAddresses.cs` helper in each transport test project). QUIC: return early when
   `QuicListener.IsSupported` or `QuicConnection.IsSupported` is false.

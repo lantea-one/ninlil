@@ -11,7 +11,7 @@ import { WebhookAuthModeEnum } from './webhookAuthModeEnum';
 
 
 /**
- * This class carries the fields used to create a new outbound webhook subscription (`POST /api/webhooks`). `WebhookSubscriptionCreateResponse` is the only place `WebhookSubscriptionCreateRequest.AuthCredentials` and the HMAC signing secret are ever returned.
+ * This class carries the fields used to create a new outbound webhook subscription (`POST /api/webhooks`). `WebhookSubscriptionCreateResponse` is the only place `authCredentials` and the HMAC signing secret are ever returned.
  */
 export interface WebhookSubscriptionCreateRequest { 
     /**
@@ -23,12 +23,12 @@ export interface WebhookSubscriptionCreateRequest {
      */
     targetUrl?: string | null;
     /**
-     * The event types to deliver, by their `DnsServerEventTypeRegistry` name. Only the seven types webhooks deliver are accepted: `DnsZoneChanged`, `DnsCacheEvicted`, `DnssecZoneResigningCompleted`, `AcmeCertificateRenewalSucceeded`, `AcmeCertificateRenewalFailed`, `CloudDnsZoneSyncFailed` and `TrustAnchorRollover`; any other name returns 400.
+     * The event types to deliver, by name. Only the seven types webhooks deliver are accepted: `DnsZoneChanged`, `DnsCacheEvicted`, `DnssecZoneResigningCompleted`, `AcmeCertificateRenewalSucceeded`, `AcmeCertificateRenewalFailed`, `CloudDnsZoneSyncFailed` and `TrustAnchorRollover`; any other name returns 400.
      */
     eventTypeNames?: Array<string> | null;
     authMode?: WebhookAuthModeEnum;
     /**
-     * The delivery POST\'s credentials, required when `WebhookSubscriptionCreateRequest.AuthMode` is not `None`: `{\"BearerToken\":\"...\"}` for `Bearer`, or `{\"Username\":\"...\",\"Password\":\"...\"}` for `Basic`. They always come from the operator (the server never generates them) and are returned once, in this endpoint\'s response.
+     * The delivery POST\'s credentials, required when `authMode` is not `None`: `{\"BearerToken\":\"...\"}` for `Bearer`, or `{\"Username\":\"...\",\"Password\":\"...\"}` for `Basic`. They always come from the operator (the server never generates them) and are returned once, in this endpoint\'s response.
      */
     authCredentials?: { [key: string]: string | null; } | null;
     /**
@@ -36,7 +36,7 @@ export interface WebhookSubscriptionCreateRequest {
      */
     enableHmacSigning?: boolean;
     /**
-     * The HMAC signing secret, used only when `WebhookSubscriptionCreateRequest.EnableHmacSigning` is true. When omitted, a random 32-byte secret is generated. Either way the plaintext secret is shown once, in this endpoint\'s response. Neither `PUT` nor `PATCH` can change it, as with a TSIG key\'s secret (see `TsigKeyWriteRequest`); to rotate or remove it, delete and recreate the subscription.
+     * The HMAC signing secret, used only when `enableHmacSigning` is true. When omitted, a random 32-byte secret is generated. Either way the plaintext secret is shown once, in this endpoint\'s response. Neither `PUT` nor `PATCH` can change it, as with a TSIG key\'s secret (see `TsigKeyWriteRequest`); to rotate or remove it, delete and recreate the subscription.
      */
     hmacSigningSecret?: string | null;
     /**

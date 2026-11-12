@@ -358,6 +358,9 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(16)
                     .HasColumnType("nvarchar(16)");
 
+                b.Property<Guid>("ScopeId")
+                    .HasColumnType("uniqueidentifier");
+
                 b.Property<string>("ScopeName")
                     .IsRequired()
                     .HasMaxLength(256)
@@ -375,11 +378,13 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
 
                 b.HasIndex("IpAddress");
 
-                b.HasIndex("ScopeName", "ClientIdentifier")
+                b.HasIndex("ScopeId", "ClientIdentifier")
                     .IsUnique();
 
-                b.HasIndex("ScopeName", "IpAddress")
+                b.HasIndex("ScopeId", "IpAddress")
                     .IsUnique();
+
+                b.HasIndex("ScopeName", "ClientIdentifier");
 
                 b.HasIndex("State", "LeaseExpiresAtUtc");
 
@@ -538,6 +543,39 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                     .IsUnique();
 
                 b.ToTable("NinlilDnsClusterNodes", (string)null);
+            });
+
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterPeerConfigBackfillEntity", b =>
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("uniqueidentifier");
+
+                b.Property<int>("AttemptCount")
+                    .HasColumnType("int");
+
+                b.Property<Guid>("ClusterNodeId")
+                    .HasColumnType("uniqueidentifier");
+
+                b.Property<DateTimeOffset>("CreatedAtUtc")
+                    .HasColumnType("datetimeoffset");
+
+                b.Property<DateTimeOffset?>("LastAttemptAtUtc")
+                    .HasColumnType("datetimeoffset");
+
+                b.Property<string>("LastError")
+                    .HasMaxLength(1000)
+                    .HasColumnType("nvarchar(1000)");
+
+                b.Property<DateTimeOffset>("RequestedAtUtc")
+                    .HasColumnType("datetimeoffset");
+
+                b.HasKey("Id");
+
+                b.HasIndex("ClusterNodeId")
+                    .IsUnique();
+
+                b.ToTable("NinlilDnsClusterPeerConfigBackfills", (string)null);
             });
 
         modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterSyncTombstoneEntity", b =>
@@ -2089,6 +2127,15 @@ partial class NinlilDnsContextModelSnapshot : ModelSnapshot
                 b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.UserEntity", null)
                     .WithMany()
                     .HasForeignKey("UserId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+            });
+
+        modelBuilder.Entity("Ninlil.Dns.Data.Abstractions.Entity.ClusterPeerConfigBackfillEntity", b =>
+            {
+                b.HasOne("Ninlil.Dns.Data.Abstractions.Entity.ClusterNodeEntity", null)
+                    .WithMany()
+                    .HasForeignKey("ClusterNodeId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
             });

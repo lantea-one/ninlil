@@ -5,8 +5,179 @@ the next release branch cuts; a maintainer renames it to the release's name (see
 release](./CONTRIBUTING.md#cutting-a-release)). Each section describes Ninlil as that release
 ships. Installation, operation and every setting are in the [README](./README.md) and
 [`ENVIRONMENT.md`](./ENVIRONMENT.md); these notes link the guide that explains each item.
+Each entry ends with a link to its issue, for example
+`([#42](https://git.lantea.one/lantea-one/ninlil/issues/42))`. The full URL keeps the link working
+outside Forgejo.
 
 ## Unreleased
+
+## v2026.11.12.1
+
+### Security
+
+- **The Data Protection key ring is encrypted at rest.** Set `NINLIL_DATA_PROTECTION_CERTIFICATE_PATH`
+  (an RSA certificate in a PFX file) to encrypt it with that certificate on every platform;
+  `NINLIL_DATA_PROTECTION_PREVIOUS_CERTIFICATE_PATH` keeps entries written under the old certificate
+  readable after a change. With no certificate, Windows encrypts it with DPAPI for the account that
+  runs Ninlil, which cannot be read on another machine or account. Elsewhere it stays unencrypted in
+  an owner-only folder. A certificate setting that does not work stops the start with exit code 78.
+  A restore refuses a backup whose key ring this server cannot read and names the setting to fix.
+  See [Encrypt the key ring](./README.md#security) and
+  [`ENVIRONMENT.md`](./ENVIRONMENT.md#data-protection-key-ring).
+  ([#42](https://git.lantea.one/lantea-one/ninlil/issues/42))
+
+### Accepted risks
+
+- **The JWT signing key is stored unencrypted at rest, and so is the Data Protection key ring when no
+  certificate is set on Linux and macOS.** Both live in the data directory. On Linux and macOS
+  Ninlil sets the folder to mode 0700 and the files to 0600; on Windows you restrict the folder with
+  `icacls`. Anyone who can read the whole data directory can mint tokens for any enabled account,
+  and, with an unencrypted key ring, decrypt the stored secrets (TSIG secrets, DNSSEC private keys,
+  cloud credentials, TOTP keys, the ACME account key). Set a Data Protection certificate to encrypt
+  the key ring. Keep the data directory readable by the administrators of the host only, and protect
+  backups with a passphrase. See [Security](./README.md#security).
+  ([#42](https://git.lantea.one/lantea-one/ninlil/issues/42))
+
+### Deprecated
+
+- **The identity settings lockout fields are deprecated.** `defaultLockoutTimeSpan`,
+  `maxFailedAccessAttempts` and `allowedForNewUsers` of `/api/identity-settings`, and the
+  `NINLIL_IDENTITY_LOCKOUT_*` variables, never had an effect: Ninlil has no account lockout, and
+  sign-in is rate limited per client address instead. The OpenAPI document marks the three fields
+  `deprecated`. Reads and writes keep working; a later release removes them
+  ([#32](https://git.lantea.one/lantea-one/ninlil/issues/32)).
+
+### Removed
+
+- **Settings that had no effect are gone.** These variables never changed anything, because
+  DNS-over-HTTPS is served by the web listener and startup sets the two backup paths itself:
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_PORT`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PATH`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_PFX_PASSWORD`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_SELF_SIGNED_CERTIFICATE_STATE_PATH`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_ALLOWED_PROTOCOLS`
+  - `NINLIL_DNS_SERVER_PROTOCOL_DNS_OVER_HTTPS_CERTIFICATE_CERTIFICATE_RELOAD_POLL_INTERVAL`
+  - `NINLIL_DNS_SERVER_BACKUP_DATA_PROTECTION_KEY_RING_DIRECTORY`
+  - `NINLIL_DNS_SERVER_BACKUP_RUNTIME_CONFIGURATION_FILE_PATH`
+
+  An environment that still sets one starts as before and logs a warning that the variable
+  matches no known setting and was ignored; the same keys in a configuration file are ignored
+  silently. Remove them to silence the warning
+  ([#27](https://git.lantea.one/lantea-one/ninlil/issues/27)).
+- **Library API (NuGet).** `DnsOverHttpsOptions.Port` and `Certificate` moved to the new
+  `DnsOverHttpsListenerOptions`, which `DnsOverHttpsHostedService` now also takes in its
+  constructor; Ninlil itself does not bind it. `BackupOptions.DataProtectionKeyRingDirectory` and
+  `RuntimeConfigurationFilePath` moved to the new `BackupPathSettings`, which `SystemBackupService`
+  takes in its constructor. Code that builds these types itself needs the new argument.
+
+### Behaviour worth knowing
+
+- **The Debian release files are named with hyphens.** They are now `ninlil-<version>-amd64.deb`
+  and `ninlil-<version>-arm64.deb`, like every other release file. The package inside is still
+  called `ninlil`, so `apt install ./ninlil-<version>-amd64.deb` installs and upgrades it as
+  before. A script that downloads the Deb by its file name needs the new name. See [Debian,
+  Ubuntu, Fedora, RHEL and Rocky Linux](./README.md#debian-ubuntu-fedora-rhel-and-rocky-linux).
+  ([#342](https://git.lantea.one/lantea-one/ninlil/issues/342))
+- **A node that joins a cluster receives the inviting node's configuration, and a peer that missed
+  a change catches up.** When a join completes, the inviting node sends the new peer its
+  filter lists, the entries of local lists, access control rules, global rewrites, forwarders,
+  users, roles, deletion records and the five synced settings sections, after the next heartbeat
+  that reaches it. A failed live delivery, or a change made while a peer is `Unreachable`, makes
+  the next successful heartbeat send that peer a full pass too, so a node that was down catches up
+  without another save. A failed pass runs again in full, after a wait that doubles from the heartbeat interval up to 1 hour. Zones, records, DHCP data, the entries
+  of subscribed lists and rewrites scoped to a client or group are not copied. The joining node's
+  own bootstrap account and role merge by the newest-write rule and the loser is renamed: delete the
+  joining node's own pair after the join. Membership stays pairwise and changes are not relayed.
+  Password hashes, two-factor secrets and synced secrets travel inside the signed, encrypted
+  cluster channel, so treat an invite code as full trust. The log shows each pass as `Config
+  backfill to peer node '<name>' started`, `done: <n> items delivered` or `failed`. See
+  [Clustering, events and webhooks](./README.md#clustering-events-and-webhooks)
+  ([#59](https://git.lantea.one/lantea-one/ninlil/issues/59)).
+- **Renaming a DHCP scope keeps its leases.** A lease refers to its scope by id, so a renamed
+  scope keeps its leases, the DHCP engine renews them, and their DNS records stay registered. On
+  upgrade, each existing lease takes the id of the scope with its scope name, and a lease whose
+  scope name matches no scope (its scope was deleted) is deleted. A backup taken before this
+  change restores the same way: its leases are relinked by scope name and the orphans are
+  dropped. See [DHCP, DHCPv6 and Router
+  Advertisement](./README.md#dhcp-dhcpv6-and-router-advertisement)
+  ([#58](https://git.lantea.one/lantea-one/ninlil/issues/58)).
+- **Settings saved to a custom runtime configuration file now take effect.** If
+  `NINLIL_DNS_SERVER_RUNTIME_SETTINGS_CONFIGURATION_FILE_PATH` points at a file other than
+  `appsettings.json`, Ninlil now loads and watches that file as a configuration source: its values
+  apply at start, and a saved change applies at once where the page says so. Values already saved
+  in that file, which Ninlil ignored until now, take effect after the upgrade. They override
+  `appsettings.json` and `appsettings.{Environment}.json`; `NINLIL_*` variables and command-line
+  arguments still override them. Review or clear the file before you upgrade. Ninlil creates
+  the file's folder at start when it is missing, so a mistyped path leaves an empty folder. See
+  [Configuration](./README.md#configuration)
+  ([#314](https://git.lantea.one/lantea-one/ninlil/issues/314),
+  [#321](https://git.lantea.one/lantea-one/ninlil/issues/321)).
+- **Enum fields in API requests take names only.** A request body field that holds an enum
+  (for example a zone's `type`) accepts a declared name. Names match without regard to case,
+  and surrounding spaces are ignored. A flags field takes a comma list of names, such as
+  `"Sunday, Monday"` for a schedule's days. A digit string (`"1"`), a JSON number (`1`) or a
+  value that is no name (`"99"`) now answers `400` with a message that lists the valid values,
+  and a `null` for a required enum answers `400` too. This covers create and update bodies,
+  `PATCH` merge-patch bodies, the DNSSEC policy's allowed algorithms, the storage switch's
+  encryption mode and the settings pages that take enum text. Responses are unchanged: they
+  write names, and a number only for a code that has no name. Enums inside a record's `data`
+  payload are not covered by this rule. Enum query-string parameters and route segments
+  (a client list's `presence` and `sort`, the DHCP option catalog's `protocolVersion`, the
+  `{kind}` of `/api/dhcp-services/{kind}/start`) follow it too: a digit string or an undefined
+  name answers `400` with the valid names. Scripts that send numbers
+  must send the names that the OpenAPI document (`/swagger/v1/swagger.json`) lists for the
+  field. The MySQL load-balance and MongoDB read-preference replica settings refuse comma lists
+  and numbers in the same way. See [REST API](./README.md#rest-api)
+  ([#296](https://git.lantea.one/lantea-one/ninlil/issues/296),
+  [#316](https://git.lantea.one/lantea-one/ninlil/issues/316),
+  [#327](https://git.lantea.one/lantea-one/ninlil/issues/327)).
+
+- **A zone transfer or DNSCrypt answer over TCP is no longer lost when the client sent one more
+  message.** After the last reply the server shuts down its side, discards what the client still
+  sends for up to 2 seconds, and then closes, so the close is not a connection reset. On Windows
+  a reset made the client throw away the final reply it had not read yet.
+  ([#12](https://git.lantea.one/lantea-one/ninlil/issues/12))
+
+- **The OpenAPI document has the same text on Windows as on Linux.** The server turns every
+  `\r\n` in a summary or description into `\n`, so an executable built on Windows serves the same
+  document as one built on Linux.
+  ([#15](https://git.lantea.one/lantea-one/ninlil/issues/15))
+
+- **Saving settings on Windows works while another program is reading the file.** A virus
+  scanner, a backup tool or an editor can briefly hold the settings file open. The save then
+  retries the file replace for up to about a second instead of failing.
+  ([#13](https://git.lantea.one/lantea-one/ninlil/issues/13))
+
+- **On Windows, a client that closes its port before the reply no longer logs a warning.** Windows
+  reports the ICMP "port unreachable" that follows as an error on the server's next UDP receive,
+  and Ninlil logged "Error receiving a UDP datagram" for each one, which any sender could
+  provoke. Plain DNS, DNSCrypt, DHCPv4, DHCPv6, the TFTP listener and the DHCPv6 relay now switch
+  that behaviour off on their UDP sockets. Linux is unaffected.
+  ([#17](https://git.lantea.one/lantea-one/ninlil/issues/17))
+
+- **On Windows, a pooled outbound UDP socket no longer fails a query because of an earlier one.**
+  With the outbound source-port pool on (`EnableSourcePortPool`), one UDP socket carries many
+  queries to different upstreams. Windows reports the ICMP "port unreachable" from a query to a
+  dead upstream as an error on that socket's next receive, which could be a later query to a
+  healthy upstream, and that query then failed. Pooled sockets now switch that behaviour off, so
+  a dead upstream is detected by the per-forwarder timeout, as on Linux. With the pool off (the
+  default), each query still has its own socket and a dead upstream fails at once on Windows.
+  ([#364](https://git.lantea.one/lantea-one/ninlil/issues/364))
+
+- **On Windows, a zone transfer over DNS-over-TLS no longer loses its last message when the
+  client sent one more.** A secondary that sent another query before the transfer ended left it
+  unread on the server's socket, and closing a socket in that state sends a reset. On Windows the
+  reset makes the client throw away a reply it had received but not read. After a completed
+  transfer the DNS-over-TLS listener now sends the TLS close alert, waits up to 2 s for the client
+  to close its side, and only then closes the socket, as the plain TCP and DNSCrypt listeners
+  already do. Linux is unaffected.
+  ([#340](https://git.lantea.one/lantea-one/ninlil/issues/340))
+
+- **Registering a YAML converter while another thread serializes no longer throws.** In the
+  `Ninlil.Common.Serializer` library, `YamlSerializer.AddConverter` and the serializers it builds
+  share one converter list; a YAML request read at the same moment as a registration could fail
+  with "Collection was modified". The list is now locked, as the JSON serializer's already was.
+  ([#354](https://git.lantea.one/lantea-one/ninlil/issues/354))
 
 ## v2026.10.31.1
 

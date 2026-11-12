@@ -11,7 +11,7 @@ import { DnssecAlgorithmEnum } from './dnssecAlgorithmEnum';
 
 
 /**
- * This class carries the fields used to start an automated RFC 6781 key rollover for an active key (`POST /api/zones/{zoneId}/dnssec-keys/{id}/roll`). The scheme follows from the key\'s `Role`: Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK and Double-Signature (RFC 6781 §4.1.2) for a KSK. The other scheme cannot be requested.
+ * This class carries the fields used to start an automated RFC 6781 key rollover for an active key (`POST /api/zones/{zoneId}/dnssec-keys/{id}/roll`). The scheme follows from the key\'s `role`: Pre-Publish (RFC 6781 §4.1.1.1) for a ZSK and Double-Signature (RFC 6781 §4.1.2) for a KSK. The other scheme cannot be requested.
  */
 export interface DnssecKeyRolloverRequest { 
     algorithm?: DnssecAlgorithmEnum;

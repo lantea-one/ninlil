@@ -5,7 +5,7 @@ namespace Ninlil.Dhcp.Common.Wire;
 
 /// <summary>
 ///     This class provides typed accessors for the options of a <see cref="Dhcpv6RelayMessage" />:
-///     Relay Message (RFC 8415 Section 21.10, mandatory), Interface-ID (RFC 8415 Section 21.18,
+///     Relay Message (RFC 9915 Section 21.10, mandatory), Interface-ID (RFC 9915 Section 21.18,
 ///     optional) and Remote-ID (RFC 4649, optional). It is the relay counterpart of
 ///     <see cref="Dhcpv6MessageOptionExtensions" />. All three values are opaque byte strings. The
 ///     Remote-ID's 4-octet enterprise number and remote-id value are kept together, because tag
@@ -16,7 +16,7 @@ public static class Dhcpv6RelayMessageOptionExtensions
 {
     /// <summary>
     ///     This method attempts to read the Relay Message option's payload: the encoded message
-    ///     being relayed (RFC 8415 Section 21.10).
+    ///     being relayed (RFC 9915 Section 21.10).
     /// </summary>
     public static bool TryGetRelayMessagePayload(
         this Dhcpv6RelayMessage message,
@@ -51,7 +51,7 @@ public static class Dhcpv6RelayMessageOptionExtensions
     }
 
     /// <summary>
-    ///     This method attempts to read the Interface-ID option (RFC 8415 Section 21.18). An empty
+    ///     This method attempts to read the Interface-ID option (RFC 9915 Section 21.18). An empty
     ///     option counts as absent.
     /// </summary>
     public static bool TryGetInterfaceId(this Dhcpv6RelayMessage message, out byte[] interfaceId)

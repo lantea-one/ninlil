@@ -18,7 +18,7 @@ namespace Ninlil.Dns.Server.Authoritative.Tests.Dnssec;
 
 /// <summary>
 ///     This class checks what happens to a zone that is marked signed but has no key that can
-///     sign because every key uses an algorithm prohibited for signing (RFC 8624 §3.1): the
+///     sign because every key uses an algorithm prohibited for signing (RFC 9904 §3): the
 ///     signing service returns <see langword="null" />, <see cref="SignedZoneCache" /> keeps the
 ///     zone listed but serves it unsigned (no DNSKEY, RRSIG, NSEC or NSEC3) and logs a Warning,
 ///     a parent zone hosted here generates no DS for it and proves that with an NSEC or NSEC3

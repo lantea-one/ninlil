@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Text.Json.Serialization;
 using Ninlil.Dns.Common.Enum;
 
 // Define our namespace.
@@ -24,7 +25,8 @@ namespace Ninlil.Dns.Common.Wire.Records;
 ///     The Opt-Out flag (RFC 5155 §3 and §6), the least significant bit of the Flags field. When
 ///     set, the span this record covers may contain unsigned delegations that have no NSEC3
 ///     record of their own, so a zone with many unsigned delegations need not create one for
-///     each.
+///     each. It seeds <see cref="Flags" />; a codec or a caller that holds the whole Flags byte
+///     sets <see cref="Flags" /> directly.
 /// </param>
 /// <param name="iterations">
 ///     How many additional times the hash is applied (RFC 5155 §5). More iterations make a
@@ -55,9 +57,31 @@ public class Nsec3RecordData(
     public byte HashAlgorithm { get; } = hashAlgorithm;
 
     /// <summary>
-    ///     This property contains whether this record may also cover an insecure delegation.
+    ///     This property contains the whole Flags octet (RFC 5155 §3.1.2). Only the Opt-Out bit
+    ///     is defined, but the other bits are kept so a validator can ignore a record whose Flags
+    ///     value is other than zero or one (RFC 5155 §8.2) and so the record re-encodes as it
+    ///     arrived. In JSON, <c>isOptOut</c> alone sets this to 0 or 1; <c>flags</c> overrides it.
     /// </summary>
-    public bool IsOptOut { get; } = isOptOut;
+    public byte Flags { get; init; } = isOptOut ? OptOutFlag : (byte)0;
+
+    /// <summary>
+    ///     This property contains whether this record may also cover an insecure delegation: the
+    ///     Opt-Out flag, the least significant bit of <see cref="Flags" /> (RFC 5155 §3.1.2.1).
+    /// </summary>
+    public bool IsOptOut => (Flags & OptOutFlag) != 0;
+
+    /// <summary>
+    ///     This property contains whether a validator may use this record. RFC 5155 §8.2: "A
+    ///     validator MUST ignore NSEC3 RRs with a Flag fields value other than zero or one."
+    /// </summary>
+    [JsonIgnore]
+    public bool HasValidFlags => Flags <= OptOutFlag;
+
+    /// <summary>
+    ///     This constant contains the Opt-Out flag, the least significant bit of the Flags field
+    ///     (RFC 5155 §3.1.2.1).
+    /// </summary>
+    private const byte OptOutFlag = 0x01;
 
     /// <summary>
     ///     This property contains how many additional times the hash is applied.
@@ -86,7 +110,7 @@ public class Nsec3RecordData(
             ReferenceEquals(this, other)
             || (
                 HashAlgorithm == other.HashAlgorithm
-                && IsOptOut == other.IsOptOut
+                && Flags == other.Flags
                 && Iterations == other.Iterations
                 && Salt.AsSpan().SequenceEqual(other.Salt)
                 && NextHashedOwnerName.AsSpan().SequenceEqual(other.NextHashedOwnerName)
@@ -102,7 +126,7 @@ public class Nsec3RecordData(
     {
         HashCode hash = new();
         hash.Add(HashAlgorithm);
-        hash.Add(IsOptOut);
+        hash.Add(Flags);
         hash.Add(Iterations);
 
         foreach (byte b in Salt)
@@ -123,12 +147,6 @@ public class Nsec3RecordData(
 /// </summary>
 public class Nsec3RecordDataCodec : IDnsRecordDataCodec
 {
-    /// <summary>
-    ///     This constant contains the Opt-Out flag's bit position within the Flags field -- the
-    ///     least significant bit, per RFC 5155 §3.1.2.1.
-    /// </summary>
-    private const byte OptOutFlag = 0x01;
-
     /// <inheritdoc />
     public DnsResourceRecordTypeEnum RecordType => DnsResourceRecordTypeEnum.Nsec3;
 
@@ -139,7 +157,9 @@ public class Nsec3RecordDataCodec : IDnsRecordDataCodec
     public IDnsRecordData Read(ReadOnlySpan<byte> rdata)
     {
         byte hashAlgorithm = rdata[0];
-        bool isOptOut = (rdata[1] & OptOutFlag) != 0;
+        // Keep the whole octet: RFC 5155 §8.2 has a validator ignore a record with Flags other
+        // than zero or one, which it can only do if the other bits survive decoding.
+        byte flags = rdata[1];
         ushort iterations = BinaryPrimitives.ReadUInt16BigEndian(rdata.Slice(2, 2));
 
         // The salt and the hashed next name are each a one-octet length prefix followed by
@@ -160,12 +180,15 @@ public class Nsec3RecordDataCodec : IDnsRecordDataCodec
 
         return new Nsec3RecordData(
             hashAlgorithm,
-            isOptOut,
+            (flags & 0x01) != 0,
             iterations,
             salt,
             nextHashedOwnerName,
             types
-        );
+        )
+        {
+            Flags = flags,
+        };
     }
 
     /// <inheritdoc />
@@ -176,7 +199,7 @@ public class Nsec3RecordDataCodec : IDnsRecordDataCodec
 
         Span<byte> header = buffer.GetSpan(5);
         header[0] = typed.HashAlgorithm;
-        header[1] = typed.IsOptOut ? OptOutFlag : (byte)0;
+        header[1] = typed.Flags;
         BinaryPrimitives.WriteUInt16BigEndian(header.Slice(2, 2), typed.Iterations);
         header[4] = (byte)typed.Salt.Length;
         buffer.Advance(5);

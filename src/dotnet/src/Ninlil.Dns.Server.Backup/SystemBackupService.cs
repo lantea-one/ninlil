@@ -6,6 +6,7 @@ using System.Xml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Dhcp.Data.Abstractions.Entity;
 using Ninlil.Dns.Common.IO;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Options;
@@ -35,7 +36,9 @@ namespace Ninlil.Dns.Server.Backup;
 ///         tampered archive, a missing entry, an unexpected key ring entry, a second
 ///         certificate or configuration entry, a configuration that is not a JSON object or
 ///         more decompressed data than <see cref="BackupOptions.MaximumRestoredPayloadBytes" />
-///         is rejected before anything is written, and so is entity JSON that does not parse.
+///         is rejected before anything is written, and so is entity JSON that does not parse
+///         and, when files are restored, a key ring that <see cref="IKeyRingRestoreCheck" /> says
+///         this server cannot read.
 ///         A TsigKeys list from before the cluster key link is re-linked to its peers while the
 ///         archive is still only in memory. The bundled files are then staged next to their
 ///         targets. The existing rows are wiped and the archive's rows imported inside one
@@ -51,16 +54,23 @@ namespace Ninlil.Dns.Server.Backup;
 ///     </para>
 /// </summary>
 /// <param name="scopeFactory">Used to open one dependency injection scope per backup/restore.</param>
-/// <param name="backupOptions">The key ring directory, runtime configuration file and minimum passphrase length.</param>
+/// <param name="backupOptions">The minimum passphrase length and restore size limit.</param>
+/// <param name="backupPaths">The key ring directory and the runtime configuration file.</param>
 /// <param name="tlsCertificateOptions">Where the shared TLS certificate lives.</param>
 /// <param name="storageOptions">The active storage engine, recorded in the manifest for reference.</param>
 /// <param name="logger">The logger this service records progress and failures to.</param>
+/// <param name="keyRingRestoreCheck">
+///     Tests whether the archive's key files can be read before a restore with files changes anything;
+///     <see langword="null" /> skips the test.
+/// </param>
 public sealed partial class SystemBackupService(
     IServiceScopeFactory scopeFactory,
     IOptions<BackupOptions> backupOptions,
+    BackupPathSettings backupPaths,
     TlsCertificateOptions tlsCertificateOptions,
     StorageOptions storageOptions,
-    ILogger<SystemBackupService> logger
+    ILogger<SystemBackupService> logger,
+    IKeyRingRestoreCheck keyRingRestoreCheck = null
 ) : IBackupService
 {
     /// <summary>
@@ -152,7 +162,7 @@ public sealed partial class SystemBackupService(
                     certificatePath
                 );
 
-            string configurationPath = backupOptions.Value.RuntimeConfigurationFilePath;
+            string configurationPath = backupPaths.RuntimeConfigurationFilePath;
             if (!string.IsNullOrWhiteSpace(configurationPath) && File.Exists(configurationPath))
                 WriteFileEntry(
                     archive,
@@ -269,6 +279,14 @@ public sealed partial class SystemBackupService(
         RestoredFiles files = ReadAndValidateFiles(archive, budget);
         if (!restoreFiles)
             files = new RestoredFiles([], null, null);
+        else if (files.KeyRing.Count > 0 && keyRingRestoreCheck is not null)
+        {
+            // Keys this server cannot read would leave every restored secret undecryptable, and
+            // the merge cannot be undone afterwards, so the restore stops before it writes.
+            string unreadable = keyRingRestoreCheck.Check(files.KeyRing);
+            if (unreadable is not null)
+                throw new BackupArchiveInvalidException(unreadable);
+        }
 
         // Every entity file is parsed now, before anything is wiped, so malformed JSON aborts the
         // restore with nothing changed.
@@ -323,11 +341,32 @@ public sealed partial class SystemBackupService(
                 linkedClusterKeys
             );
 
+        // An archive from before the lease scope id has DhcpLeases without a ScopeId property;
+        // relink those leases to their scopes by name and drop the ones whose scope is gone, as
+        // the migration did for a live database. This runs before anything is wiped, so a bad
+        // archive never half-restores.
+        List<LeaseEntity> leases = [.. parsedByName["DhcpLeases"].Cast<LeaseEntity>()];
+        List<DhcpScopeEntity> dhcpScopes = [.. parsedByName["DhcpScopes"].Cast<DhcpScopeEntity>()];
+        (int linkedLeases, int removedLeases) = BackupLegacyFixups.LinkLeasesToScopes(
+            entityJsonByName["DhcpLeases"],
+            leases,
+            dhcpScopes
+        );
+        if (linkedLeases > 0 || removedLeases > 0)
+        {
+            parsedByName["DhcpLeases"] = leases;
+            logger.LogInformation(
+                "Linked {LinkedLeaseCount} DHCP leases to their scopes and dropped {DroppedLeaseCount} leases of deleted scopes in an archive that predates the link.",
+                linkedLeases,
+                removedLeases
+            );
+        }
+
         // Every required entry is present and valid. The files are staged next to their targets
         // first, so a full disk or a permission error aborts here with nothing changed; the
         // database is changed next, in one transaction where the engine supports it; the files
         // are renamed into place last, only after that transaction commits.
-        string configurationPath = backupOptions.Value.RuntimeConfigurationFilePath;
+        string configurationPath = backupPaths.RuntimeConfigurationFilePath;
         bool restoresConfiguration =
             files.Configuration is not null && !string.IsNullOrWhiteSpace(configurationPath);
         SemaphoreSlim configurationLock = restoresConfiguration
@@ -505,14 +544,14 @@ public sealed partial class SystemBackupService(
 
     /// <summary>
     ///     This method lists every Data Protection key ring file in
-    ///     <see cref="BackupOptions.DataProtectionKeyRingDirectory" />, matched by the ASP.NET Core
+    ///     <see cref="BackupPathSettings.DataProtectionKeyRingDirectory" />, matched by the ASP.NET Core
     ///     <c>key-&lt;guid&gt;.xml</c> naming pattern, the same pattern a restore requires. The same
     ///     directory also holds, by default, the SQLite database and the JWT signing key, which
     ///     must not be picked up.
     /// </summary>
     private IReadOnlyList<string> ListKeyRingFiles()
     {
-        string directory = backupOptions.Value.DataProtectionKeyRingDirectory;
+        string directory = backupPaths.DataProtectionKeyRingDirectory;
         return Directory.Exists(directory)
             ?
             [
@@ -828,7 +867,7 @@ public sealed partial class SystemBackupService(
         List<(string Path, StagedFile File)> stagedFiles
     )
     {
-        string keyRingDirectory = backupOptions.Value.DataProtectionKeyRingDirectory;
+        string keyRingDirectory = backupPaths.DataProtectionKeyRingDirectory;
         foreach ((string fileName, byte[] bytes) in files.KeyRing)
         {
             string path = Path.Combine(keyRingDirectory, fileName);
@@ -845,7 +884,7 @@ public sealed partial class SystemBackupService(
 
         if (restoresConfiguration)
         {
-            string path = backupOptions.Value.RuntimeConfigurationFilePath;
+            string path = backupPaths.RuntimeConfigurationFilePath;
             stagedFiles.Add(
                 (
                     path,

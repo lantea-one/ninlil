@@ -11,7 +11,7 @@ import { WebhookDeliveryAttemptStatusEnum } from './webhookDeliveryAttemptStatus
 
 
 /**
- * This class carries one webhook delivery and its attempts so far, as returned by `GET /api/webhooks/{id}/delivery-attempts` from the stored `WebhookDeliveryAttemptEntity` history. It is read-only: only `WebhookDeliveryService` and `WebhookDeliveryRetrySweepService` write deliveries, as they make attempts.
+ * This class carries one webhook delivery and its attempts so far, as returned by `GET /api/webhooks/{id}/delivery-attempts` from the stored attempt history. It is read-only: only the webhook delivery and its retry job write deliveries, as they make attempts.
  */
 export interface WebhookDeliveryAttemptDetail { 
     /**
@@ -40,7 +40,7 @@ export interface WebhookDeliveryAttemptDetail {
      */
     attemptCount?: number;
     /**
-     * The most attempts the delivery may make: the subscription\'s `WebhookSubscriptionDetail.MaxDeliveryAttempts` when the delivery was created.
+     * The most attempts the delivery may make: the subscription\'s `WebhookSubscriptionDetail.maxDeliveryAttempts` when the delivery was created.
      */
     maxAttempts?: number;
     /**
@@ -48,7 +48,7 @@ export interface WebhookDeliveryAttemptDetail {
      */
     lastAttemptedAtUtc?: string | null;
     /**
-     * When the next retry is due, or null once `WebhookDeliveryAttemptDetail.Status` is final.
+     * When the next retry is due, or null once `status` is final.
      */
     nextRetryDueUtc?: string | null;
     /**

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
@@ -21,7 +22,8 @@ namespace Ninlil.Dns.Protocol.DnsCrypt.Tests;
 ///     reference to each query's bytes for the life of the query, so one test holds a first
 ///     query inside the resolver while a second datagram arrives, checks that the first one's
 ///     bytes did not change, and then decrypts both replies to check each client gets its own
-///     answer. It also checks that stopping the listener ends its receive loops.
+///     answer. It also checks that stopping the listener ends its receive loops without a warning
+///     in the log.
 /// </summary>
 public sealed class DnsCryptUdpReceiveTests
 {
@@ -96,6 +98,42 @@ public sealed class DnsCryptUdpReceiveTests
         Assert.False(host.Listener.IsListening);
     }
 
+    [Fact]
+    public async Task StopAsync_WhileReceiveLoopsArePending_LogsNoWarning()
+    {
+        CapturingLogger<DnsCryptUdpListener> logger = new();
+        Host host = await Host.StartAsync(logger);
+
+        // The resolver holds its first query until released; this test needs it answered.
+        host.Resolver.ReleaseFirstQuery();
+
+        // One answered query first: the receive that follows it is the one a stop aborts. Closing
+        // the socket can make that pending receive fail with a SocketException (for example
+        // SocketError.OperationAborted, 995, on Windows), which is the stop itself and not worth a
+        // warning in the service's log.
+        DnsMessage query = DnsCryptWireTestHelper.BuildQuery(
+            5,
+            DnsName.Parse("before-stop.example.test.")
+        );
+        (byte[] packet, DnsCryptWireTestHelper.ClientQuerySession session) =
+            DnsCryptWireTestHelper.BuildEncryptedQueryPacket(host.Certificate, query);
+        using UdpClient client = new(AddressFamily.InterNetwork);
+        client.Connect(IPAddress.Loopback, host.Port);
+        await client.SendAsync(packet);
+        DnsMessage reply = DnsCryptWireTestHelper.DecryptResponsePacket(
+            host.Certificate,
+            session,
+            await ReceiveAsync(client),
+            out _,
+            out _
+        );
+        Assert.Equal(5, reply.Id);
+
+        await host.DisposeAsync();
+
+        Assert.DoesNotContain(logger.Entries, entry => entry.Level >= LogLevel.Warning);
+    }
+
     private static async Task<byte[]> ReceiveAsync(UdpClient client)
     {
         using CancellationTokenSource timeout = new(Timeout);
@@ -118,7 +156,7 @@ public sealed class DnsCryptUdpReceiveTests
 
         public CapturingResolver Resolver { get; } = new();
 
-        public static async Task<Host> StartAsync()
+        public static async Task<Host> StartAsync(ILogger<DnsCryptUdpListener> logger = null)
         {
             Host host = new() { Port = FreeUdpPort() };
 
@@ -160,7 +198,7 @@ public sealed class DnsCryptUdpReceiveTests
                         ProviderName = "example.test",
                     }
                 ),
-                NullLogger<DnsCryptUdpListener>.Instance
+                logger ?? NullLogger<DnsCryptUdpListener>.Instance
             );
             await host.Listener.StartAsync(CancellationToken.None);
 

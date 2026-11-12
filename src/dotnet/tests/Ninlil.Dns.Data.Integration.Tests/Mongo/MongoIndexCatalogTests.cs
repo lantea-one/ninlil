@@ -81,8 +81,9 @@ public sealed class MongoIndexCatalogTests(MongoDbEngineFixture fixture)
         ["NinlilDhcpScopes"] = ["Name:1"],
         ["NinlilDhcpLeases"] =
         [
+            "ScopeId:1,ClientIdentifier:1",
+            "ScopeId:1,IpAddress:1",
             "ScopeName:1,ClientIdentifier:1",
-            "ScopeName:1,IpAddress:1",
             "IpAddress:1",
             "State:1,LeaseExpiresAtUtc:1",
         ],
@@ -90,6 +91,7 @@ public sealed class MongoIndexCatalogTests(MongoDbEngineFixture fixture)
         ["NinlilDhcpScopeCustomOptions"] = ["ScopeId:1,OptionTag:1"],
         ["NinlilDhcpTagRuleOptions"] = ["TagRuleId:1,OptionTag:1"],
         ["NinlilDnsClusterNodes"] = ["RemoteNodeId:1"],
+        ["NinlilDnsClusterPeerConfigBackfills"] = ["ClusterNodeId:1"],
         ["NinlilDnsClusterSyncTombstones"] = ["EntityType:1,EntityKey:1"],
         ["NinlilDnsClusterSyncedSettingsStates"] = ["SectionName:1"],
     };
@@ -269,7 +271,11 @@ public sealed class MongoIndexCatalogTests(MongoDbEngineFixture fixture)
             ),
             (
                 "NinlilDhcpLeases",
-                new BsonDocument { { "ScopeName", "lan" }, { "ClientIdentifier", "aa:bb" } },
+                new BsonDocument
+                {
+                    { "ScopeId", Guid4(Guid.NewGuid()) },
+                    { "ClientIdentifier", "aa:bb" },
+                },
                 null
             ),
             ("NinlilDnsApiTokens", new BsonDocument("TokenHash", "abc"), null),

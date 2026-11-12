@@ -89,6 +89,7 @@ public static class OptionsEnvironmentVariableRegistry
         new(typeof(EmailSenderOptions)),
         new(typeof(AdminLoginRateLimitOptions)),
         new(typeof(OidcSsoOptions)),
+        new(typeof(EmailChangeOptions)),
         // Protocol transports (Ninlil.Dns.Protocol.*).
         new(typeof(PlainProtocolOptions)),
         new(typeof(DnsOverTlsOptions)),
@@ -158,6 +159,8 @@ public static class OptionsEnvironmentVariableRegistry
         new(typeof(AppearanceOptions)),
         new(typeof(BrandingOptions)),
         new(typeof(RuntimeConfigurationOptions)),
+        // The Data Protection key ring encryption at rest (Ninlil.Web).
+        new(typeof(DataProtectionKeyRingOptions)),
     ];
 
     /// <summary>

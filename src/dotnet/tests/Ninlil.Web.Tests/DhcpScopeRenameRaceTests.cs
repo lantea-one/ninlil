@@ -18,10 +18,10 @@ namespace Ninlil.Web.Tests;
 /// <summary>
 ///     This class covers the controller half of the scope rename race. It builds
 ///     <see cref="DhcpScopesController" /> by hand over EF Core repositories on a temporary
-///     SQLite file, without a web host. A lease repository decorator inserts a lease under the
-///     old scope name through a second context right after the controller's first read of the old
-///     name, the way the DHCP engine does while a rename is in flight. The controller's second
-///     pass after its save must move that lease too.
+///     SQLite file, without a web host. A lease repository decorator inserts a lease carrying the
+///     old scope name copy through a second context right after the controller's first read of
+///     the scope's leases, the way the DHCP engine does while a rename is in flight. The
+///     controller's second pass after its save must rewrite that lease's copy too.
 /// </summary>
 public sealed class DhcpScopeRenameRaceTests : IDisposable
 {
@@ -51,12 +51,17 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
     }
 
     [Fact]
-    public async Task Patch_WhenTheEngineWritesALeaseUnderTheOldNameDuringTheRename_MovesItToo()
+    public async Task Patch_WhenTheEngineWritesALeaseWithTheOldNameDuringTheRename_RenamesItToo()
     {
         Guid scopeId = await SeedScopeWithLeaseAsync("race-old", "race-client-1");
 
         await using NinlilDnsContext context = new(_options);
-        DhcpScopesController controller = CreateController(context, "race-old", "race-client-2");
+        DhcpScopesController controller = CreateController(
+            context,
+            scopeId,
+            "race-old",
+            "race-client-2"
+        );
 
         IActionResult result = await controller.Patch(
             scopeId,
@@ -75,13 +80,14 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
     }
 
     [Fact]
-    public async Task Replace_WhenTheEngineWritesALeaseUnderTheOldNameDuringTheRename_MovesItToo()
+    public async Task Replace_WhenTheEngineWritesALeaseWithTheOldNameDuringTheRename_RenamesItToo()
     {
         Guid scopeId = await SeedScopeWithLeaseAsync("race-put-old", "race-client-1");
 
         await using NinlilDnsContext context = new(_options);
         DhcpScopesController controller = CreateController(
             context,
+            scopeId,
             "race-put-old",
             "race-client-2"
         );
@@ -112,6 +118,7 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
 
     private DhcpScopesController CreateController(
         NinlilDnsContext context,
+        Guid scopeId,
         string oldName,
         string racingClient
     )
@@ -133,14 +140,15 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
 
             if (
                 done
-                || method.Name != nameof(ILeaseRepository.ListByScopeNameAsync)
-                || !string.Equals((string)args[0], oldName, StringComparison.Ordinal)
+                || method.Name != nameof(ILeaseRepository.ListByScopeIdAsync)
+                || (Guid)args[0] != scopeId
             )
                 return result;
 
             done = true;
             return InsertAfterAsync(
                 (Task<IReadOnlyList<LeaseEntity>>)result,
+                scopeId,
                 oldName,
                 racingClient
             );
@@ -163,6 +171,7 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
     /// </summary>
     private async Task<IReadOnlyList<LeaseEntity>> InsertAfterAsync(
         Task<IReadOnlyList<LeaseEntity>> read,
+        Guid scopeId,
         string scopeName,
         string clientIdentifier
     )
@@ -170,7 +179,7 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
         IReadOnlyList<LeaseEntity> stale = await read;
 
         await using NinlilDnsContext other = new(_options);
-        other.Set<LeaseEntity>().Add(NewLease(scopeName, clientIdentifier, "192.0.2.12"));
+        other.Set<LeaseEntity>().Add(NewLease(scopeId, scopeName, clientIdentifier, "192.0.2.12"));
         await other.SaveChangesAsync();
         return stale;
     }
@@ -194,12 +203,13 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
 
         await using NinlilDnsContext context = new(_options);
         context.Set<DhcpScopeEntity>().Add(scope);
-        context.Set<LeaseEntity>().Add(NewLease(name, clientIdentifier, "192.0.2.11"));
+        context.Set<LeaseEntity>().Add(NewLease(scope.Id, name, clientIdentifier, "192.0.2.11"));
         await context.SaveChangesAsync();
         return scope.Id;
     }
 
     private static LeaseEntity NewLease(
+        Guid scopeId,
         string scopeName,
         string clientIdentifier,
         string address
@@ -209,6 +219,7 @@ public sealed class DhcpScopeRenameRaceTests : IDisposable
             Id = Guid.NewGuid(),
             CreatedAtUtc = DateTimeOffset.UtcNow,
             ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+            ScopeId = scopeId,
             ScopeName = scopeName,
             ClientIdentifier = clientIdentifier,
             IpAddress = address,

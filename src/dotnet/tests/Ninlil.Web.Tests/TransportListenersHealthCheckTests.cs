@@ -137,6 +137,9 @@ public sealed class TransportListenersHealthCheckTests
 
         Assert.Equal(HealthStatus.Unhealthy, result.Status);
         Assert.Contains("Plain/UDP (:: (", result.Description);
-        Assert.Contains("in use", result.Description);
+        Assert.True(
+            PortTakenReason.IsIn(result.Description),
+            $"Expected an OS port-taken reason ({PortTakenReason.Describe()}), got: {result.Description}"
+        );
     }
 }

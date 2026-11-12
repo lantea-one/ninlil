@@ -63,7 +63,7 @@ public class AppearanceSettingsController(
 
     /// <summary>
     ///     This action merges a partial update into <c>DnsServer:Appearance</c> as an RFC 7396
-    ///     merge patch, through <see cref="PresetConfigurationFileApplier" />. A field absent from
+    ///     merge patch, written to the configuration file. A field absent from
     ///     <paramref name="patch" /> keeps its value. The change takes effect at once. Returns 400
     ///     for an unknown palette or mode name. Requires <c>appearance:write</c>.
     /// </summary>
@@ -122,12 +122,11 @@ public class AppearanceSettingsController(
     }
 
     /// <summary>
-    ///     This action merges a partial update into the caller's
-    ///     <see cref="UserEntity.PreferredPalette" /> and <see cref="UserEntity.PreferredMode" />
-    ///     as an RFC 7396 merge patch: an absent field is unchanged, a JSON <c>null</c> removes the
-    ///     override (falling back to the server-wide default), and a palette or mode name sets it.
-    ///     The value is stored on the caller's account, not in the configuration file. Returns 400
-    ///     for an unknown name. Requires only a signed-in caller.
+    ///     This action merges a partial update into the caller's preferred palette and preferred
+    ///     mode as an RFC 7396 merge patch: an absent field is unchanged, a JSON <c>null</c>
+    ///     removes the override (falling back to the server-wide default), and a palette or mode
+    ///     name sets it. The value is stored on the caller's account, not in the configuration
+    ///     file. Returns 400 for an unknown name. Requires only a signed-in caller.
     /// </summary>
     [HttpPatch("me")]
     [Authorize]

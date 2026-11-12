@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the rewrite engine settings (`DnsRewriteOptions`) that `GET /api/rewrite-settings` returns. A `PATCH` to the same endpoint accepts the same fields. The rewrites themselves are a separate resource (`DnsRewritesController`); this record holds the on/off switch and the TTL of synthesized answers, which apply to all of them. Both fields are replicated to every cluster node, so the record also reports which node last wrote them.
+ * This record is the REST shape of the rewrite engine settings (configuration section `DnsServer:Rewrites`) that `GET /api/rewrite-settings` returns. A `PATCH` to the same endpoint accepts the same fields. The rewrites themselves are a separate resource (`/api/dns-rewrites`); this record holds the on/off switch and the TTL of synthesized answers, which apply to all of them. Both fields are replicated to every cluster node, so the record also reports which node last wrote them.
  */
 export interface RewriteSettingsDetail { 
     /**

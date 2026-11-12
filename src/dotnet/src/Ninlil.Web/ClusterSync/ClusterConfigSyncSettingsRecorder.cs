@@ -23,6 +23,14 @@ namespace Ninlil.Web.ClusterSync;
 ///     <see cref="SettingsClusterConfigSyncApplier" /> applies it. It is registered as a scoped
 ///     service in <c>Program.cs</c>.
 ///     <para>
+///         <b>Every synced key is catalogued.</b> A live envelope carries only the keys one write
+///         changed, so nothing but <see cref="ClusterSyncedSettingsCatalog" /> says which keys a
+///         section syncs. <see cref="SettingsClusterConfigSyncSource" /> reads that catalogue to
+///         send a section whole to a node that joins later, so
+///         <see cref="RecordAndPublishAsync" /> throws an <see cref="InvalidOperationException" />
+///         for a section or key that is not in it.
+///     </para>
+///     <para>
 ///         <b>Secrets travel in the clear, on the cluster channel only.</b> A secret setting (see
 ///         <see cref="Ninlil.Web.Configuration.ConfigurationSecretSettings" />) is sent as the
 ///         plaintext the operator entered, because a Data Protection payload opens only with the
@@ -31,6 +39,8 @@ namespace Ninlil.Web.ClusterSync;
 ///         <see cref="ClusterConfigSettingsChangedEvent" /> never crosses the message broker.
 ///         Callers pass the values as the operator entered them, not as written to the file. Each
 ///         receiving node encrypts the secret with its own key ring before it writes the file.
+///         <see cref="SettingsClusterConfigSyncSource" /> sends a secret the same way when a
+///         backfill sends a section whole.
 ///     </para>
 /// </summary>
 /// <param name="stateRepository">Reads and writes the sync state of a section.</param>
@@ -45,6 +55,42 @@ public class ClusterConfigSyncSettingsRecorder(
 )
 {
     /// <summary>
+    ///     This method is the one way a synced settings controller saves a write: it checks the
+    ///     catalogue, merges the file settings into the runtime configuration file, then records
+    ///     and publishes the write (<see cref="RecordAndPublishAsync" />). The catalogue check
+    ///     comes first so a refused write leaves the file untouched, and this node and its peers
+    ///     never disagree about a key that only one of them has.
+    /// </summary>
+    /// <param name="sectionName">The section name; see <see cref="RecordAndPublishAsync" />.</param>
+    /// <param name="settings">
+    ///     The values as the operator entered them. They are catalogued and sent to peers.
+    /// </param>
+    /// <param name="fileSettings">
+    ///     What is written to this node's file: <paramref name="settings" /> as they are, or with
+    ///     secrets encrypted by <see cref="Ninlil.Web.Configuration.ConfigurationSecretSettings.ProtectForFile" />.
+    /// </param>
+    /// <param name="configurationFilePath">The runtime configuration file.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     The section or a key is not in <see cref="ClusterSyncedSettingsCatalog" />. Nothing is
+    ///     written.
+    /// </exception>
+    public async Task ApplyAndRecordAsync(
+        string sectionName,
+        IReadOnlyList<PresetConfigurationSetting> settings,
+        IReadOnlyList<PresetConfigurationSetting> fileSettings,
+        string configurationFilePath,
+        CancellationToken stoppingToken
+    )
+    {
+        ClusterSyncedSettingsCatalog.EnsureCatalogued(sectionName, settings);
+
+        await PresetConfigurationFileApplier.ApplyAsync(fileSettings, configurationFilePath);
+
+        await RecordAndPublishAsync(sectionName, settings, stoppingToken);
+    }
+
+    /// <summary>
     ///     This method records a settings write that has just been applied, with this node as its
     ///     origin, and publishes it to the cluster. Each value is sent as a
     ///     <see cref="JsonElement" /> (see <see cref="SettingsSyncEntry" />), so lists, numbers,
@@ -58,12 +104,21 @@ public class ClusterConfigSyncSettingsRecorder(
     /// </param>
     /// <param name="settings">The configuration values that were just written.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     The section, or a key of <paramref name="settings" />, is not in
+    ///     <see cref="ClusterSyncedSettingsCatalog" />. Nothing is recorded or published.
+    /// </exception>
     public async Task RecordAndPublishAsync(
         string sectionName,
         IReadOnlyList<PresetConfigurationSetting> settings,
         CancellationToken stoppingToken
     )
     {
+        // A section or key outside the catalogue would sync live but never reach a node that
+        // joins later, because a backfill sends only what the catalogue lists. Refusing it here
+        // makes a new synced setting fail its own first test until it is catalogued.
+        ClusterSyncedSettingsCatalog.EnsureCatalogued(sectionName, settings);
+
         DateTimeOffset now = DateTimeOffset.UtcNow;
         Guid ownNodeId = clusterOptions.CurrentValue.NodeId;
 
@@ -92,14 +147,12 @@ public class ClusterConfigSyncSettingsRecorder(
 
         await unitOfWork.SaveChangesAsync(stoppingToken);
 
-        string settingsJson = JsonSerializer.Serialize(
-            settings
-                .Select(setting => new SettingsSyncEntry(
-                    setting.SectionPath,
-                    setting.Key,
-                    JsonSerializer.SerializeToElement(setting.Value)
-                ))
-                .ToList()
+        string settingsJson = SettingsSyncEntry.ToPayloadJson(
+            settings.Select(setting => new SettingsSyncEntry(
+                setting.SectionPath,
+                setting.Key,
+                JsonSerializer.SerializeToElement(setting.Value)
+            ))
         );
 
         eventPublisher.Publish(

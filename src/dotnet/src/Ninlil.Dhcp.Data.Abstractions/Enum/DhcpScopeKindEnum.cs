@@ -16,7 +16,7 @@ namespace Ninlil.Dhcp.Data.Abstractions.Enum;
 public enum DhcpScopeKindEnum
 {
     /// <summary>
-    ///     An address pool: the only DHCPv4 mode, and RFC 8415 stateful address assignment
+    ///     An address pool: the only DHCPv4 mode, and RFC 9915 stateful address assignment
     ///     (IA_NA) for DHCPv6. <see cref="Entity.DhcpScopeEntity.RangeStartAddress" /> and
     ///     <c>RangeEndAddress</c> bound a pool of single addresses.
     /// </summary>
@@ -24,7 +24,7 @@ public enum DhcpScopeKindEnum
     AddressAssignment = 0,
 
     /// <summary>
-    ///     RFC 8415 Section 21.21 prefix delegation (IA_PD), IPv6 only.
+    ///     RFC 9915 Section 21.21 prefix delegation (IA_PD), IPv6 only.
     ///     <see cref="Entity.DhcpScopeEntity.RangeStartAddress" /> and <c>RangeEndAddress</c> bound
     ///     a pool of prefixes, each <see cref="Entity.DhcpScopeEntity.DelegatedPrefixLength" />
     ///     bits long, delegated to clients (usually downstream routers).

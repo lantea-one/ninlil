@@ -64,11 +64,16 @@ public sealed class SystemBackupServiceAtomicRestoreTests : IAsyncLifetime
                 SelfSignedCertificateStatePath = Path.Combine(_rootDirectory, "unused.pfx"),
             }
         );
+        builder.Services.AddSingleton(
+            new BackupPathSettings
+            {
+                DataProtectionKeyRingDirectory = _keyRingDirectory,
+                RuntimeConfigurationFilePath = _configurationPath,
+            }
+        );
         builder.Services.AddNinlilDnsServerBackup(builder.Configuration);
         builder.Services.PostConfigure<BackupOptions>(options =>
         {
-            options.DataProtectionKeyRingDirectory = _keyRingDirectory;
-            options.RuntimeConfigurationFilePath = _configurationPath;
             options.MinimumPassphraseLength = 8;
         });
 
@@ -84,8 +89,7 @@ public sealed class SystemBackupServiceAtomicRestoreTests : IAsyncLifetime
     {
         _host.Dispose();
 
-        if (Directory.Exists(_rootDirectory))
-            Directory.Delete(_rootDirectory, recursive: true);
+        TemporaryFiles.DeleteDirectory(_rootDirectory);
 
         return Task.CompletedTask;
     }

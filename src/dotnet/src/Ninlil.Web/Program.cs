@@ -58,6 +58,7 @@ using Ninlil.Dns.Protocol.Plain.Extension;
 using Ninlil.Dns.Server.AccessControl.Extension;
 using Ninlil.Dns.Server.Acme.Extension;
 using Ninlil.Dns.Server.Authoritative.Extension;
+using Ninlil.Dns.Server.Backup;
 using Ninlil.Dns.Server.Backup.Extension;
 using Ninlil.Dns.Server.Backup.Options;
 using Ninlil.Dns.Server.ClientIdentity;
@@ -86,15 +87,18 @@ using Ninlil.Dns.Server.Rewrites.Extension;
 using Ninlil.Dns.Server.SelfUpdate.Extension;
 using Ninlil.Dns.Server.Tsig.Extension;
 using Ninlil.Dns.Server.Webhooks.Extension;
+using Ninlil.Web.DataProtection;
 using Ninlil.Web.EnvironmentVariables;
 using Ninlil.Web.ExceptionHandling;
 using Ninlil.Web.Extension;
 using Ninlil.Web.HealthChecks;
 using Ninlil.Web.Hubs;
 using Ninlil.Web.Middleware;
+using Ninlil.Web.ModelBinding;
 using Ninlil.Web.OpenApi;
 using Ninlil.Web.Options;
 using Ninlil.Web.Routing;
+using Ninlil.Web.Serialization;
 using Ninlil.Web.Services;
 using Ninlil.Web.Services.Storage;
 using Ninlil.Web.Startup;
@@ -163,6 +167,22 @@ if (environmentVariablesSources.Count > 0)
 }
 builder.Configuration.Sources.Insert(ninlilSourceInsertIndex, ninlilEnvironmentVariableSource);
 
+// The file the settings pages save to must also be a configuration source that reloads on change,
+// or an IOptionsMonitor never sees a saved value. The default appsettings.json already is one;
+// a custom path is added here, just before the NINLIL_* source, so an environment variable still
+// overrides a saved value and command-line arguments still override both. The path is read
+// from the sources registered so far (environment variables, appsettings.json), so it cannot
+// itself be set inside the custom file.
+string runtimeConfigurationFilePath = RuntimeConfigurationFileSource.ResolvePath(
+    builder.Configuration,
+    builder.Environment.ContentRootPath
+);
+RuntimeConfigurationFileSource.AddIfMissing(
+    builder.Configuration.Sources,
+    runtimeConfigurationFilePath,
+    ninlilSourceInsertIndex
+);
+
 // Everything the host generates and keeps (an auto-generated SQLite database, the Data
 // Protection key ring, the JWT signing key, the cluster node id) lives in one "data" directory
 // next to the application.
@@ -171,22 +191,50 @@ Directory.CreateDirectory(dataDirectory);
 
 // The directory is restricted to the process owner, as the self-signed TLS certificate and
 // DNSCrypt provider keys are, because the Data Protection key ring is not encrypted at rest on
-// Linux without a certificate, which operators are not asked to provide.
+// Linux when no DataProtection certificate is configured.
 if (!OperatingSystem.IsWindows())
     File.SetUnixFileMode(
         dataDirectory,
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
     );
 
+// How the key ring is encrypted at rest: with the DataProtection certificate when one is set, with
+// DPAPI on Windows otherwise, and not at all elsewhere. A setting that cannot work (a missing file,
+// a wrong password, no private key) stops the start with exit code 78, the same code the database
+// guards use. Falling back would write new keys unencrypted, or under another protection than the
+// operator configured, and the operator would not notice.
+DataProtectionKeyRingOptions keyRingOptions =
+    builder
+        .Configuration.GetSection(DataProtectionKeyRingOptions.SectionName)
+        .Get<DataProtectionKeyRingOptions>()
+    ?? new DataProtectionKeyRingOptions();
+KeyRingProtection keyRingProtection;
+try
+{
+    keyRingProtection = KeyRingProtection.Resolve(keyRingOptions, OperatingSystem.IsWindows());
+}
+catch (DatabaseStartupRefusedException refusal)
+{
+    StartupRefusalReporter.Report(null, "Ninlil.Web.DataProtection", refusal);
+    Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
+    return;
+}
+
+// The factory registration lets the container dispose the loaded certificates at shutdown.
+builder.Services.AddSingleton(_ => keyRingProtection);
+builder.Services.AddSingleton<IKeyRingRestoreCheck, KeyRingRestoreCheck>();
+
 // The Data Protection key ring must survive a restart, or every secret encrypted with it (TOTP
 // authenticator keys, TSIG secrets, DNSSEC keys, cloud provider credentials, the ACME account
 // key) becomes undecryptable when a new process generates a fresh key. This is registered
 // before the unconfigured AddDataProtection() call in AddNinlilDnsIdentity so this
 // configuration wins; AddDataProtection() can be called more than once.
-builder
-    .Services.AddDataProtection()
-    .SetApplicationName("Ninlil.Dns")
-    .PersistKeysToFileSystem(new DirectoryInfo(dataDirectory));
+keyRingProtection.Apply(
+    builder
+        .Services.AddDataProtection()
+        .SetApplicationName("Ninlil.Dns")
+        .PersistKeysToFileSystem(new DirectoryInfo(dataDirectory))
+);
 
 // JSON Web Tokens need a signing key. One is generated and kept in the data directory so a fresh
 // installation works without configuration (as the auto-generated SQLite connection string of
@@ -221,12 +269,7 @@ try
 }
 catch (DatabaseStartupRefusedException refusal)
 {
-    using ILoggerFactory refusalLoggerFactory = LoggerFactory.Create(logging =>
-        logging.AddConsole()
-    );
-    refusalLoggerFactory
-        .CreateLogger("Ninlil.Web.Jwt")
-        .LogCritical("Startup refused: {Message}", refusal.Message);
+    StartupRefusalReporter.Report(null, "Ninlil.Web.Jwt", refusal);
     Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
     return;
 }
@@ -359,12 +402,7 @@ try
 }
 catch (DatabaseStartupRefusedException refusal)
 {
-    using ILoggerFactory refusalLoggerFactory = LoggerFactory.Create(logging =>
-        logging.AddConsole()
-    );
-    refusalLoggerFactory
-        .CreateLogger("Ninlil.Web.Storage")
-        .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+    StartupRefusalReporter.Report(null, "Ninlil.Web.Storage", refusal);
     Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
     return;
 }
@@ -387,10 +425,7 @@ RuntimeConfigurationOptions runtimeConfigurationOptions =
         .Get<RuntimeConfigurationOptions>()
     ?? new RuntimeConfigurationOptions();
 if (string.IsNullOrWhiteSpace(runtimeConfigurationOptions.ConfigurationFilePath))
-    runtimeConfigurationOptions.ConfigurationFilePath = Path.Combine(
-        builder.Environment.ContentRootPath,
-        "appsettings.json"
-    );
+    runtimeConfigurationOptions.ConfigurationFilePath = runtimeConfigurationFilePath;
 builder.Services.AddSingleton(runtimeConfigurationOptions);
 
 // Encrypts an SMTP password that an earlier version stored in plaintext in that file.
@@ -420,13 +455,16 @@ builder.Services.Configure<BrandingOptions>(
 
 // A full-system backup covers the data directory (the Data Protection key ring) and the runtime
 // configuration file. Their paths are set here after binding rather than configured separately,
-// so each has one source of truth.
+// so each has one source of truth. The settings object is registered first so the extension's
+// default does not replace it.
+builder.Services.AddSingleton(
+    new BackupPathSettings
+    {
+        DataProtectionKeyRingDirectory = dataDirectory,
+        RuntimeConfigurationFilePath = runtimeConfigurationOptions.ConfigurationFilePath,
+    }
+);
 builder.Services.AddNinlilDnsServerBackup(builder.Configuration);
-builder.Services.PostConfigure<BackupOptions>(options =>
-{
-    options.DataProtectionKeyRingDirectory = dataDirectory;
-    options.RuntimeConfigurationFilePath = runtimeConfigurationOptions.ConfigurationFilePath;
-});
 
 // A storage switch is saved by the request side (StorageEngineSwitchService) and applied by
 // PendingStorageSwitchApplier at the next start, before any background service runs. The
@@ -526,6 +564,13 @@ builder.Services.AddNinlilDnsServerClusterSync();
 builder.Services.AddScoped<
     Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncApplier,
     Ninlil.Web.ClusterSync.SettingsClusterConfigSyncApplier
+>();
+
+// The reading half of the same section sync: a backfill to a node that joined later sends each
+// synced section whole through this source, from the runtime file and not from IConfiguration.
+builder.Services.AddScoped<
+    Ninlil.Dns.Server.Core.ClusterSync.IClusterConfigSyncSource,
+    Ninlil.Web.ClusterSync.SettingsClusterConfigSyncSource
 >();
 builder.Services.AddScoped<Ninlil.Web.ClusterSync.ClusterConfigSyncSettingsRecorder>();
 
@@ -659,11 +704,15 @@ builder.Services.AddSingleton<IManagedServiceRegistry>(serviceProvider =>
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<PendingTwoFactorSignInCache>();
 builder.Services.AddSingleton<TwoFactorCodeAttemptLimiter>();
+builder.Services.AddSingleton<CurrentPasswordAttemptLimiter>();
 builder.Services.AddSingleton<TwoFactorEmailCodeCooldown>();
 
 // Scoped, like IEmailSender and UserManager<TUser>. Used by the EmailLink mode of
 // UsersController.ResetPassword and by AuthController.ForgotPassword.
 builder.Services.AddScoped<PasswordResetLinkSender>();
+
+// Scoped for the same reason. Builds and sends the self-service e-mail change messages.
+builder.Services.AddScoped<EmailChangeLinkSender>();
 
 // DnsEventsHubBroadcaster is one singleton, registered under its concrete type and under each
 // IDnsServerEventSubscriber<TEvent> it implements, all resolving to the same instance, as
@@ -720,8 +769,17 @@ builder.Services.AddExceptionHandler<NinlilExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // MergePatchBodyFilter turns a non-object PATCH body or a wrong-typed field into 400 for every
-// action that takes a [FromBody] JsonElement.
-builder.Services.AddControllers(options => options.Filters.Add<MergePatchBodyFilter>());
+// action that takes a [FromBody] JsonElement. RequestEnumNameJsonConverterFactory makes every
+// request-body enum take declared names only; it is registered for MVC only, so other readers of
+// the shared enum converters (cluster sync, state files) keep their behaviour.
+// EnumNameModelBinderProvider does the same for query-string and route enums.
+builder
+    .Services.AddControllers(options =>
+    {
+        options.Filters.Add<MergePatchBodyFilter>();
+        options.ModelBinderProviders.Insert(0, new EnumNameModelBinderProvider());
+    })
+    .AddJsonOptions(MvcJsonSerialization.Configure);
 builder.Services.AddEndpointsApiExplorer();
 
 // Registers every IExamplesProvider<T> and IMultipleExamplesProvider<T> in this assembly (the
@@ -876,9 +934,12 @@ if (storageOptions.Engine != StorageEngineEnum.MongoDb)
     {
         // The database is in a state this version must not run on. Exit 78 (EX_CONFIG) so the
         // systemd units, which list it in RestartPreventExitStatus, do not restart in a loop.
-        app.Services.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(RelationalStartupMigrator).FullName)
-            .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+        StartupRefusalReporter.Report(
+            app.Services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(RelationalStartupMigrator).FullName),
+            null,
+            refusal
+        );
         await migrationScope.DisposeAsync();
         await app.DisposeAsync();
         Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
@@ -904,11 +965,7 @@ else
     catch (DatabaseStartupRefusedException refusal)
     {
         // Same exit path as the relational guard: 78 stops the systemd restart loop.
-        mongoGuardLogger.LogCritical(
-            refusal.InnerException,
-            "Startup refused: {Message}",
-            refusal.Message
-        );
+        StartupRefusalReporter.Report(mongoGuardLogger, null, refusal);
         await backfillScope.DisposeAsync();
         await app.DisposeAsync();
         Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
@@ -941,9 +998,12 @@ if (storageOptions.Engine != StorageEngineEnum.MongoDb)
     catch (DatabaseStartupRefusedException refusal)
     {
         // The configured target could not be filled; same exit path as the guards above.
-        app.Services.GetRequiredService<ILoggerFactory>()
-            .CreateLogger(typeof(PendingStorageSwitchApplier).FullName)
-            .LogCritical(refusal.InnerException, "Startup refused: {Message}", refusal.Message);
+        StartupRefusalReporter.Report(
+            app.Services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger(typeof(PendingStorageSwitchApplier).FullName),
+            null,
+            refusal
+        );
         await app.DisposeAsync();
         Environment.ExitCode = DatabaseStartupRefusedException.ExitCode;
         return;
@@ -1072,8 +1132,8 @@ app.UseMiddleware<StorageReadIntentMiddleware>();
 
 // The admin sign-in limiter policies (ServiceCollectionAdminLoginRateLimitingExtension's
 // AuthenticationEndpointPolicyName and PasswordResetEndpointPolicyName) apply only where
-// [EnableRateLimiting] names them (AuthController.Login, TwoFactorLogin and ForgotPassword); this
-// middleware is what enforces that attribute.
+// [EnableRateLimiting] names them (AuthController.Login, TwoFactorLogin, ForgotPassword,
+// ResetPassword and ConfirmEmailChange); this middleware is what enforces that attribute.
 app.UseRateLimiter();
 
 app.MapControllers();

@@ -1,6 +1,10 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration.Json;
+using Microsoft.Extensions.FileProviders;
 
 // Define our namespace.
 namespace Ninlil.Web.Tests;
@@ -19,7 +23,9 @@ namespace Ninlil.Web.Tests;
 ///         which is generated and saved when missing) before <c>WebApplicationBuilder.Build()</c>
 ///         merges such overrides, so authenticated requests then fail with "the signature key was
 ///         not found". <c>WebApplicationBuilder.CreateBuilder(args)</c> reads environment variables
-///         up front, so they have no ordering problem.
+///         up front, so they have no ordering problem. <see cref="ConfigureWebHost" /> still uses
+///         <c>ConfigureAppConfiguration</c>, but only to remove a source, never to add a value that
+///         <c>Program.cs</c> reads, so its late run does not matter.
 ///     </para>
 ///     <para>
 ///         Environment variables are process-wide, so this only works because every test class
@@ -49,12 +55,17 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     ///     This field contains a temporary JSON file that the runtime settings controllers and
     ///     <c>PresetsController</c> merge their writes into for this test run. Without it, a test
     ///     that patches a setting or applies a preset would change the shared configuration file
-    ///     in the build output.
+    ///     in the build output. It sits in a directory of its own, not the busy temp
+    ///     directory, so a second host that loads it as a reload-on-change source (the file watcher
+    ///     reports every change in a directory) is not disturbed by unrelated files.
     /// </summary>
-    private readonly string _runtimeConfigurationFilePath = Path.Combine(
-        Path.GetTempPath(),
-        $"ninlil-dns-web-tests-runtime-settings-{Guid.NewGuid():N}.json"
-    );
+    private readonly string _runtimeConfigurationDirectory = Directory
+        .CreateTempSubdirectory("ninlil-dns-web-tests-runtime-settings-")
+        .FullName;
+
+    /// <summary>This property contains the temporary settings file inside its own directory.</summary>
+    private string _runtimeConfigurationFilePath =>
+        Path.Combine(_runtimeConfigurationDirectory, "settings.json");
 
     /// <summary>
     ///     This field contains a temporary path for saved MAC vendor data, so a test that triggers
@@ -90,9 +101,9 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
         );
 
         // Plain DNS always starts (it has no Enable flag), and its default port 53, like the
-        // default web ports 80 and 443, needs root. Ports the operating system reports as free
-        // keep these listeners clear of services on the test machine and of another copy of
-        // this suite running alongside, without disabling anything.
+        // default web ports 80 and 443, needs root. Ports that are free for TCP and UDP keep
+        // these listeners clear of services on the test machine and of another copy of this
+        // suite running alongside, without disabling anything.
         PlainDnsPort = GetFreePort();
         Environment.SetEnvironmentVariable(
             "NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT",
@@ -200,13 +211,45 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     public int DnsCryptPort { get; }
 
     /// <inheritdoc />
-    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
         builder.UseEnvironment("Development");
+
+        // Program.cs loads the runtime settings file as a reload-on-change source, so a settings
+        // PATCH would change what every later test in the shared host reads (recursion on, a DHCP
+        // port, a filter flag) and the tests would depend on their order. The shared host drops
+        // that one source, so its writes only land in the file. A second host that points the
+        // setting at a file of its own keeps it, which is what the tests of that source use.
+        builder.ConfigureAppConfiguration(
+            (_, configuration) =>
+            {
+                string sharedFile = Path.GetFullPath(_runtimeConfigurationFilePath);
+                foreach (
+                    JsonConfigurationSource source in configuration
+                        .Sources.OfType<JsonConfigurationSource>()
+                        .Where(source =>
+                            source.FileProvider is PhysicalFileProvider physical
+                            && string.Equals(
+                                Path.GetFullPath(Path.Combine(physical.Root, source.Path)),
+                                sharedFile,
+                                StringComparison.Ordinal
+                            )
+                        )
+                        .ToList()
+                )
+                    configuration.Sources.Remove(source);
+            }
+        );
+    }
 
     /// <inheritdoc />
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
+
+        // The hosts load the default self-signed certificate from data/ next to this assembly. On
+        // Windows that imports an entry and a key into the user's stores, which this removes.
+        TlsCertificateStore.RemoveEntriesForSource(TlsCertificateStore.DefaultStatePath);
 
         try
         {
@@ -219,7 +262,7 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
 
         try
         {
-            File.Delete(_runtimeConfigurationFilePath);
+            Directory.Delete(_runtimeConfigurationDirectory, recursive: true);
             File.Delete(_macVendorDataFilePath);
             File.Delete(_macVendorDataFilePath + ".state.json");
         }
@@ -274,14 +317,61 @@ public sealed class NinlilDnsWebApplicationFactory : WebApplicationFactory<Progr
     }
 
     /// <summary>
-    ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned.
+    ///     This constant is how many random ports <see cref="GetFreePort" /> tries before it gives
+    ///     up.
     /// </summary>
-    /// <returns>A free TCP port number.</returns>
-    private static int GetFreePort()
+    private const int PortSearchLimit = 2000;
+
+    /// <summary>
+    ///     This method returns a port number that is free on loopback for both TCP and UDP, by
+    ///     briefly holding it with one socket of each kind. The Plain DNS and DNSCrypt transports
+    ///     listen on the same number over both protocols, so a number that is free for TCP alone
+    ///     is not enough. <see cref="StartupRefusalProcessTests" /> uses it for its child process
+    ///     as well.
+    ///     <para>
+    ///         The port is picked at random from the dynamic range (RFC 6335 §6, 49152 to 65535)
+    ///         and bound explicitly, not taken from a port-0 bind. Windows keeps separate excluded
+    ///         port ranges for TCP and UDP
+    ///         (<c>netsh int ipv4 show excludedportrange protocol=udp</c>), so a port-0 TCP port
+    ///         can sit inside a UDP-excluded block. The UDP listener is then refused (error
+    ///         10013), the host keeps running without it, and every test that sends a UDP query
+    ///         fails. The port-0 counter also hands out the following ports of such a block one
+    ///         after the other, while a refused random pick costs one attempt.
+    ///     </para>
+    /// </summary>
+    /// <returns>A port number free for TCP and UDP on loopback.</returns>
+    /// <exception cref="InvalidOperationException">No pick out of <see cref="PortSearchLimit" /> was free.</exception>
+    internal static int GetFreePort()
     {
-        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        for (int attempt = 1; attempt <= PortSearchLimit; attempt++)
+        {
+            int port = Random.Shared.Next(49152, 65536);
+            IPEndPoint endPoint = new(IPAddress.Loopback, port);
+
+            try
+            {
+                using Socket tcpSocket = new(
+                    AddressFamily.InterNetwork,
+                    SocketType.Stream,
+                    ProtocolType.Tcp
+                );
+                tcpSocket.Bind(endPoint);
+
+                using Socket udpSocket = new(
+                    AddressFamily.InterNetwork,
+                    SocketType.Dgram,
+                    ProtocolType.Udp
+                );
+                udpSocket.Bind(endPoint);
+
+                return port;
+            }
+            catch (SocketException)
+            {
+                // In use, or excluded for one of the two protocols: pick another.
+            }
+        }
+
+        throw new InvalidOperationException("No port was free for both TCP and UDP.");
     }
 }

@@ -2,6 +2,7 @@ using System.Security.Authentication;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Enum;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Identity.Authorization;
@@ -1161,10 +1162,13 @@ public class TransportSettingsController(
             string name = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
 
             if (
-                !Enum.TryParse(name, ignoreCase: true, out SslProtocols parsed)
+                !EnumNameParser.TryParseName(name, ignoreCase: true, out SslProtocols parsed)
                 || parsed == SslProtocols.None
             )
-                throw new ValidationException($"'{name}' is not a valid TLS protocol name.");
+                throw new ValidationException(
+                    $"'{name}' is not a valid TLS protocol name. Each entry must be one name, "
+                        + $"never a number or a list. Valid values: {EnumNameParser.GetNames<SslProtocols>()}."
+                );
 
             combined |= parsed;
         }
@@ -1191,13 +1195,20 @@ public class TransportSettingsController(
         {
             string name = item.ValueKind == JsonValueKind.String ? item.GetString() : null;
 
-            if (!Enum.TryParse(name, ignoreCase: true, out DnsCryptEsVersion _))
+            if (
+                !EnumNameParser.TryParseName(
+                    name,
+                    ignoreCase: true,
+                    out DnsCryptEsVersion _,
+                    out string canonicalName
+                )
+            )
                 throw new ValidationException(
                     $"'{name}' is not a valid DNSCrypt cipher name. Expected one of: "
-                        + $"{string.Join(", ", Enum.GetNames<DnsCryptEsVersion>())}."
+                        + $"{EnumNameParser.GetNames<DnsCryptEsVersion>()}."
                 );
 
-            parsed.Add(name);
+            parsed.Add(canonicalName);
         }
 
         if (parsed.Count == 0)

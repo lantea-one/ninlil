@@ -2,7 +2,7 @@
 namespace Ninlil.Dhcp.Common.Enum;
 
 /// <summary>
-///     This enumeration is the RFC 8415 Section 7.3 "msg-type" field, the first byte of every
+///     This enumeration is the RFC 9915 Section 7.3 "msg-type" field, the first byte of every
 ///     DHCPv6 message. DHCPv4 splits this job between the "op" field
 ///     (<see cref="Dhcpv4OperationCodeEnum" />) and the DHCP Message Type option; DHCPv6 carries
 ///     it in the header.

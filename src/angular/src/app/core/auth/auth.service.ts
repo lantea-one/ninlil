@@ -226,6 +226,21 @@ export class AuthService {
   }
 
   /**
+   * This method completes a self-service e-mail change against the anonymous
+   * `POST /api/auth/confirm-email-change`. The `/confirm-email-change` page calls it with the
+   * three values from the mailed link, unchanged. On success the server has ended every session
+   * of the account. This method does not touch the local session; the page clears it, because
+   * the link can be opened in a browser that is signed in as that user.
+   */
+  async confirmEmailChange(userId: string, email: string, token: string): Promise<void> {
+    await firstValueFrom(
+      this.authApi.apiAuthConfirmEmailChangePost({
+        confirmEmailChangeRequest: { userId, email, token },
+      }),
+    );
+  }
+
+  /**
    * This method submits a Forgot Password request for an e-mail address against the anonymous
    * `POST /api/auth/forgot-password`. The backend returns the same message whether or not the
    * address has an account, so the response cannot be used to discover accounts. This method

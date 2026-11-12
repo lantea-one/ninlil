@@ -45,6 +45,16 @@ public abstract class MongoRepositoryBase<TEntity>(
     ) => await Collection.Find(predicate ?? (_ => true)).ToListAsync(stoppingToken);
 
     /// <inheritdoc />
+    public virtual async Task<IReadOnlyList<Guid>> ListIdsAsync(
+        Expression<Func<TEntity, bool>> predicate = null,
+        CancellationToken stoppingToken = default
+    ) =>
+        await Collection
+            .Find(predicate ?? (_ => true))
+            .Project(entity => entity.Id)
+            .ToListAsync(stoppingToken);
+
+    /// <inheritdoc />
     public virtual Task AddAsync(TEntity entity, CancellationToken stoppingToken = default)
     {
         // Staged, so it is written only when IUnitOfWork.SaveChangesAsync runs.

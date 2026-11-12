@@ -64,7 +64,7 @@ public static class PrivilegedPortStartupDiagnostics
     ///     The DNSCrypt settings, included only when <see cref="DnsCryptOptions.Enable" /> is
     ///     <see langword="true" />. DNS-over-HTTPS is never included: it is served by the
     ///     <paramref name="webListenOptions" /> listener rather than its own port (see
-    ///     <c>EndpointRouteBuilderDnsOverHttpsExtension</c>), so <c>DnsOverHttpsOptions.Port</c> is
+    ///     <c>EndpointRouteBuilderDnsOverHttpsExtension</c>), so <c>DnsOverHttpsListenerOptions.Port</c> is
     ///     not bound separately.
     /// </param>
     /// <returns>Every listener the host is about to start, by name and port.</returns>

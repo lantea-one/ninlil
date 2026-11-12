@@ -112,7 +112,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         Assert.True(na.Options.TryGetStatusCode(out Dhcpv6StatusCodeEnum status, out string _));
         Assert.Equal(Dhcpv6StatusCodeEnum.NoAddressesAvailable, status);
 
-        // RFC 8415 Section 18.3.9 asks for the status inside the IA only, so the message itself
+        // RFC 9915 Section 18.3.9 asks for the status inside the IA only, so the message itself
         // carries none; the identifiers are there, and no lease row was created.
         Assert.False(advertise.TryGetStatusCode(out Dhcpv6StatusCodeEnum _, out string _));
         Assert.True(advertise.TryGetServerIdentifier(out byte[] _));
@@ -236,7 +236,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
     [Fact]
     public async Task Solicit_WithRapidCommitOnAnExhaustedScope_RepliesWithNoAddrsAvailAndRapidCommit()
     {
-        // RFC 8415 Section 18.3.1: with Rapid Commit the server produces the REPLY "as though
+        // RFC 9915 Section 18.3.1: with Rapid Commit the server produces the REPLY "as though
         // it had received a Request message" and includes Rapid Commit in it; Section 18.3.2
         // then puts NoAddrsAvail in an IA that cannot be served.
         await using Dhcpv6EngineTestHost rapidHost = new();
@@ -539,7 +539,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         );
     }
 
-    // RFC 8415 Section 16.7: a server discards a Rebind that includes a Server Identifier option.
+    // RFC 9915 Section 16.7: a server discards a Rebind that includes a Server Identifier option.
     [Fact]
     public async Task Rebind_WithAServerIdentifier_GetsNoReply()
     {
@@ -568,7 +568,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         Assert.Null(reply);
     }
 
-    // RFC 8415 Section 16.2: a server discards a Solicit that includes a Server Identifier option.
+    // RFC 9915 Section 16.2: a server discards a Solicit that includes a Server Identifier option.
     [Fact]
     public async Task Solicit_WithAServerIdentifier_GetsNoReply()
     {
@@ -594,7 +594,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         Assert.Null(reply);
     }
 
-    // RFC 8415 Section 16.5: a server discards a Confirm that includes a Server Identifier option.
+    // RFC 9915 Section 16.5: a server discards a Confirm that includes a Server Identifier option.
     [Fact]
     public async Task Confirm_WithAServerIdentifier_GetsNoReply()
     {
@@ -625,7 +625,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         Assert.Null(reply);
     }
 
-    // RFC 8415 Section 16.12: an Information-request naming another server is discarded; one
+    // RFC 9915 Section 16.12: an Information-request naming another server is discarded; one
     // naming this server, or none, is answered.
     [Fact]
     public async Task InformationRequest_WithAnotherServersIdentifier_GetsNoReply()
@@ -677,7 +677,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
         Assert.Equal(Dhcpv6MessageTypeEnum.Reply, reply.MessageType);
     }
 
-    // RFC 8415 Section 16.12: an Information-request that includes an IA option is discarded.
+    // RFC 9915 Section 16.12: an Information-request that includes an IA option is discarded.
     [Fact]
     public async Task InformationRequest_WithAnIdentityAssociation_GetsNoReply()
     {
@@ -1272,7 +1272,7 @@ public sealed class Dhcpv6RequestHandlerTests : IAsyncLifetime
 
     /// <summary>
     ///     This method builds a SOLICIT with a Client Identifier and an Elapsed Time option, which
-    ///     clients include in their messages (RFC 8415); other messages use
+    ///     clients include in their messages (RFC 9915); other messages use
     ///     <see cref="NewMessage" />.
     /// </summary>
     private static Dhcpv6Message NewSolicit(byte[] clientDuid, uint transactionId)

@@ -88,6 +88,12 @@ dotnet test Ninlil.slnx                                               # everythi
   there. Its SQLite tests need no Docker and carry no trait. Replication tests start primary and
   replica containers from `Ninlil.Dns.Data.EngineHosts`.
 - Tests use OS-assigned free ports, never fixed ones, and need no root.
+- A change that touches a test project converts that project's reserve-and-release calls
+  (`GetFreeUdpPort`, `GetFreeTcpPort`, `GetFreePort`): start the server on port 0 and read the port
+  it bound. Where the server cannot expose that port, retry a bounded number of times on
+  `AddressInUse` and say why in a comment. Example: `Ninlil.Dhcp.Server.Tftp.Tests` uses
+  `TftpServer.BoundPort`. The environment-variable ports in `NinlilDnsWebApplicationFactory` stay,
+  because the host needs them before it starts.
 - `Ninlil.Web.Tests`:
   - Every class joins `[Collection(WebTestCollection.Name)]` and shares one
     `NinlilDnsWebApplicationFactory` host. A test that needs a second host calls
@@ -284,10 +290,10 @@ page](./CONTRIBUTING.md#add-a-console-page)). Browser check of a built console: 
   (`/** */`). The build has `CS1591` muted, so this is enforced by review, not the compiler.
 - Test names read as sentences: `Method_Condition_ExpectedResult`, e.g.
   `Fallback_ForADeepLinkClientRoute_ServesIndexHtml`.
-- Pick the agent role by the work: `architect` designs; `coder` implements a backend package;
-  `storage-coder` schema, migrations and repositories; `protocol-coder` DNS and DHCP wire and
-  transport code; `console-coder` the Angular console; `docs-writer` Markdown; `mechanic` mechanical
-  edits; `api-regen` the snapshot and client; `verifier` read-only review.
+- Pick the agent role by the work: `architect` designs and writes issue drafts; `coder` implements
+  a backend package; `storage-coder` schema, migrations and repositories; `protocol-coder` DNS and
+  DHCP wire and transport code; `console-coder` the Angular console; `docs-writer` Markdown;
+  `mechanic` mechanical edits; `api-regen` the snapshot and client; `verifier` read-only review.
 
 ## Comment standard
 
@@ -321,9 +327,24 @@ Every comment is for a reader opening the file cold, today.
   - `Zone transfers over TCP, TLS and QUIC are now rate limited and reach the query log`
   - `The OpenAPI snapshot and Angular API client now include maxConcurrentQueries`
 - Small logical commits: backend change, snapshot + client, and UI change are separate commits.
-- Branches: `feature/*` from `develop` → PR into `develop` → PR into `main` → release branch
-  `v<yyyy>.<mm>.<dd>.<increment>`, per sub-phase; `hotfix/*` from `main`. Details: [branches](./CONTRIBUTING.md#commit-branch-and-pull-request)
-  and [cutting a release](./CONTRIBUTING.md#cutting-a-release).
+- Branches: `feature/<issue>-<short-name>` from `develop` → PR into `develop` → PR into `main` →
+  release branch `v<yyyy>.<mm>.<dd>.<increment>`; `hotfix/<issue>-<short-name>` from `main`. For
+  a sub-phase, `<issue>` is its epic. Details:
+  [branches](./CONTRIBUTING.md#commit-branch-and-pull-request) and
+  [cutting a release](./CONTRIBUTING.md#cutting-a-release).
+- Issues close when their work reaches `develop`. The pull request description names the issue it
+  finishes with `Closes #n` (Forgejo closes it on merge) and an issue it only works on with
+  `Refs #n`.
+- The commit subject has no issue number. The body has a line above the trailers: `Closes #n` in
+  the commit that finishes an issue, `Refs #n` in every other commit about it. The commit keyword
+  acts only when the commit reaches `main`, so it is a backstop.
+- A closing keyword on an issue with open dependencies does nothing, silently: merge the
+  dependency's pull request first, or close the issue by hand. A commit keyword on a commit that
+  sits only on `develop`, a release or a hotfix branch closes nothing until it reaches `main`.
+- Milestones are releases, named `Release: <scope>`. A release is cut when its milestone has no
+  open issue (scope-based, not dated). Put a new issue in a release milestone only when it must ship
+  in that release; otherwise leave it without a milestone. The theme is an exclusive `theme/*`
+  label. At the cut, the milestone is closed and its description names the version.
 - Never push, and never commit secrets, unless the user explicitly asks.
 
 ## Before you finish

@@ -32,7 +32,7 @@ public enum DhcpOptionValueTypeEnum
     IPv6AddressList,
 
     /// <summary>
-    ///     A text value; RFC 2132 and RFC 8415 describe these as strings with no terminating
+    ///     A text value; RFC 2132 and RFC 9915 describe these as strings with no terminating
     ///     null. "This server's address" is sent as the address's text for these options.
     /// </summary>
     String,

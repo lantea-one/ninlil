@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the REST shape of the outbound query settings (`OutboundQueryOptions`) that `GET /api/outbound-query-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the outbound query settings (configuration section `DnsServer:OutboundQuery`) that `GET /api/outbound-query-settings` returns. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface OutboundQuerySettingsDetail { 
     /**

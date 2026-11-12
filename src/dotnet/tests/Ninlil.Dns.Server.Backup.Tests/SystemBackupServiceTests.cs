@@ -67,10 +67,12 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
                 ),
             }
         );
+        builder.Services.AddSingleton(
+            new BackupPathSettings { DataProtectionKeyRingDirectory = _keyRingDirectory }
+        );
         builder.Services.AddNinlilDnsServerBackup(builder.Configuration);
         builder.Services.PostConfigure<BackupOptions>(options =>
         {
-            options.DataProtectionKeyRingDirectory = _keyRingDirectory;
             options.MinimumPassphraseLength = 8;
         });
 
@@ -394,6 +396,7 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
         {
             Id = Guid.NewGuid(),
             ProtocolVersion = InternetProtocolVersionEnum.IPv4,
+            ScopeId = scope.Id,
             ScopeName = "lan",
             ClientIdentifier = "11:22:33:44:55:66",
             IpAddress = "192.0.2.101",
@@ -617,12 +620,11 @@ public sealed class SystemBackupServiceTests : IAsyncLifetime
     {
         await SeedOneZoneAsync();
 
-        // Writing into the options singleton's value points the service at a configuration file
+        // Writing into the path settings singleton points the service at a configuration file
         // for this test only; the host is private to this test instance.
         string configurationPath = Path.Combine(_keyRingDirectory, "runtime-settings.json");
-        _host
-            .Services.GetRequiredService<IOptions<BackupOptions>>()
-            .Value.RuntimeConfigurationFilePath = configurationPath;
+        _host.Services.GetRequiredService<BackupPathSettings>().RuntimeConfigurationFilePath =
+            configurationPath;
         await File.WriteAllTextAsync(configurationPath, "{\"Storage\":{\"Engine\":\"Sqlite\"}}");
         CreateSecretProtector().Protect("make sure a key ring file exists");
 

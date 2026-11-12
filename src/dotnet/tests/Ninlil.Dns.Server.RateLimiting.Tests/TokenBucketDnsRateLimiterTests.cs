@@ -63,21 +63,31 @@ public class TokenBucketDnsRateLimiterTests
     [Fact]
     public async Task RefillsTokensOverTime()
     {
+        // The limiter reads the system clock, so the rate is slow enough (one token per two
+        // seconds) that a stalled thread on a loaded machine cannot refill the bucket between the
+        // two acquisitions below, and the refill is awaited by polling instead of a fixed delay.
         TokenBucketDnsRateLimiter limiter = CreateLimiter(
             new DnsRateLimitOptions
             {
                 Enable = true,
                 BurstSize = 1,
-                QueriesPerSecond = 100,
+                QueriesPerSecond = 0.5,
             }
         );
 
         Assert.True(await limiter.TryAcquireAsync(ClientA));
         Assert.False(await limiter.TryAcquireAsync(ClientA));
 
-        await Task.Delay(TimeSpan.FromMilliseconds(50));
+        using CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
+        bool refilled = false;
 
-        Assert.True(await limiter.TryAcquireAsync(ClientA));
+        while (!refilled && !deadline.IsCancellationRequested)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+            refilled = await limiter.TryAcquireAsync(ClientA);
+        }
+
+        Assert.True(refilled);
     }
 
     [Fact]

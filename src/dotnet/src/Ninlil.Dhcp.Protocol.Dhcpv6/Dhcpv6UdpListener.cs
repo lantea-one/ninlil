@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Common.Extension.Sockets;
 using Ninlil.Dhcp.Common.Control;
 using Ninlil.Dhcp.Common.Enum;
 using Ninlil.Dhcp.Common.Wire;
@@ -14,7 +15,7 @@ namespace Ninlil.Dhcp.Protocol.Dhcpv6;
 /// <summary>
 ///     This class is the DHCPv6 UDP transport, the counterpart of
 ///     <c>Ninlil.Dhcp.Protocol.Dhcpv4.Dhcpv4UdpListener</c>. It binds the server port, joins the
-///     RFC 8415 Section 7.1 All_DHCP_Relay_Agents_and_Servers group on every interface, decodes
+///     RFC 9915 Section 7.1 All_DHCP_Relay_Agents_and_Servers group on every interface, decodes
 ///     client datagrams with <see cref="Dhcpv6MessageReader" />, passes them to the
 ///     <see cref="IDhcpv6RequestHandler" /> and unicasts the reply back. Address assignment,
 ///     prefix delegation and every other server decision belong to the handler.
@@ -102,6 +103,14 @@ public sealed class Dhcpv6UdpListener(
     public bool IsListening { get; private set; }
 
     /// <summary>
+    ///     This property contains the UDP port the socket is bound to, or 0 while the listener is
+    ///     stopped. It differs from the configured server port only when that port is 0, which
+    ///     asks the operating system for a free one; tests use that to avoid reserving a port
+    ///     number and releasing it before the listener binds it.
+    /// </summary>
+    public int BoundPort { get; private set; }
+
+    /// <summary>
     ///     This property reports whether the socket is bound and the receive loop is still
     ///     running, so a dead loop is not reported as a healthy listener.
     /// </summary>
@@ -141,12 +150,17 @@ public sealed class Dhcpv6UdpListener(
                 _receiveLoopCts = null;
                 _receiveLoopTask = null;
                 IsListening = false;
+                BoundPort = 0;
             }
 
             // The relay handler is optional, so it is looked up rather than injected.
             _relayMessageHandler = serviceProvider?.GetService<IDhcpv6RelayMessageHandler>();
 
             socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+
+            // On Windows a client that closes its port before the reply would fail the next
+            // receive with WSAECONNRESET (a warning in the log that any sender can provoke).
+            socket.IgnoreIcmpPortUnreachable();
 
             try
             {
@@ -173,11 +187,12 @@ public sealed class Dhcpv6UdpListener(
             _socket = socket;
             _receiveLoopCts = receiveLoopCts;
             IsListening = true;
+            BoundPort = ((IPEndPoint)socket.LocalEndPoint).Port;
             StartFailure = null;
 
             logger.LogInformation(
                 "The DHCPv6 listener started and is now bound to UDP port {ServerPort}.",
-                options.Value.ServerPort
+                BoundPort
             );
 
             _receiveLoopTask = Task.Run(() => RunReceiveLoopAsync(socket, receiveLoopCts.Token));
@@ -207,6 +222,7 @@ public sealed class Dhcpv6UdpListener(
             _receiveLoopCts = null;
             _receiveLoopTask = null;
             IsListening = false;
+            BoundPort = 0;
         }
 
         try

@@ -27,4 +27,14 @@ namespace Ninlil.Web.ClusterSync;
 /// <param name="SectionPath">The configuration section the value belongs under.</param>
 /// <param name="Key">The property name within that section.</param>
 /// <param name="Value">The value as JSON, serialized from the original object.</param>
-public sealed record SettingsSyncEntry(string SectionPath, string Key, JsonElement Value);
+public sealed record SettingsSyncEntry(string SectionPath, string Key, JsonElement Value)
+{
+    /// <summary>
+    ///     This method serializes the entries into the <c>PayloadJson</c> of a settings envelope.
+    ///     The recorder (live sync) and the settings source (backfill) both use it, so the two
+    ///     paths write the same bytes for the same entries.
+    /// </summary>
+    /// <param name="entries">The entries, in the order they are written.</param>
+    public static string ToPayloadJson(IEnumerable<SettingsSyncEntry> entries) =>
+        JsonSerializer.Serialize(entries.ToList());
+}

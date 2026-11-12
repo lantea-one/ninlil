@@ -18,15 +18,15 @@ export interface ClientSummaryDetail {
      */
     totalCount?: number;
     /**
-     * Clients with any address seen within OnlineWindow.
+     * Clients with any address seen within `onlineWindow`.
      */
     onlineCount?: number;
     /**
-     * Clients not seen within OnlineWindow, including clients never seen; computed as total minus online.
+     * Clients not seen within `onlineWindow`, including clients never seen; computed as total minus online.
      */
     offlineCount?: number;
     /**
-     * Clients registered at or after NewSinceUtc.
+     * Clients registered at or after `newSinceUtc`.
      */
     newCount?: number;
     /**
@@ -34,7 +34,7 @@ export interface ClientSummaryDetail {
      */
     favoriteCount?: number;
     /**
-     * The instant NewCount counts from: the request\'s `newSinceUtc`, or 24 hours ago when it was omitted.
+     * The instant `newCount` counts from: the request\'s `newSinceUtc`, or 24 hours ago when it was omitted.
      */
     newSinceUtc?: string;
     /**

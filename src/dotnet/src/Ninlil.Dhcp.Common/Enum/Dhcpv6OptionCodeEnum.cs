@@ -2,7 +2,7 @@
 namespace Ninlil.Dhcp.Common.Enum;
 
 /// <summary>
-///     This enumeration names the DHCPv6 option codes (RFC 8415, plus RFC 3646, RFC 4649 and RFC
+///     This enumeration names the DHCPv6 option codes (RFC 9915, plus RFC 3646, RFC 4649 and RFC
 ///     4704 options) that the code works with, most of them through typed accessors in
 ///     <see cref="Ninlil.Dhcp.Common.Wire.Dhcpv6MessageOptionExtensions" />. It is not a full list
 ///     of IANA codes: a message can carry any other code as a raw
@@ -13,21 +13,21 @@ namespace Ninlil.Dhcp.Common.Enum;
 public enum Dhcpv6OptionCodeEnum : ushort
 {
     /// <summary>
-    ///     RFC 8415 Section 21.2's Client Identifier option, carrying the client's DUID (DHCP
+    ///     RFC 9915 Section 21.2's Client Identifier option, carrying the client's DUID (DHCP
     ///     Unique Identifier). A DUID is treated as an opaque byte string, like
-    ///     <see cref="Dhcpv4OptionTagEnum.ClientIdentifier" />; RFC 8415 Section 11 defines several
+    ///     <see cref="Dhcpv4OptionTagEnum.ClientIdentifier" />; RFC 9915 Section 11 defines several
     ///     DUID formats, but the wire layer does not need to tell them apart.
     /// </summary>
     ClientIdentifier = 1,
 
     /// <summary>
-    ///     RFC 8415 Section 21.3's Server Identifier option: a DUID like
+    ///     RFC 9915 Section 21.3's Server Identifier option: a DUID like
     ///     <see cref="ClientIdentifier" />, identifying the server.
     /// </summary>
     ServerIdentifier = 2,
 
     /// <summary>
-    ///     RFC 8415 Section 21.10's Relay Message option. It appears only in a RELAY-FORW or
+    ///     RFC 9915 Section 21.10's Relay Message option. It appears only in a RELAY-FORW or
     ///     RELAY-REPL message (see <see cref="Ninlil.Dhcp.Common.Wire.Dhcpv6RelayMessage" />), and
     ///     its value is the encoded message being relayed: the client's request or the server's
     ///     reply. The relay codec supports one level of nesting; see
@@ -37,7 +37,7 @@ public enum Dhcpv6OptionCodeEnum : ushort
     RelayMessage = 9,
 
     /// <summary>
-    ///     RFC 8415 Section 21.4's Identity Association for Non-temporary Addresses (IA_NA)
+    ///     RFC 9915 Section 21.4's Identity Association for Non-temporary Addresses (IA_NA)
     ///     option: a container carrying one client-chosen IAID, the T1/T2 renewal timers, and a
     ///     nested options area (typically one or more <see cref="IaAddress" /> options, plus
     ///     optionally a <see cref="StatusCode" /> option). See
@@ -46,15 +46,16 @@ public enum Dhcpv6OptionCodeEnum : ushort
     IaNa = 3,
 
     /// <summary>
-    ///     RFC 8415 Section 21.5's Identity Association for Temporary Addresses (IA_TA) option.
-    ///     It nests <see cref="IaAddress" /> options like <see cref="IaNa" />, but has no T1/T2
-    ///     timers. See
+    ///     The Identity Association for Temporary Addresses (IA_TA) option. RFC 9915 Section 21.5
+    ///     marks it obsolete; its format is the one RFC 8415 Section 21.5 defines. It nests
+    ///     <see cref="IaAddress" /> options like <see cref="IaNa" />, but has no T1/T2 timers.
+    ///     The DHCPv6 server ignores it. See
     ///     <see cref="Ninlil.Dhcp.Common.Wire.Dhcpv6IdentityAssociationForTemporaryAddresses" />.
     /// </summary>
     IaTa = 4,
 
     /// <summary>
-    ///     RFC 8415 Section 21.6's IA Address (IAADDR) option: one address with its preferred and
+    ///     RFC 9915 Section 21.6's IA Address (IAADDR) option: one address with its preferred and
     ///     valid lifetimes, nested inside an <see cref="IaNa" /> or <see cref="IaTa" /> option.
     ///     See
     ///     <see cref="Ninlil.Dhcp.Common.Wire.Dhcpv6IdentityAssociationAddress" />.
@@ -62,26 +63,26 @@ public enum Dhcpv6OptionCodeEnum : ushort
     IaAddress = 5,
 
     /// <summary>
-    ///     RFC 8415 Section 21.7's Option Request Option (ORO): the option codes a client wants in
+    ///     RFC 9915 Section 21.7's Option Request Option (ORO): the option codes a client wants in
     ///     the reply, the DHCPv6 counterpart of the Parameter Request List
     ///     (<see cref="Dhcpv4OptionTagEnum.ParameterRequestList" />).
     /// </summary>
     OptionRequest = 6,
 
     /// <summary>
-    ///     RFC 8415 Section 21.8's Preference option. A server includes it in an ADVERTISE to
+    ///     RFC 9915 Section 21.8's Preference option. A server includes it in an ADVERTISE to
     ///     influence which server a client picks.
     /// </summary>
     Preference = 7,
 
     /// <summary>
-    ///     RFC 8415 Section 21.9's Elapsed Time option: how long, in hundredths of a second,
+    ///     RFC 9915 Section 21.9's Elapsed Time option: how long, in hundredths of a second,
     ///     the client has been trying to complete the current message exchange.
     /// </summary>
     ElapsedTime = 8,
 
     /// <summary>
-    ///     RFC 8415 Section 21.15's User Class option: one or more "user-class-data" instances,
+    ///     RFC 9915 Section 21.15's User Class option: one or more "user-class-data" instances,
     ///     each a 2-octet length followed by opaque data. It is the counterpart of the DHCPv4 User
     ///     Class option (<see cref="Dhcpv4OptionTagEnum.UserClass" />, RFC 3004), which uses a
     ///     1-octet length.
@@ -89,7 +90,7 @@ public enum Dhcpv6OptionCodeEnum : ushort
     UserClass = 15,
 
     /// <summary>
-    ///     RFC 8415 Section 21.16's Vendor Class option: a 4-octet IANA Enterprise Number followed
+    ///     RFC 9915 Section 21.16's Vendor Class option: a 4-octet IANA Enterprise Number followed
     ///     by one or more "vendor-class-data" instances, each a 2-octet length and opaque data.
     ///     Unlike the single-string DHCPv4 Vendor Class Identifier
     ///     (<see cref="Dhcpv4OptionTagEnum.VendorClassIdentifier" />, RFC 2132 Section 9.13), it
@@ -98,7 +99,7 @@ public enum Dhcpv6OptionCodeEnum : ushort
     VendorClass = 16,
 
     /// <summary>
-    ///     RFC 8415 Section 21.13's Status Code option: a numeric result code
+    ///     RFC 9915 Section 21.13's Status Code option: a numeric result code
     ///     (<see cref="Dhcpv6StatusCodeEnum" />) plus an optional human-readable message, nested
     ///     inside an IA_NA/IA_TA/IA_PD option to report success/failure for that specific identity
     ///     association, or carried at the top level of a message to report success/failure for
@@ -107,7 +108,7 @@ public enum Dhcpv6OptionCodeEnum : ushort
     StatusCode = 13,
 
     /// <summary>
-    ///     RFC 8415 Section 21.14's Rapid Commit option: an empty marker a client puts in a
+    ///     RFC 9915 Section 21.14's Rapid Commit option: an empty marker a client puts in a
     ///     SOLICIT to ask for an immediate REPLY (skipping ADVERTISE and REQUEST), and a server
     ///     puts in that REPLY to confirm it.
     /// </summary>
@@ -127,7 +128,7 @@ public enum Dhcpv6OptionCodeEnum : ushort
     DomainSearchList = 24,
 
     /// <summary>
-    ///     RFC 8415 Section 21.21's Identity Association for Prefix Delegation (IA_PD) option,
+    ///     RFC 9915 Section 21.21's Identity Association for Prefix Delegation (IA_PD) option,
     ///     the prefix delegation counterpart of <see cref="IaNa" />: a container carrying one
     ///     client-chosen IAID, T1/T2 renewal timers, and a nested options area of one or more
     ///     <see cref="IaPrefix" /> options. See
@@ -136,7 +137,7 @@ public enum Dhcpv6OptionCodeEnum : ushort
     IaPd = 25,
 
     /// <summary>
-    ///     RFC 8415 Section 21.22's IA Prefix (IAPREFIX) option: one delegated prefix with its
+    ///     RFC 9915 Section 21.22's IA Prefix (IAPREFIX) option: one delegated prefix with its
     ///     preferred and valid lifetimes, nested inside an <see cref="IaPd" /> option (the prefix
     ///     counterpart of <see cref="IaAddress" />). See
     ///     <see cref="Ninlil.Dhcp.Common.Wire.Dhcpv6IdentityAssociationPrefix" />.
@@ -144,7 +145,7 @@ public enum Dhcpv6OptionCodeEnum : ushort
     IaPrefix = 26,
 
     /// <summary>
-    ///     RFC 8415 Section 21.18's Interface-ID option: opaque bytes a relay agent puts on a
+    ///     RFC 9915 Section 21.18's Interface-ID option: opaque bytes a relay agent puts on a
     ///     RELAY-FORW to identify the interface a client's message arrived on. The server must
     ///     echo it unchanged on the RELAY-REPL. The value is treated as an opaque byte string and
     ///     never interpreted.

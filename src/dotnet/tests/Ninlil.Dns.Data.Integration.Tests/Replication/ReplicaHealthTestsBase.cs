@@ -70,13 +70,15 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
     ///     This method builds the storage services for <paramref name="databaseName" /> with the
     ///     fast monitor settings and enables the router (as <c>Program</c> does after startup).
     /// </summary>
-    protected ServiceProvider BuildServices(string databaseName)
+    /// <param name="databaseName">The database the services use.</param>
+    /// <param name="maxLagSeconds">The lag limit in seconds.</param>
+    protected ServiceProvider BuildServices(string databaseName, int maxLagSeconds = 1)
     {
         Dictionary<string, string> values = new()
         {
             ["Storage:Engine"] = host.Engine.ToString(),
             ["Storage:ConnectionString"] = host.BuildConnectionString(databaseName),
-            ["Storage:ReadReplica:MaxLagSeconds"] = "1",
+            ["Storage:ReadReplica:MaxLagSeconds"] = maxLagSeconds.ToString(),
             ["Storage:ReadReplica:LagCheckIntervalSeconds"] = "1",
         };
         ConfigureSplit(values, databaseName);
@@ -96,13 +98,13 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
         return provider;
     }
 
-    private static async Task StartMonitorAsync(ServiceProvider services)
+    protected static async Task StartMonitorAsync(ServiceProvider services)
     {
         foreach (IHostedService hosted in services.GetServices<IHostedService>())
             await hosted.StartAsync(CancellationToken.None);
     }
 
-    private static async Task StopMonitorAsync(ServiceProvider services)
+    protected static async Task StopMonitorAsync(ServiceProvider services)
     {
         foreach (IHostedService hosted in services.GetServices<IHostedService>())
             await hosted.StopAsync(CancellationToken.None);
@@ -188,7 +190,7 @@ public abstract class ReplicaHealthTestsBase(ReplicatedEngineHost host)
                 status => status.IsEligible,
                 "the replica to be eligible"
             );
-            // MongoDB optimes have whole-second resolution, so a healthy secondary can show 1 s.
+            // A healthy replica is current or a few milliseconds late; one second is slack.
             Assert.InRange(eligible.LagSeconds.Value, 0, 1);
             Assert.True(eligible.SchemaCurrent);
 

@@ -676,7 +676,7 @@ public sealed class Dhcpv6OptionOverlayServiceTests : IAsyncLifetime
             "2001:db8:c1::12"
         );
 
-        // Code 32 is Information Refresh Time (RFC 8415 Section 21.23); 4 octets, 3600 s.
+        // Code 32 is Information Refresh Time (RFC 9915 Section 21.23); 4 octets, 3600 s.
         await _host.SeedCustomOptionAsync(scope.Id, 32, "00000E10");
 
         Dhcpv6Message advertise = await SolicitAsync(0x11, 0x2001);

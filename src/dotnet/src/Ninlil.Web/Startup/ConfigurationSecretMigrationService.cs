@@ -61,20 +61,9 @@ public sealed class ConfigurationSecretMigrationService(
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-                return;
+            JsonObject rootObject = await RuntimeConfigurationFileReader.ReadRootAsync(path);
 
-            // The configuration system accepts comments and trailing commas, so the reader does too.
-            JsonNode root = JsonNode.Parse(
-                await File.ReadAllTextAsync(path),
-                documentOptions: new JsonDocumentOptions
-                {
-                    CommentHandling = JsonCommentHandling.Skip,
-                    AllowTrailingCommas = true,
-                }
-            );
-
-            if (root is not JsonObject rootObject)
+            if (rootObject is null)
                 return;
 
             List<PresetConfigurationSetting> changes = [];
@@ -83,7 +72,8 @@ public sealed class ConfigurationSecretMigrationService(
             foreach (ConfigurationSecretSetting secret in ConfigurationSecretSettings.All)
             {
                 if (
-                    FindSection(rootObject, secret.SectionPath) is not JsonObject section
+                    RuntimeConfigurationFileReader.FindSection(rootObject, secret.SectionPath)
+                        is not JsonObject section
                     || section[secret.PlainKey] is not JsonValue valueNode
                     || !valueNode.TryGetValue(out string plaintext)
                     || string.IsNullOrEmpty(plaintext)
@@ -128,6 +118,7 @@ public sealed class ConfigurationSecretMigrationService(
                         or UnauthorizedAccessException
                         or JsonException
                         or InvalidDataException
+                        or ArgumentException
                         or CryptographicException
             )
         {
@@ -138,23 +129,5 @@ public sealed class ConfigurationSecretMigrationService(
                 path
             );
         }
-    }
-
-    /// <summary>
-    ///     This method follows a colon-separated section path through the JSON object.
-    /// </summary>
-    private static JsonNode FindSection(JsonObject root, string sectionPath)
-    {
-        JsonNode current = root;
-
-        foreach (string segment in sectionPath.Split(':'))
-        {
-            if (current is not JsonObject currentObject)
-                return null;
-
-            current = currentObject[segment];
-        }
-
-        return current;
     }
 }

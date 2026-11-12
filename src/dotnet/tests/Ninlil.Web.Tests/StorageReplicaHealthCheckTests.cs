@@ -73,7 +73,7 @@ public sealed class StorageReplicaHealthCheckTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            TemporaryFiles.DeleteDirectory(directory);
         }
     }
 

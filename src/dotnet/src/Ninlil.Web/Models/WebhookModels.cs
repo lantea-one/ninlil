@@ -6,12 +6,12 @@ namespace Ninlil.Web.Models;
 /// <summary>
 ///     This class carries the fields used to create a new outbound webhook subscription
 ///     (<c>POST /api/webhooks</c>). <see cref="WebhookSubscriptionCreateResponse" /> is the only
-///     place <see cref="AuthCredentials" /> and the HMAC signing secret are ever returned.
+///     place <c>authCredentials</c> and the HMAC signing secret are ever returned.
 /// </summary>
 /// <param name="Name">An operator-chosen, human-readable, unique name for the subscription.</param>
 /// <param name="TargetUrl">The absolute http or https URL every matching event is POSTed to.</param>
 /// <param name="EventTypeNames">
-///     The event types to deliver, by their <c>DnsServerEventTypeRegistry</c> name. Only the
+///     The event types to deliver, by name. Only the
 ///     seven types webhooks deliver are accepted: <c>DnsZoneChanged</c>, <c>DnsCacheEvicted</c>,
 ///     <c>DnssecZoneResigningCompleted</c>, <c>AcmeCertificateRenewalSucceeded</c>,
 ///     <c>AcmeCertificateRenewalFailed</c>, <c>CloudDnsZoneSyncFailed</c> and
@@ -19,7 +19,7 @@ namespace Ninlil.Web.Models;
 /// </param>
 /// <param name="AuthMode">The authentication the delivery POST uses, if any. Defaults to none.</param>
 /// <param name="AuthCredentials">
-///     The delivery POST's credentials, required when <see cref="AuthMode" /> is not <c>None</c>:
+///     The delivery POST's credentials, required when <c>authMode</c> is not <c>None</c>:
 ///     <c>{"BearerToken":"..."}</c> for <c>Bearer</c>, or
 ///     <c>{"Username":"...","Password":"..."}</c> for <c>Basic</c>. They always come from the
 ///     operator (the server never generates them) and are returned once, in this endpoint's
@@ -30,7 +30,7 @@ namespace Ninlil.Web.Models;
 ///     so the receiver can verify them.
 /// </param>
 /// <param name="HmacSigningSecret">
-///     The HMAC signing secret, used only when <see cref="EnableHmacSigning" /> is
+///     The HMAC signing secret, used only when <c>enableHmacSigning</c> is
 ///     <see langword="true" />. When omitted, a random 32-byte secret is generated. Either way the
 ///     plaintext secret is shown once, in this endpoint's response. Neither <c>PUT</c> nor
 ///     <c>PATCH</c> can change it, as with a TSIG key's secret (see
@@ -59,9 +59,9 @@ public record WebhookSubscriptionCreateRequest(
 /// <summary>
 ///     This class carries the fields used to fully replace an existing webhook subscription's
 ///     settings and credentials (<c>PUT /api/webhooks/{id}</c>). Unlike a TSIG key's generated
-///     secret, <see cref="AuthCredentials" /> comes from the operator, who already knows the value,
+///     secret, <c>authCredentials</c> comes from the operator, who already knows the value,
 ///     so a <c>PUT</c> replaces it too, as with <see cref="CloudProviderCredentialWriteRequest" />.
-///     The HMAC signing secret (see <see cref="WebhookSubscriptionCreateRequest.HmacSigningSecret" />)
+///     The HMAC signing secret (see <c>WebhookSubscriptionCreateRequest.hmacSigningSecret</c>)
 ///     cannot be changed this way; delete and recreate the subscription instead.
 /// </summary>
 /// <param name="Name">The subscription's name.</param>
@@ -86,8 +86,8 @@ public record WebhookSubscriptionWriteRequest(
 /// <summary>
 ///     This class carries a webhook subscription without its secrets, as returned by the list and
 ///     get endpoints and nested in <see cref="WebhookSubscriptionCreateResponse" />, the one
-///     response that includes <see cref="WebhookSubscriptionCreateResponse.AuthCredentials" /> and
-///     <see cref="WebhookSubscriptionCreateResponse.HmacSigningSecret" />.
+///     response that includes <c>WebhookSubscriptionCreateResponse.authCredentials</c> and
+///     <c>WebhookSubscriptionCreateResponse.hmacSigningSecret</c>.
 /// </summary>
 /// <param name="Id">The subscription's identifier.</param>
 /// <param name="Name">The subscription's name.</param>
@@ -125,7 +125,7 @@ public record WebhookSubscriptionDetail(
 /// <param name="Subscription">The new subscription, without secrets.</param>
 /// <param name="AuthCredentials">
 ///     The delivery POST's credentials, or <see langword="null" /> when
-///     <see cref="WebhookSubscriptionDetail.AuthMode" /> is <c>None</c>.
+///     <c>WebhookSubscriptionDetail.authMode</c> is <c>None</c>.
 /// </param>
 /// <param name="HmacSigningSecret">
 ///     The HMAC signing secret, as supplied or generated, or <see langword="null" /> when signing
@@ -139,10 +139,9 @@ public record WebhookSubscriptionCreateResponse(
 
 /// <summary>
 ///     This class carries one webhook delivery and its attempts so far, as returned by
-///     <c>GET /api/webhooks/{id}/delivery-attempts</c> from the stored
-///     <c>WebhookDeliveryAttemptEntity</c> history. It is read-only: only
-///     <c>WebhookDeliveryService</c> and <c>WebhookDeliveryRetrySweepService</c> write deliveries,
-///     as they make attempts.
+///     <c>GET /api/webhooks/{id}/delivery-attempts</c> from the stored attempt history. It is
+///     read-only: only the webhook delivery and its retry job write deliveries, as they make
+///     attempts.
 /// </summary>
 /// <param name="Id">The delivery's identifier.</param>
 /// <param name="SubscriptionId">The identifier of the subscription the delivery is for.</param>
@@ -159,11 +158,11 @@ public record WebhookSubscriptionCreateResponse(
 /// <param name="AttemptCount">How many attempts have been made so far.</param>
 /// <param name="MaxAttempts">
 ///     The most attempts the delivery may make: the subscription's
-///     <see cref="WebhookSubscriptionDetail.MaxDeliveryAttempts" /> when the delivery was created.
+///     <c>WebhookSubscriptionDetail.maxDeliveryAttempts</c> when the delivery was created.
 /// </param>
 /// <param name="LastAttemptedAtUtc">When the last attempt was made, or <see langword="null" /> if none has been.</param>
 /// <param name="NextRetryDueUtc">
-///     When the next retry is due, or <see langword="null" /> once <see cref="Status" /> is final.
+///     When the next retry is due, or <see langword="null" /> once <c>status</c> is final.
 /// </param>
 /// <param name="LastHttpStatusCode">
 ///     The HTTP status code the receiver returned to the last attempt, or <see langword="null" />

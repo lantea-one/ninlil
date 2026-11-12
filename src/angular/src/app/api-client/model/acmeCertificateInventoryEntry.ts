@@ -10,11 +10,11 @@
 
 
 /**
- * This record is one row of the certificate inventory that `AcmeSettingsController.Certificates` returns: one per domain in `AcmeOptions.Domains`, with what `IAcmeAccountStore` knows about it. `AcmeCertificateInventoryEntry.HasCertificate` separates a domain that has never been issued a certificate from one that simply is not due for renewal yet, whatever `AcmeCertificateInventoryEntry.IsDueForRenewal` says.
+ * This record is one row of the certificate inventory that `GET /api/acme-settings/certificates` returns: one per domain in `DnsServer:Acme:Domains`, with what the server has recorded about it. `hasCertificate` separates a domain that has never been issued a certificate from one that simply is not due for renewal yet, whatever `isDueForRenewal` says.
  */
 export interface AcmeCertificateInventoryEntry { 
     /**
-     * The domain as configured in `AcmeOptions.Domains`.
+     * The domain as configured in `DnsServer:Acme:Domains`.
      */
     domain?: string | null;
     /**
@@ -22,15 +22,15 @@ export interface AcmeCertificateInventoryEntry {
      */
     hasCertificate?: boolean;
     /**
-     * When the current certificate was issued, or null if `AcmeCertificateInventoryEntry.HasCertificate` is false.
+     * When the current certificate was issued, or null if `hasCertificate` is false.
      */
     issuedAtUtc?: string | null;
     /**
-     * When the current certificate expires, or null if `AcmeCertificateInventoryEntry.HasCertificate` is false.
+     * When the current certificate expires, or null if `hasCertificate` is false.
      */
     expiresAtUtc?: string | null;
     /**
-     * true when the domain has no certificate yet, or its certificate expires                 within `AcmeOptions.RenewBeforeExpiration`. It is computed by                 `AcmeCertificateRenewalService.IsDomainDue`, the check the renewal loop itself uses.
+     * true when the domain has no certificate yet, or its certificate expires                 within the configured `renewBeforeExpiration` setting. The certificate                 renewal job uses the same check.
      */
     isDueForRenewal?: boolean;
     /**
@@ -38,7 +38,7 @@ export interface AcmeCertificateInventoryEntry {
      */
     lastFailureAtUtc?: string | null;
     /**
-     * A short description of why the most recent attempt failed, or null together with `AcmeCertificateInventoryEntry.LastFailureAtUtc`.
+     * A short description of why the most recent attempt failed, or null together with `lastFailureAtUtc`.
      */
     lastFailureMessage?: string | null;
 }

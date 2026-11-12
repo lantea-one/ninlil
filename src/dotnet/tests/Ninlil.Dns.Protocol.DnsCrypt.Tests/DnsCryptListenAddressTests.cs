@@ -141,6 +141,9 @@ public sealed class DnsCryptListenAddressTests
             // these tests never send, so an empty store is enough.
             InMemoryDnsCryptCertificateStore store = new(algorithm.GenerateKeyPair());
 
+            // Two bound addresses, UDP and TCP must share one port number, but port 0 gives
+            // every socket its own, so the number is reserved first (see
+            // LocalAddresses.GetFreePort) and the listeners start on it.
             RunningListeners running = new() { Port = LocalAddresses.GetFreePort() };
             StaticOptionsMonitor<DnsCryptOptions> options = new(
                 new DnsCryptOptions
@@ -171,9 +174,7 @@ public sealed class DnsCryptListenAddressTests
             running.Tcp = new DnsCryptTcpListener(running._pipeline, store, options, tcpLogger);
             await running.Udp.StartAsync(CancellationToken.None);
             await running.Tcp.StartAsync(CancellationToken.None);
-
-            // Binding happens on each listener's background loop, just after StartAsync returns.
-            await Task.Delay(200);
+            await DnsCryptListenerStartup.WaitForBindOutcomeAsync(running.Udp, running.Tcp);
             return running;
         }
 

@@ -12,11 +12,11 @@ import { DnsClassEnum } from './dnsClassEnum';
 
 
 /**
- * This class carries every writable field of a `RecordEntity`, used to create a record (`POST /api/zones/{zoneId}/records`) and to fully replace one (`PUT /api/zones/{zoneId}/records/{id}`).
+ * This class carries every writable field of a record, used to create a record (`POST /api/zones/{zoneId}/records`) and to fully replace one (`PUT /api/zones/{zoneId}/records/{id}`).
  */
 export interface RecordWriteRequest { 
     /**
-     * The record\'s owner name. \"@\" means the zone\'s own name (RFC 1035 §5.1) and is stored as that name; any other name is stored as given.
+     * The record\'s owner name, a full name without a trailing dot. \"@\" means the zone\'s own name (RFC 1035 §5.1) and is stored as that name. Any other name must be the zone\'s name or below it, compared label by label and case-insensitively (RFC 4343); otherwise the API answers 400 with a suggestion. \"www\" is refused in zone \"example.test\" (use \"www.example.test\"), and so is \"wwwexample.test\".
      */
     name?: string | null;
     type?: DnsResourceRecordTypeEnum;

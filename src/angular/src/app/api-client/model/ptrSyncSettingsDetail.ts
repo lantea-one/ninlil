@@ -10,19 +10,19 @@
 
 
 /**
- * This record is the REST shape of the PTR sync defaults (`PtrSyncOptions`) that `GET /api/ptr-sync-settings` returns: whether the A and AAAA records of a `ZoneTypeEnum.Primary` or `ZoneTypeEnum.CloudPrimary` zone are mirrored as PTR records into the matching reverse zone, and how reverse zones are sized. Each applies when the zone\'s own setting is unset. A `PATCH` to the same endpoint accepts the same fields.
+ * This record is the REST shape of the PTR sync defaults (configuration section `DnsServer:Authoritative:PtrSync`) that `GET /api/ptr-sync-settings` returns: whether the A and AAAA records of a `Primary` or `CloudPrimary` zone are mirrored as PTR records into the matching reverse zone, and how reverse zones are sized. Each applies when the zone\'s own setting is unset. A `PATCH` to the same endpoint accepts the same fields.
  */
 export interface PtrSyncSettingsDetail { 
     /**
-     * Whether PTR records are managed for a zone whose `ZoneEntity.AutoManagePtrRecords` is unset. Defaults to false.
+     * Whether PTR records are managed for a zone whose `autoManagePtrRecords` is unset. Defaults to false.
      */
     defaultEnabled?: boolean;
     /**
-     * The IPv4 reverse zone size, in prefix bits, for a zone whose `ZoneEntity.PtrIpv4PrefixLength` is unset. Defaults to 24, one zone per octet boundary; 25 to 30 use RFC 2317 classless zones. Only 24 to 30 are accepted.
+     * The IPv4 reverse zone size, in prefix bits, for a zone whose `ptrIpv4PrefixLength` is unset. Defaults to 24, one zone per octet boundary; 25 to 30 use RFC 2317 classless zones. Only 24 to 30 are accepted.
      */
     defaultIpv4ReverseZonePrefixBits?: number;
     /**
-     * The IPv6 reverse zone size, in prefix bits, for a zone whose `ZoneEntity.PtrIpv6PrefixLength` is unset. Defaults to 64; only multiples of 4 from 16 to 124 are accepted.
+     * The IPv6 reverse zone size, in prefix bits, for a zone whose `ptrIpv6PrefixLength` is unset. Defaults to 64; only multiples of 4 from 16 to 124 are accepted.
      */
     defaultIpv6ReverseZonePrefixBits?: number;
 }

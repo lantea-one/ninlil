@@ -169,12 +169,15 @@ public sealed class DnsCryptProviderNameTests
         /// <summary>This property contains the TCP listener under test.</summary>
         public DnsCryptTcpListener Tcp { get; private set; }
 
-        /// <summary>This property contains the port both listeners were told to bind.</summary>
+        /// <summary>
+        ///     This property contains the port both listeners share, or, when the provider name
+        ///     keeps them from binding, a free port where nothing listens.
+        /// </summary>
         public int Port { get; private set; }
 
         /// <summary>
-        ///     This method starts both listeners for <paramref name="providerName" /> and gives
-        ///     their background loops a moment to bind or give up.
+        ///     This method starts both listeners for <paramref name="providerName" /> and
+        ///     waits until each has bound or given up.
         /// </summary>
         public static async Task<RunningListeners> StartAsync(
             string providerName,
@@ -205,16 +208,14 @@ public sealed class DnsCryptProviderNameTests
                 ),
             ]);
 
-            RunningListeners running = new() { Port = LocalAddresses.GetFreePort() };
-            StaticOptionsMonitor<DnsCryptOptions> options = new(
-                new DnsCryptOptions
-                {
-                    Enable = true,
-                    Port = running.Port,
-                    ProviderName = providerName,
-                    ListenAddresses = "127.0.0.1",
-                }
-            );
+            RunningListeners running = new();
+            DnsCryptOptions dnscryptOptions = new()
+            {
+                Enable = true,
+                ProviderName = providerName,
+                ListenAddresses = "127.0.0.1",
+            };
+            StaticOptionsMonitor<DnsCryptOptions> options = new(dnscryptOptions);
 
             running._pipeline = new DnsQueryProcessingPipeline(
                 new DnsQueryDispatcher(
@@ -231,23 +232,29 @@ public sealed class DnsCryptProviderNameTests
             );
             await running._pipeline.StartAsync(CancellationToken.None);
 
-            running.Udp = new DnsCryptUdpListener(
-                running._pipeline,
-                store,
-                options,
-                udpLogger ?? NullLogger<DnsCryptUdpListener>.Instance
-            );
-            running.Tcp = new DnsCryptTcpListener(
-                running._pipeline,
-                store,
-                options,
-                tcpLogger ?? NullLogger<DnsCryptTcpListener>.Instance
-            );
-            await running.Udp.StartAsync(CancellationToken.None);
-            await running.Tcp.StartAsync(CancellationToken.None);
+            (running.Udp, running.Tcp, int port) =
+                await DnsCryptListenerStartup.StartOnFreePortAsync(
+                    dnscryptOptions,
+                    () =>
+                        (
+                            new DnsCryptUdpListener(
+                                running._pipeline,
+                                store,
+                                options,
+                                udpLogger ?? NullLogger<DnsCryptUdpListener>.Instance
+                            ),
+                            new DnsCryptTcpListener(
+                                running._pipeline,
+                                store,
+                                options,
+                                tcpLogger ?? NullLogger<DnsCryptTcpListener>.Instance
+                            )
+                        )
+                );
 
-            // Binding happens on each listener's background loop, just after StartAsync returns.
-            await Task.Delay(300);
+            // A provider name that is not usable leaves both listeners unbound; the test still
+            // needs a port to prove that nothing answers there.
+            running.Port = port == 0 ? LocalAddresses.GetFreePort() : port;
             return running;
         }
 

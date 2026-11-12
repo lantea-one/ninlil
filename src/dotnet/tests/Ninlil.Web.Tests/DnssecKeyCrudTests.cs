@@ -266,11 +266,13 @@ public class DnssecKeyCrudTests(NinlilDnsWebApplicationFactory factory)
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains(
-            "prohibited",
-            await response.Content.ReadAsStringAsync(),
-            StringComparison.Ordinal
-        );
+        string expected = algorithm is "RSASHA1" or "RSASHA1-NSEC3-SHA1"
+            ? "Ninlil does not sign with"
+            : "prohibited for signing (RFC 9904 §3)";
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains(expected, body, StringComparison.Ordinal);
+        // The message names the algorithm the way the request did, by its IANA mnemonic.
+        Assert.Contains($"'{algorithm}'", body, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -3,7 +3,7 @@ namespace Ninlil.Dhcp.Server.Relay;
 
 /// <summary>
 ///     This class binds to the <c>DhcpServer:Relay:Dhcpv6</c> section of the application's
-///     configuration and controls whether this server acts as an RFC 8415 DHCPv6 relay agent,
+///     configuration and controls whether this server acts as an RFC 9915 DHCPv6 relay agent,
 ///     forwarding client messages to upstream DHCPv6 servers in a RELAY-FORW envelope instead of
 ///     answering them from local scopes, and how. Only a single relay hop is supported; see
 ///     <c>Ninlil.Dhcp.Common.Wire.Dhcpv6RelayMessage</c>.
@@ -57,7 +57,7 @@ public sealed class Dhcpv6RelayOptions
     public string RelayLinkAddress { get; set; }
 
     /// <summary>
-    ///     This property optionally contains the RFC 8415 Section 21.18 Interface-ID, as ASCII
+    ///     This property optionally contains the RFC 9915 Section 21.18 Interface-ID, as ASCII
     ///     text, added to every RELAY-FORW so the server can tell which relay interface a message
     ///     arrived on. It is the DHCPv6 counterpart of
     ///     <c>Dhcpv4RelayOptions.RelayAgentCircuitId</c>. Left <see langword="null" /> or empty (the

@@ -19,12 +19,11 @@ namespace Ninlil.Web.Models;
 /// <param name="AnswerCount">How many records the answer section held.</param>
 /// <param name="ClientIdentifier">
 ///     The client's persistent identifier (a MAC address or DUID), resolved when the entry was
-///     written, or <see langword="null" /> when it was not resolved or the privacy level hides it
-///     (see <see cref="Ninlil.Dns.Server.QueryLog.DnsQueryLogSubscriber" />).
+///     written, or <see langword="null" /> when it was not resolved or the privacy level hides it.
 /// </param>
 /// <param name="ClientProtocolVersion">
-///     Which identifier space <paramref name="ClientIdentifier" /> belongs to, or
-///     <see langword="null" /> when <paramref name="ClientIdentifier" /> is <see langword="null" />.
+///     Which identifier space <c>clientIdentifier</c> belongs to, or
+///     <see langword="null" /> when <c>clientIdentifier</c> is <see langword="null" />.
 /// </param>
 public record DnsQueryLogEntryDetail(
     Guid Id,

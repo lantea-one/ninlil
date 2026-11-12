@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in Ninlil does not work as documented.
+title: ""
+labels:
+  - kind/bug
+  - status/needs-design
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report a vulnerability here. Issues are public. Send a security report by e-mail
+        as described in [SECURITY.md](https://git.lantea.one/lantea-one/ninlil/src/branch/main/SECURITY.md#report-a-vulnerability).
+  - type: input
+    id: version
+    attributes:
+      label: Ninlil version
+      description: The release name or the container tag. See [Releases and versioning](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#releases-and-versioning).
+      placeholder: v2026.10.31.1
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: How Ninlil runs and on which operating system
+      description: Binary, package or container image, and the operating system with its version.
+      placeholder: container image on Debian 13
+    validations:
+      required: true
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Storage engine
+      description: The value of `Storage:Engine`. SQLite is the default when it is not set.
+      options:
+        - Sqlite
+        - PostgreSql
+        - MySql
+        - SqlServer
+        - MongoDb
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The requests, queries or configuration involved, in order.
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: What happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Log lines around the problem. Remove secrets such as passwords and tokens first.
+      render: text
+    validations:
+      required: true

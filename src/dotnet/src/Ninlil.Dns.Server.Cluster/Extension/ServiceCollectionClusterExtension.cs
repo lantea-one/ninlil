@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Server.Cluster.Authentication;
+using Ninlil.Dns.Server.Cluster.Backfill;
 using Ninlil.Dns.Server.Cluster.Channel;
 using Ninlil.Dns.Server.Cluster.Heartbeat;
 using Ninlil.Dns.Server.Cluster.Http;
@@ -15,7 +16,7 @@ namespace Ninlil.Dns.Server.Cluster.Extension;
 /// <summary>
 ///     This class provides our <see cref="IServiceCollection" /> extension for wiring up
 ///     Ninlil's clustering: <see cref="ClusterOptions" />, the invite and join services, the peer
-///     HTTP client factory, the heartbeat service and receiver, and the config-sync broadcaster, username
+///     HTTP client factory, the heartbeat service and receiver, and the config-sync broadcaster and backfill runner, username
 ///     checker and statistics aggregator. The <see cref="ClusterTsigAuthenticationDefaults.AuthenticationScheme" />
 ///     scheme is registered separately by <see cref="AddNinlilDnsServerClusterAuthentication" />,
 ///     which <c>Program.cs</c> calls after setting up the other authentication schemes.
@@ -50,7 +51,33 @@ public static class ServiceCollectionClusterExtension
         // event subscribers in Ninlil.Dns.Server.ClusterSync do not depend on this project.
         // Singleton, like the peer HTTP client factory; it keeps no per-request state and
         // reads peers through its own scope.
-        instance.AddSingleton<IClusterConfigSyncBroadcaster, ClusterConfigSyncBroadcaster>();
+        // The same instance also sends one envelope to one peer (IClusterConfigPeerSender),
+        // which the backfill runner uses.
+        // The broadcaster records missed deliveries through the requester and not the runner:
+        // the runner sends through the broadcaster, so the runner would make a cycle.
+        instance.AddSingleton<ClusterConfigBackfillRequester>();
+        instance.AddSingleton<IClusterConfigBackfillRequester>(provider =>
+            provider.GetRequiredService<ClusterConfigBackfillRequester>()
+        );
+        instance.AddSingleton<ClusterConfigSyncBroadcaster>();
+        instance.AddSingleton<IClusterConfigSyncBroadcaster>(provider =>
+            provider.GetRequiredService<ClusterConfigSyncBroadcaster>()
+        );
+        instance.AddSingleton<IClusterConfigPeerSender>(provider =>
+            provider.GetRequiredService<ClusterConfigSyncBroadcaster>()
+        );
+
+        // Pushes every synced item to a peer that is owed a backfill (a peer that just joined).
+        // A singleton, because it tracks which peers a pass is running for.
+        instance.AddSingleton<ClusterConfigBackfillRunner>();
+        instance.AddSingleton<IClusterConfigBackfillRunner>(provider =>
+            provider.GetRequiredService<ClusterConfigBackfillRunner>()
+        );
+
+        // Its only hosted-service job is the stop: it cancels and awaits running passes at shutdown.
+        instance.AddHostedService(provider =>
+            provider.GetRequiredService<ClusterConfigBackfillRunner>()
+        );
 
         // The best-effort cluster-wide username check (see IClusterUsernameUniquenessChecker).
         instance.AddSingleton<

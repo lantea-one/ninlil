@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Exceptions;
+using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Common.Wire.Records;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
@@ -100,12 +101,12 @@ public class RecordsController(
 
     /// <summary>
     ///     This action adds a record to the zone. A zone's first record must be its SOA, since
-    ///     without it there is no serial to advance; that first record bootstraps the zone through
-    ///     <see cref="IZoneUpdateService.BootstrapZoneAsync" />, and later records go through
-    ///     <see cref="IZoneUpdateService.ApplyChangesAsync" />. Returns 400 when the first record
-    ///     is not an SOA, is an SOA that is not at the zone's own name, or the data does not fit the
-    ///     record type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown
-    ///     zone, and 409 for a second SOA or a zone that has records but no SOA at its apex. The
+    ///     without it there is no serial to advance; that first record bootstraps the zone, and later
+    ///     records go through the same change path as DNS dynamic updates. Returns 400 when the first record
+    ///     is not an SOA, is an SOA that is not at the zone's own name, the name is not a valid DNS
+    ///     name or is neither the zone's name nor below it, or the data does not fit the record
+    ///     type (an APL item must be in canonical form, RFC 3123 §4), 404 for an unknown zone, and
+    ///     409 for a second SOA or a zone that has records but no SOA at its apex. The
     ///     owner name "@" means the zone's own name (RFC 1035 §5.1) and is stored as that name.
     ///     Requires <c>zones:write</c>.
     /// </summary>
@@ -178,10 +179,12 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This action replaces a record's fields, keeping its id. Returns 400 when the data does
-    ///     not fit the record type (an APL item must be in canonical form, RFC 3123 §4) and 404 when the record does not exist or belongs to another
-    ///     zone, and 409 when the edit would change the type to or from SOA or rename
-    ///     the SOA record (a zone has exactly one SOA). Requires <c>zones:write</c>.
+    ///     This action replaces a record's fields, keeping its id. Returns 400 when the name is not
+    ///     a valid DNS name or is neither the zone's name nor below it, or the data does not fit
+    ///     the record type (an APL item must be in canonical form, RFC 3123 §4), 404 when the
+    ///     record does not exist or belongs to another zone, and 409 when the edit would change the
+    ///     type to or from SOA or rename the SOA record (a zone has exactly one SOA). Requires
+    ///     <c>zones:write</c>.
     /// </summary>
     [HttpPut("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -231,11 +234,12 @@ public class RecordsController(
 
     /// <summary>
     ///     This action updates a record as an RFC 7396 merge patch: an absent field is unchanged, a
-    ///     JSON <c>null</c> clears a nullable field, and any other value replaces it. Changing
-    ///     <c>type</c> without new <c>data</c> re-checks the existing data against the new type and
-    ///     returns 400 if it does not fit (as does new APL data that is not in canonical form, RFC
-    ///     3123 §4), and 409 when the patch would change the type to or
-    ///     from SOA or rename the SOA record. Requires <c>zones:write</c>.
+    ///     JSON <c>null</c> clears a nullable field, and any other value replaces it. Returns 400 for
+    ///     a <c>name</c> that is not a valid DNS name or is neither the zone's name nor below it.
+    ///     Changing <c>type</c> without new <c>data</c> re-checks the existing data against the new
+    ///     type and returns 400 if it does not fit (as does new APL data that is not in canonical
+    ///     form, RFC 3123 §4), and 409 when the patch would change the type to or from SOA or
+    ///     rename the SOA record. Requires <c>zones:write</c>.
     /// </summary>
     [HttpPatch("{id:guid}")]
     [RequirePermission("zones:write")]
@@ -255,9 +259,7 @@ public class RecordsController(
         // type; one that changes both is checked against the new type.
         DnsResourceRecordTypeEnum effectiveType = existingRecord.Type;
         if (patch.TryGetMergePatchField("type", out JsonElement type))
-            effectiveType = System.Text.Json.JsonSerializer.Deserialize<DnsResourceRecordTypeEnum>(
-                type.GetRawText()
-            );
+            effectiveType = type.GetEnumName<DnsResourceRecordTypeEnum>("type");
 
         string patchedName = existingRecord.Name;
         if (patch.TryGetMergePatchField("name", out JsonElement patchName))
@@ -302,9 +304,7 @@ public class RecordsController(
                     record.Type = effectiveType;
 
                     if (patch.TryGetMergePatchField("class", out JsonElement dnsClass))
-                        record.Class = System.Text.Json.JsonSerializer.Deserialize<DnsClassEnum>(
-                            dnsClass.GetRawText()
-                        );
+                        record.Class = dnsClass.GetEnumName<DnsClassEnum>("class");
 
                     if (
                         patch.TryGetMergePatchField(
@@ -408,17 +408,52 @@ public class RecordsController(
     }
 
     /// <summary>
-    ///     This method turns the owner name "@" into the zone's own name and returns any other name
-    ///     unchanged. RFC 1035 §5.1: "A free standing @ is used to denote the current origin." A
-    ///     name without a trailing dot, such as "www", is stored as given; the API does not append
-    ///     the zone name to it.
+    ///     This method turns the owner name "@" into the zone's own name, then refuses any name
+    ///     that is neither the zone's name nor below it with <see cref="ValidationException" />
+    ///     (400). RFC 1035 §5.1: "A free standing @ is used to denote the current origin." The
+    ///     API takes full names without a trailing dot, so it never appends the zone name to
+    ///     "www"; such a name would be stored as written and never answered, so the message
+    ///     suggests the full name instead.
     /// </summary>
-    private static string ResolveOwnerName(string name, string zoneName) =>
-        name == "@" ? zoneName : name;
+    private static string ResolveOwnerName(string name, string zoneName)
+    {
+        string resolved = name == "@" ? zoneName : name;
+        ThrowIfNotInZone(resolved, zoneName);
+        return resolved;
+    }
 
     /// <summary>
-    ///     This method resolves an owner name of "@" for an edit by loading the zone's name. Returns
-    ///     404 when the zone does not exist.
+    ///     This method throws <see cref="ValidationException" /> when <paramref name="name" /> is
+    ///     not a valid DNS name, or is not the zone's name or a name below it. It compares labels,
+    ///     not text: "wwwexample.test" ends with the text "example.test" but is not below that
+    ///     zone. Labels compare case-insensitively (RFC 4343), which <see cref="DnsName" />
+    ///     equality implements.
+    /// </summary>
+    private static void ThrowIfNotInZone(string name, string zoneName)
+    {
+        // A name that does not parse gets its own message: suggesting the zone suffix would be
+        // wrong for "ü.example.test", which is in the zone but needs its xn-- form.
+        if (string.IsNullOrWhiteSpace(name) || !DnsName.TryParse(name, out DnsName owner))
+            throw new ValidationException(
+                $"'{name}' is not a valid DNS name; use ASCII labels, with an internationalized label in its xn-- form."
+            );
+
+        if (
+            DnsName.TryParse(zoneName, out DnsName zone)
+            && owner.Labels.Count >= zone.Labels.Count
+            && owner.Suffix(owner.Labels.Count - zone.Labels.Count) == zone
+        )
+            return;
+
+        string trimmedZone = zoneName.TrimEnd('.');
+        throw new ValidationException(
+            $"'{name}' is not in zone '{trimmedZone}'; did you mean '{name.TrimEnd('.')}.{trimmedZone}'?"
+        );
+    }
+
+    /// <summary>
+    ///     This method resolves and checks an owner name for an edit by loading the zone's name.
+    ///     Returns 404 when the zone does not exist and 400 when the name is not in the zone.
     /// </summary>
     private async Task<string> ResolveOwnerNameAsync(
         Guid zoneId,
@@ -426,13 +461,10 @@ public class RecordsController(
         CancellationToken stoppingToken
     )
     {
-        if (name != "@")
-            return name;
-
         ZoneEntity zone =
             await zoneRepository.GetByIdAsync(zoneId, stoppingToken)
             ?? throw new NotFoundException("Zone", zoneId.ToString());
-        return zone.Name;
+        return ResolveOwnerName(name, zone.Name);
     }
 
     /// <summary>

@@ -8,8 +8,9 @@ import { ForbiddenComponent } from './layout/forbidden/forbidden.component';
 
 /**
  * This constant is the app's route table. The public pages (login, forgot and reset password,
- * SSO callback) sit at the top level. Every other page renders inside {@link AppShellComponent},
- * whose route has {@link authGuard}, so they all need a session.
+ * e-mail change confirmation, SSO callback) sit at the top level. Every other page renders
+ * inside {@link AppShellComponent}, whose route has {@link authGuard}, so they all need a
+ * session.
  *
  * <p>Most areas also have a {@link permissionGuard} for the backend's read permission on the
  * parent route and for the write permission on each create and edit route. The guard blocks a
@@ -46,6 +47,16 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/auth/reset-password/set-new-password.component').then(
         (m) => m.SetNewPasswordComponent,
+      ),
+  },
+  {
+    // The public page the self-service e-mail change link opens (`userId`, `email` and `token`
+    // in the query). Anonymous: the link may be opened in a browser with no session, and the
+    // change has ended every session anyway.
+    path: 'confirm-email-change',
+    loadComponent: () =>
+      import('./features/auth/confirm-email-change/confirm-email-change.component').then(
+        (m) => m.ConfirmEmailChangeComponent,
       ),
   },
   {

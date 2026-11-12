@@ -57,7 +57,9 @@ namespace Ninlil.Dns.Server.Core.Pipeline;
 ///             <item>The domain block/allow lists (<see cref="IDnsFilterEngine.EvaluateDomainAsync" />).</item>
 ///             <item>DNS rewrites (<see cref="IDnsRewriteEngine" />), which answer directly. A
 ///             CNAME answer to an A or AAAA question is completed with the target's records,
-///             resolved through the dispatcher (<c>RewriteTargetChaser</c>).</item>
+///             resolved through the dispatcher (<c>RewriteTargetChaser</c>). An NXDOMAIN from the
+///             dispatcher for a name that has a rewrite of another type becomes NODATA
+///             (<see cref="IDnsRewriteEngine.TryBuildNoDataForNxDomainAsync" />).</item>
 ///             <item>Otherwise, <see cref="IDnsQueryDispatcher" />, which offers the query to each
 ///             registered <see cref="IDnsQueryResolver" /> in turn (NOTIFY, dynamic update,
 ///             authoritative, forwarding, recursive).</item>
@@ -767,7 +769,26 @@ public sealed class DnsQueryProcessingPipeline(
             }
         }
 
+        bool resolvedByDispatcher = response is null;
         response ??= await dispatcher.DispatchAsync(context, stoppingToken);
+
+        // A name that exists only through a rewrite of another type has no NXDOMAIN to give
+        // (RFC 2308 §2.2: NXDOMAIN says the name does not exist). The engine swaps in a NODATA
+        // copy; it runs only for an NXDOMAIN, so other queries pay nothing.
+        if (
+            resolvedByDispatcher
+            && rewriteEngine is not null
+            && response.ResponseCode == DnsResponseCodeEnum.NxDomain
+        )
+        {
+            response =
+                await rewriteEngine.TryBuildNoDataForNxDomainAsync(
+                    request,
+                    response,
+                    message.RemoteAddress,
+                    stoppingToken
+                ) ?? response;
+        }
 
         // Response IP blocking: an answer whose A/AAAA records name a blocked address is
         // denied like a domain-list match. The same check catches CNAME cloaking (a CNAME chain

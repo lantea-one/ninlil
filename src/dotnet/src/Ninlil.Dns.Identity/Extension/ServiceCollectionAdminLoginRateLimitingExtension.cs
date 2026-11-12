@@ -35,9 +35,10 @@ public static class ServiceCollectionAdminLoginRateLimitingExtension
     /// <summary>
     ///     This constant contains the policy name that
     ///     <c>Web.Controllers.AuthController.ForgotPassword</c> applies, so an anonymous caller
-    ///     cannot make the server send unlimited reset e-mails. It uses the same
-    ///     <see cref="AdminLoginRateLimitOptions" /> limits as <see cref="AuthenticationEndpointPolicyName" />
-    ///     but counts separately, so asking for a reset link does not use up sign-in attempts.
+    ///     cannot make the server send unlimited reset e-mails. <c>AuthController.ResetPassword</c>
+    ///     and <c>AuthController.ConfirmEmailChange</c> apply it too, so guessing a token is
+    ///     limited. It uses the same <see cref="AdminLoginRateLimitOptions" /> limits as
+    ///     <see cref="AuthenticationEndpointPolicyName" /> but counts separately, so asking for a reset link does not use up sign-in attempts.
     /// </summary>
     public const string PasswordResetEndpointPolicyName = "password-reset";
 

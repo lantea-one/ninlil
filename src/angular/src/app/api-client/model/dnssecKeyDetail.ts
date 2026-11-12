@@ -13,7 +13,7 @@ import { DnssecKeyRoleEnum } from './dnssecKeyRoleEnum';
 
 
 /**
- * This class carries a DNSSEC key, as returned by the list, get and create endpoints under `/api/zones/{zoneId}/dnssec-keys`. It never includes the private key. Unlike a TSIG secret or a cloud provider credential, a DNSSEC private key never needs to leave the server: it is used only for signing inside `Server.Authoritative`, stays encrypted at rest and is never exposed over REST.
+ * This class carries a DNSSEC key, as returned by the list, get and create endpoints under `/api/zones/{zoneId}/dnssec-keys`. It never includes the private key. Unlike a TSIG secret or a cloud provider credential, a DNSSEC private key never needs to leave the server: it is used only for signing inside the server, stays encrypted at rest and is never exposed over REST.
  */
 export interface DnssecKeyDetail { 
     /**
@@ -35,7 +35,7 @@ export interface DnssecKeyDetail {
      */
     keyTag?: number;
     /**
-     * Whether the key has been withdrawn from the zone\'s DNSKEY RRset: true when `DnssecKeyDetail.LifecycleState` is `Removed`. It is the field `DnssecKeyWriteRequest.IsRetired` writes.
+     * Whether the key has been withdrawn from the zone\'s DNSKEY RRset: true when `lifecycleState` is `Removed`. It is the field `DnssecKeyWriteRequest.isRetired` writes.
      */
     isRetired?: boolean;
     /**
@@ -72,7 +72,7 @@ export interface DnssecKeyDetail {
      */
     dsRecord?: string | null;
     /**
-     * The digest part of DsRecord on its own, as uppercase hexadecimal, for registrars that ask for the key tag, algorithm, digest type and digest separately.
+     * The digest part of `dsRecord` on its own, as uppercase hexadecimal, for registrars that ask for the key tag, algorithm, digest type and digest separately.
      */
     dsDigest?: string | null;
 }

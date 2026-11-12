@@ -99,9 +99,8 @@ public class ClientGroupListAssignmentsController(
     ///     This action assigns a block or allow list to the group. Returns 400 when the list does
     ///     not exist (an invalid value in the request, not a missing resource), 404 for an unknown
     ///     group, and 409 when the list is already assigned. A duplicate would not change
-    ///     filtering, since <c>DnsFilterEngine.ResolveApplicableListsAsync</c> collects list ids
-    ///     into a <see cref="HashSet{T}" />, but it is refused to keep rows meaningful. Requires
-    ///     <c>clientgroups:write</c>.
+    ///     filtering, since the filter engine collects list ids into a set, but it is refused to
+    ///     keep rows meaningful. Requires <c>clientgroups:write</c>.
     /// </summary>
     [HttpPost]
     [RequirePermission("clientgroups:write")]

@@ -10,7 +10,7 @@
 
 
 /**
- * This record is the zone transfer settings (`ZoneTransferOptions`) that `GET /api/zone-transfer-settings` returns: how the AXFR and IXFR responses the server sends to secondaries are split into messages. A `PATCH` to the same endpoint accepts the same field.
+ * This record is the zone transfer settings (configuration section `DnsServer:Authoritative:ZoneTransfer`) that `GET /api/zone-transfer-settings` returns: how the AXFR and IXFR responses the server sends to secondaries are split into messages. A `PATCH` to the same endpoint accepts the same field.
  */
 export interface ZoneTransferSettingsDetail { 
     /**

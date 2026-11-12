@@ -28,7 +28,7 @@ export interface DnsClientStaticAddressMappingDetail {
     clientIdentifier?: string | null;
     protocolVersion?: InternetProtocolVersionEnum;
     /**
-     * Whether the mapping is disabled. `StaticAddressMappingClientIdentityResolver` ignores a disabled mapping.
+     * Whether the mapping is disabled. A disabled mapping is ignored when a client is identified.
      */
     isDisabled?: boolean;
     /**

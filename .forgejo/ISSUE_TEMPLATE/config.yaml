@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://git.lantea.one/lantea-one/ninlil/src/branch/main/SECURITY.md
+    about: Send security reports by e-mail, never in a public issue. SECURITY.md explains how.

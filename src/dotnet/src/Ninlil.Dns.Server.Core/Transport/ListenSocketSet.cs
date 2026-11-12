@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
+using Ninlil.Common.Extension.Sockets;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Core.Transport;
@@ -35,6 +36,7 @@ public sealed class ListenSocketSet
     {
         Sockets = sockets;
         FailedAddresses = failedAddresses;
+        BoundPort = sockets.Count == 0 ? 0 : ((IPEndPoint)sockets[0].LocalEndPoint).Port;
     }
 
     /// <summary>
@@ -42,6 +44,13 @@ public sealed class ListenSocketSet
     ///     a status read before the first bind sees "nothing failed" rather than null.
     /// </summary>
     public static ListenSocketSet Empty { get; } = new([], []);
+
+    /// <summary>
+    ///     This property contains the port of the first bound socket, or 0 when nothing bound. It
+    ///     is how a caller that asked for port 0 learns the port the operating system chose. With
+    ///     several sockets on port 0 each gets a port of its own, so it names only the first.
+    /// </summary>
+    public int BoundPort { get; }
 
     /// <summary>This property contains every socket that bound successfully.</summary>
     public IReadOnlyList<Socket> Sockets { get; }
@@ -264,12 +273,22 @@ public sealed class ListenSocketSet
     }
 
     /// <summary>This method creates an unbound socket of the right shape for the protocol.</summary>
-    private static Socket CreateSocket(AddressFamily family, ProtocolType protocolType) =>
-        new(
+    private static Socket CreateSocket(AddressFamily family, ProtocolType protocolType)
+    {
+        Socket socket = new(
             family,
             protocolType == ProtocolType.Tcp ? SocketType.Stream : SocketType.Dgram,
             protocolType
         );
+
+        // A listening UDP socket receives from many clients. On Windows a client that closes its
+        // port before the reply would otherwise fail the next receive with WSAECONNRESET, a
+        // warning in the log that an off-path sender can provoke at will.
+        if (protocolType == ProtocolType.Udp)
+            socket.IgnoreIcmpPortUnreachable();
+
+        return socket;
+    }
 
     /// <summary>
     ///     This method compares a host address with a configured one, ignoring the IPv6 scope when

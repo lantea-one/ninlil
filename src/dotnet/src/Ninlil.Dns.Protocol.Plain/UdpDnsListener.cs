@@ -64,6 +64,13 @@ public sealed class UdpDnsListener(
     /// </summary>
     public IReadOnlyList<string> FailedListenAddresses => _sockets.FailedAddresses;
 
+    /// <summary>
+    ///     This property contains the port of the first bound socket (0 while nothing is bound).
+    ///     A listener configured with port 0 gets its port from the operating system; this is how
+    ///     a caller reads it.
+    /// </summary>
+    public int BoundPort => _sockets.BoundPort;
+
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

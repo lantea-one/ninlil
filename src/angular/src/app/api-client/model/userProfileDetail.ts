@@ -10,7 +10,7 @@
 
 
 /**
- * This class carries the caller\'s self-service profile, read through `GET /api/users/me` and changed through `PATCH /api/users/me`, which accepts only the display name and phone number. `UserProfileDetail.Email` is shown, and lets the Profile page compute the Gravatar hash, but cannot be changed here: changing an e-mail address would need a re-verification flow that does not exist. An administrator can change it through `UpdateUserRequest`.
+ * This class carries the caller\'s self-service profile, read through `GET /api/users/me` and changed through `PATCH /api/users/me`, which accepts only the display name and phone number. `email` is shown, and lets the Profile page compute the Gravatar hash, but `PATCH /api/users/me` ignores it: the address changes only through `POST /api/users/me/email`, which needs the current password. An administrator can change it through `UpdateUserRequest`.
  */
 export interface UserProfileDetail { 
     /**
@@ -33,5 +33,9 @@ export interface UserProfileDetail {
      * The account\'s phone number, if any.
      */
     phoneNumber?: string | null;
+    /**
+     * Whether `POST /api/users/me/email` sends a confirmation link to the new address first (true) or changes the address at once. The Profile page uses it to word its form. It mirrors `Identity:EmailChange:RequireConfirmation`.
+     */
+    emailChangeRequiresConfirmation?: boolean;
 }
 
