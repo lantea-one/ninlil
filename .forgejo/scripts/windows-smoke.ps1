@@ -45,7 +45,8 @@ A local executable, or a zip with the same layout as the release asset, to test 
 downloading one.
 
 .PARAMETER StartupTimeoutSeconds
-How long to wait for /status to answer 200. Default 120 (the first start extracts the bundle).
+How long to wait for /status to answer 200 and then to report Healthy. Default 120 (the first
+start extracts the bundle).
 
 .PARAMETER DnsQueryPortOverride
 Test switch: sends the DNS query to this port instead of the one the server was given, which
@@ -382,8 +383,19 @@ try {
     Write-Host "ok: DNS-over-TLS answered with RCODE $($tlsReply[3] -band 0x0F)"
 
     # 6. DNS-over-QUIC. Every enabled transport must be listening: /status is Unhealthy otherwise.
-    $health = ($status.Content | ConvertFrom-Json).status
-    if ($health -ne 'Healthy') { throw "/status reports '$health', not Healthy: $($status.Content)" }
+    # /status answers before the last listener is bound, so the answer of step 1 can still say
+    # Unhealthy on a busy host. Ask again until it is Healthy or the start-up time is used up.
+    $health = ''
+    while ($health -ne 'Healthy') {
+        if ($process.HasExited) { throw "The executable exited with code $($process.ExitCode) before /status was Healthy." }
+        $status = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$httpPort/status" -TimeoutSec 5
+        $health = ($status.Content | ConvertFrom-Json).status
+        if ($health -ne 'Healthy') {
+            if ((Get-Date) -gt $deadline) { throw "/status reports '$health', not Healthy, $StartupTimeoutSeconds seconds after the start: $($status.Content)" }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    Write-Host 'ok: /status is Healthy, so every enabled transport is listening'
     if ((Get-Content $stdoutFile -Raw) -match 'QUIC is not supported') {
         throw 'The executable reports that QUIC is not supported (msquic.dll did not load beside it).'
     }
