@@ -53,8 +53,8 @@ public sealed class PlainListenAddressTests
         // port that a TCP port-0 bind returned (WSAEACCES, a reserved or excluded range), so the
         // UDP side goes first. Its port-0 binds then walk through a TCP-excluded block of
         // hundreds of ports, so a refused TCP bind moves on to the next port, up to
-        // LocalAddresses.PortSearchLimit times (see LocalAddresses.GetFreePort). The TCP bind
-        // of the same number can also fail when another process holds it.
+        // LocalAddresses.PortSearchLimit times. The TCP bind of the same number can also fail
+        // when another process holds it.
         Socket udpOccupant = null;
         Socket tcpOccupant = null;
         int port = 0;
