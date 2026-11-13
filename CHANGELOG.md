@@ -11,6 +11,13 @@ outside Forgejo.
 
 ## Unreleased
 
+### Behaviour worth knowing
+
+- **An IPv6 address with an IPv4 tail is sent with the right bytes in APL records and DHCP
+  options.** Before, the console turned the IPv4 part of an address such as `::ffff:192.0.2.1` into
+  wrong bytes and sent them without an error. The address is now sent as its 16 octets.
+  ([#198](https://git.lantea.one/lantea-one/ninlil/issues/198))
+
 ## v2026.11.13.1
 
 ### Behaviour worth knowing
