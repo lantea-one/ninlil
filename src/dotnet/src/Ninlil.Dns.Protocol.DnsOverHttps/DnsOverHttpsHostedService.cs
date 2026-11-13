@@ -2,8 +2,11 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -49,6 +52,14 @@ public sealed class DnsOverHttpsHostedService(
     ///     <c>Ninlil.Dns.Server.Acme</c> replaces is picked up without a restart.
     /// </summary>
     private ReloadableTlsCertificateProvider _certificateProvider;
+
+    /// <summary>
+    ///     This property is the TCP port the Kestrel server is bound to, or 0 while it is not
+    ///     running (not started, disabled, stopped). It differs from the configured port only
+    ///     when that is 0 (an OS-assigned port, which tests use so that no other process can
+    ///     take the port between choosing it and binding it).
+    /// </summary>
+    public int BoundPort { get; private set; }
 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -128,9 +139,16 @@ public sealed class DnsOverHttpsHostedService(
         await app.StartAsync(cancellationToken);
         _app = app;
 
+        // Kestrel replaces a requested port 0 with the bound port in the addresses feature.
+        BoundPort = new Uri(
+            app.Services.GetRequiredService<IServer>()
+                .Features.Get<IServerAddressesFeature>()
+                .Addresses.First()
+        ).Port;
+
         logger.LogInformation(
             "DNS-over-HTTPS listening on port {Port}, path '{Path}'.",
-            listenerOptions.Value.Port,
+            BoundPort,
             options.Value.Path
         );
     }
@@ -138,6 +156,8 @@ public sealed class DnsOverHttpsHostedService(
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        BoundPort = 0;
+
         if (_app is not null)
             await _app.StopAsync(cancellationToken);
 
