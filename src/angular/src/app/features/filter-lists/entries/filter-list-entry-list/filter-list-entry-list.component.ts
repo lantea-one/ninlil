@@ -29,9 +29,7 @@ import { NotificationService } from '../../../../shared/notification/notificatio
 import { ClusterSyncInfoComponent } from '../../../../shared/cluster-sync-info/cluster-sync-info.component';
 import { isSubscribedList } from '../../filter-list.model';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
-
-/** The page size the list starts with, as on the other list pages. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../../shared/pagination/default-page-size';
 
 /**
  * This component is a filter list's entries page (`/filter-lists/:listId/entries`,

@@ -122,7 +122,14 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="entries()" class="query-log-table">
+    <table
+      cdk-table
+      cTable
+      hover
+      [responsive]="true"
+      [dataSource]="entries()"
+      class="query-log-table"
+    >
       <ng-container cdkColumnDef="occurredAtUtc">
         <th cdk-header-cell *cdkHeaderCellDef>Occurred at</th>
         <td cdk-cell *cdkCellDef="let entry">{{ entry.occurredAtUtc | date: 'medium' }}</td>

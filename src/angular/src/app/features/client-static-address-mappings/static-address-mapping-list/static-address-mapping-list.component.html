@@ -40,7 +40,14 @@
   </p>
 
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="mappings()" class="mapping-table">
+    <table
+      cdk-table
+      cTable
+      hover
+      [responsive]="true"
+      [dataSource]="mappings()"
+      class="mapping-table"
+    >
       <ng-container cdkColumnDef="cidr">
         <th cdk-header-cell *cdkHeaderCellDef>Network</th>
         <td cdk-cell *cdkCellDef="let mapping">

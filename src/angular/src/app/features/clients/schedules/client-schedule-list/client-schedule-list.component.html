@@ -41,7 +41,14 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="schedules()" class="schedule-table">
+    <table
+      cdk-table
+      cTable
+      hover
+      [responsive]="true"
+      [dataSource]="schedules()"
+      class="schedule-table"
+    >
       <ng-container cdkColumnDef="days">
         <th cdk-header-cell *cdkHeaderCellDef>Days</th>
         <td cdk-cell *cdkCellDef="let schedule">{{ schedule.daysOfWeek }}</td>

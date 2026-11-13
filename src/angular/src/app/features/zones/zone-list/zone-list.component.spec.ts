@@ -88,6 +88,14 @@ describe('ZoneListComponent', () => {
     expect(element.querySelector<HTMLButtonElement>('td button')?.disabled).toBeFalse();
   });
 
+  it('scrolls the table sideways inside its card on a narrow screen', async () => {
+    const fixture = await createComponent();
+    const element: HTMLElement = fixture.nativeElement;
+
+    // CoreUI adds this wrapper only when `[responsive]="true"` reaches the table.
+    expect(element.querySelector('.table-responsive > table')).not.toBeNull();
+  });
+
   it('shows the signed lock for a signed zone that is served signed', async () => {
     const fixture = await createComponent({ isDnssecSigned: true, dnssecServedUnsigned: false });
 

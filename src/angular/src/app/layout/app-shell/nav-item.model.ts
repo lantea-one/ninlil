@@ -10,7 +10,7 @@ export interface NavItem {
   /** The route path (relative to the shell) this item navigates to. */
   path: string;
 
-  /** The `@coreui/icons` icon name (registered in `app.config.ts`) shown alongside the label. */
+  /** The `@coreui/icons` icon name (registered in `core/icons/core-ui-icons.ts`) shown alongside the label. */
   icon: string;
 
   /**
@@ -30,7 +30,7 @@ export const BRAND_ICON = 'cilLan';
 /**
  * This constant lists the sidebar's nav items, in display order. Each permission is the read
  * permission of the controller behind the page. Icon names are `@coreui/icons` names and must be
- * registered in `app.config.ts`.
+ * registered in `core/icons/core-ui-icons.ts`.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', path: 'dashboard', icon: 'cilSpeedometer', permission: null },

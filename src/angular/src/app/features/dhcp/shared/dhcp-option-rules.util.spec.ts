@@ -5,6 +5,7 @@ import {
   dhcpv4OptionHint,
   dhcpv4OptionTagValidator,
   dhcpv6OptionCodeValidator,
+  optionTagErrorMessage,
 } from './dhcp-option-rules.util';
 
 describe('dhcpv4OptionTagValidator', () => {
@@ -58,5 +59,41 @@ describe('dhcpv4OptionHint', () => {
     expect(dhcpv4OptionHint(66)).toContain('as text');
     expect(dhcpv4OptionHint(150)).toContain('RFC 5859');
     expect(dhcpv4OptionHint(6)).toBeNull();
+  });
+});
+
+describe('optionTagErrorMessage', () => {
+  it('returns null when the control has no errors', () => {
+    expect(optionTagErrorMessage(null, false)).toBeNull();
+  });
+
+  it('gives the DHCPv4 range message for a tag out of range', () => {
+    expect(optionTagErrorMessage(dhcpv4OptionTagValidator(new FormControl(0)), false)).toBe(
+      'A DHCPv4 option tag is between 1 and 254 (0 is Pad and 255 is End).',
+    );
+  });
+
+  it('gives the DHCPv6 range message for a code out of range', () => {
+    expect(optionTagErrorMessage(dhcpv6OptionCodeValidator(new FormControl(256)), true)).toBe(
+      'A DHCPv6 option code is between 1 and 255.',
+    );
+  });
+
+  it('names the reserved DHCPv6 code with its IANA name', () => {
+    expect(optionTagErrorMessage(dhcpv6OptionCodeValidator(new FormControl(2)), true)).toBe(
+      'Code 2 (Server Identifier) is written by the server and cannot be set here.',
+    );
+  });
+
+  it('names the reserved DHCPv4 tag as set by the server or relay', () => {
+    expect(optionTagErrorMessage(dhcpv4OptionTagValidator(new FormControl(82)), false)).toBe(
+      'Tag 82 is set by the server or the relay agent and cannot be set here.',
+    );
+  });
+
+  it('gives no message for an empty tag, which required reports on save', () => {
+    expect(
+      optionTagErrorMessage(dhcpv4OptionTagValidator(new FormControl(null)), false),
+    ).toBeNull();
   });
 });

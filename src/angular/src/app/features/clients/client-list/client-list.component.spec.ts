@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideCoreUiIcons } from '../../../core/icons/core-ui-icons';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -139,6 +140,8 @@ describe('ClientListComponent', () => {
       imports: [ClientListComponent],
       providers: [
         provideRouter([]),
+        // This helper resets the test bed inside a test, which drops the global icon setup.
+        provideCoreUiIcons(),
         {
           provide: ActivatedRoute,
           useValue: {

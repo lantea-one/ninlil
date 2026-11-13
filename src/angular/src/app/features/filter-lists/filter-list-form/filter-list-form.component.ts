@@ -31,13 +31,13 @@ import {
   FilterListsService,
 } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
+import { assignBulkLineNumbers } from '../../../shared/bulk-create/bulk-line-numbers.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
 import {
   FILTER_LIST_ACTION_OPTIONS,
   FILTER_LIST_KIND_OPTIONS,
   FILTER_LIST_SOURCE_OPTIONS,
   KNOWN_BLOCKLIST_OPTIONS,
-  assignBulkLineNumbers,
   deriveBlocklistName,
 } from '../filter-list.model';
 

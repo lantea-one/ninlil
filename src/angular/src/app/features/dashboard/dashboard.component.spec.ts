@@ -86,7 +86,7 @@ describe('DashboardComponent', () => {
   it('loads status and quick stats on init, then renders the health grid and quick stats', async () => {
     const fixture = await createComponent();
     statsServiceFake.fetchStatus.and.resolveTo({ status: 'Healthy', components: [] });
-    statsServiceFake.fetchQuickStats.and.resolveTo([{ label: 'Zones', icon: 'dns', count: 5 }]);
+    statsServiceFake.fetchQuickStats.and.resolveTo([{ label: 'Zones', icon: 'cilLan', count: 5 }]);
 
     fixture.detectChanges();
     await flushMicrotasks();
@@ -94,7 +94,7 @@ describe('DashboardComponent', () => {
 
     expect(fixture.componentInstance.status()).toEqual({ status: 'Healthy', components: [] });
     expect(fixture.componentInstance.quickStats()).toEqual([
-      { label: 'Zones', icon: 'dns', count: 5 },
+      { label: 'Zones', icon: 'cilLan', count: 5 },
     ]);
     expect(fixture.componentInstance.loading()).toBeFalse();
     expect(fixture.nativeElement.querySelector('app-health-tile-grid')).not.toBeNull();

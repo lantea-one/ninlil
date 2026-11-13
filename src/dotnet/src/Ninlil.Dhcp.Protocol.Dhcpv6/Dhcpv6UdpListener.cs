@@ -164,12 +164,15 @@ public sealed class Dhcpv6UdpListener(
 
             try
             {
-                // SO_REUSEADDR for the same reasons as in Dhcpv4UdpListener.StartAsync.
-                socket.SetSocketOption(
-                    SocketOptionLevel.Socket,
-                    SocketOptionName.ReuseAddress,
-                    true
-                );
+                // Exclusive port use on Windows, SO_REUSEADDR elsewhere, for the same reasons as
+                // in Dhcpv4UdpListener.StartAsync. Joining multicast groups after the bind works
+                // on an exclusive socket.
+                if (!socket.ClaimPortExclusivelyOnWindows())
+                    socket.SetSocketOption(
+                        SocketOptionLevel.Socket,
+                        SocketOptionName.ReuseAddress,
+                        true
+                    );
                 socket.Bind(new IPEndPoint(IPAddress.IPv6Any, options.Value.ServerPort));
                 JoinMulticastGroupOnEveryUsableInterface(socket);
             }
@@ -178,7 +181,11 @@ public sealed class Dhcpv6UdpListener(
                 // On a bind failure (port in use, for instance) leave IsListening false, keep the
                 // reason for the health check and let the caller see the exception.
                 socket.Dispose();
-                StartFailure = exception.Message;
+                StartFailure = ExclusiveListenerPortSocketExtension.DescribeBindFailure(
+                    exception,
+                    "UDP",
+                    options.Value.ServerPort
+                );
                 throw;
             }
 
