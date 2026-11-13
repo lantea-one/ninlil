@@ -3,7 +3,8 @@
 #
 # It commits the changes on a new branch bump/pins-<yyyy-mm-dd>, pushes it, and opens a pull
 # request into BASE_BRANCH through the Forgejo API. The pull request runs the verify build (lint
-# and the tests); the Build workflow can be started by hand on the branch for the full pipeline. Nothing is merged here; a maintainer reviews and merges.
+# and the tests); the Build workflow can be started by hand on the branch for the full pipeline.
+# Nothing is merged here; a maintainer reviews and merges.
 #
 # It does nothing when the tree is clean, and when a pull request from a bump/pins-* branch is
 # already open, so a weekly schedule never stacks pull requests.

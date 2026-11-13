@@ -294,7 +294,7 @@ To go on from here, read [Installation](#installation) for a permanent setup and
 
 ## Installation
 
-Every release, and every build of every branch, is published from the project's Forgejo pipeline
+Every release, and every pre-release build, is published from the project's Forgejo pipeline
 (see [Releases and versioning](#releases-and-versioning)). Pick whichever fits:
 
 | You want | Use |
@@ -574,7 +574,7 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
    | Fedora, RHEL, Rocky Linux, AlmaLinux | x86-64 | `ninlil-<version>-1.x86_64.rpm` |
    | Fedora, RHEL, Rocky Linux, AlmaLinux | ARM64 | `ninlil-<version>-1.aarch64.rpm` |
 
-   `<version>` is the date version, such as `2026.10.09.1`. A branch build is a pre-release and its
+   `<version>` is the date version, such as `2026.10.09.1`. A pre-release build's
    version carries the branch and commit (`2026.10.09.3~develop.a1b2c3d` for a Deb,
    `2026.10.09.3-0.develop.a1b2c3d` for an RPM); it sorts below the release it precedes.
 
@@ -6035,7 +6035,7 @@ built for a small attack surface:
 |---|---|
 | `latest` | The newest release |
 | `<yyyy>.<mm>.<dd>.<increment>` | A specific release, e.g. `2026.09.24.1` |
-| `<yyyy>.<mm>.<dd>.<increment>-<branch>-<short-sha>` | A branch build; removed after 24 hours |
+| `<yyyy>.<mm>.<dd>.<increment>-<branch>-<short-sha>` | A pre-release build; removed after 24 hours |
 
 ### Run it
 
@@ -6251,8 +6251,9 @@ pushing again; see [A run stays waiting](./CONTRIBUTING.md#a-run-stays-waiting).
 to the pipeline: the lint job, `test-dotnet` and `test-admin-console` run, and the version, draft,
 binary, package, image, smoke-test and publish jobs show as skipped. The `Build / Pipeline
 (pull_request)` status therefore covers lint and the Linux tests only; the Windows tests, the
-builds and the packages run in the push build of `develop` after the merge, or on the branch when
-the Build workflow is started by hand.
+builds and the packages run in the push build of `develop` after the merge. The builds and the
+packages also run on a branch when the Build workflow is started by hand; the Windows tests run
+only for `develop` and `main`.
 Only the kinds `prerelease` and `release` open those jobs, so an unknown kind publishes nothing and
 gets no Docker socket. No secrets are passed to a pull-request run.
 

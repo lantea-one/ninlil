@@ -28,7 +28,7 @@ sudo pacman -U https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/
 `ninlil/PKGBUILD.in` is the template they are built from: `.forgejo/scripts/arch-packages.sh`
 fills in the build's version, download URLs, and checksums, then builds both architectures in an
 Arch Linux container from the binaries that same pipeline run produced. A release's `pkgver` is its
-plain date version (`2026.09.24.1`); a branch build appends the branch and commit
+plain date version (`2026.09.24.1`); a pre-release build appends the branch and commit
 (`2026.09.24.3.develop.a1b2c3d`).
 
 ## `ninlil-git-stable` and `ninlil-git-next`
