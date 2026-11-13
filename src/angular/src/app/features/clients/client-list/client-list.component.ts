@@ -52,9 +52,7 @@ import {
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
 import { AuthService } from '../../../core/auth/auth.service';
-
-/** The page size the list starts with, as on the other list pages. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../shared/pagination/default-page-size';
 
 /**
  * This interface pairs one raw client with everything this list derives from it for display: its

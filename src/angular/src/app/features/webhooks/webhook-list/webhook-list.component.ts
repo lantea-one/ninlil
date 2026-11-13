@@ -24,9 +24,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { summarizeEventTypeNames } from '../webhook.model';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
-
-/** The page size the list starts with, as on the other list pages. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../shared/pagination/default-page-size';
 
 /**
  * This component is the Webhooks page (`/webhooks`, `webhooks:read`). It lists subscriptions a page

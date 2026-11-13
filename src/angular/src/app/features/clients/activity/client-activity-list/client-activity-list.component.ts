@@ -16,9 +16,7 @@ import {
 } from '../../../../shared/coreui-pagination/coreui-pagination.component';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
-
-/** The page size the list starts with, the same as the query log page. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../../shared/pagination/default-page-size';
 
 /**
  * This component is a client's activity page (`/clients/:clientId/activity`). It shows the

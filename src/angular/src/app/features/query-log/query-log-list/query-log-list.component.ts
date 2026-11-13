@@ -34,8 +34,7 @@ import {
   buildQueryLogSearchParams,
   clientIdentifierKind,
 } from '../query-log.model';
-
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../shared/pagination/default-page-size';
 
 /**
  * This component is the Query Log page (`/query-log`, `querylog:read`). It searches the stored

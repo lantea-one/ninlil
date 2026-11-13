@@ -35,8 +35,7 @@ import {
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../../shared/http-error/http-error.util';
 import { NotificationService } from '../../../../shared/notification/notification.service';
-
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../../shared/pagination/default-page-size';
 
 /**
  * The text every quarantine row's client identifier starts with. A declined address (RFC 2131
