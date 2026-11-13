@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dhcp.Protocol.Dhcpv6;
 using Ninlil.Web.Controllers;
 using Ninlil.Web.Models;
@@ -138,30 +139,33 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
     }
 
     /// <summary>
-    ///     This test checks that starting DHCPv6 through the API binds its socket (a probe can no
-    ///     longer bind the port) and stopping it releases the socket (the probe can bind again),
-    ///     not just that <c>IsRunning</c> changes. It always leaves DHCPv6 stopped, since the
-    ///     order of test classes is not fixed, as <see cref="ServicesControllerCrudTests" /> does.
-    ///     It runs on a second host whose DHCPv6 server port is a free port. Port 0 cannot serve
-    ///     this test: the host reads the port from its settings before it starts, and the probe
-    ///     below needs the number to bind it, so the number is reserved first, as for the
-    ///     environment-variable ports of <see cref="NinlilDnsWebApplicationFactory" />. When
-    ///     another process takes it before the first probe, the test starts a new host on another
-    ///     number, up to <see cref="ReservedPortAttempts" /> times.
+    ///     This test checks that starting DHCPv6 through the API binds its socket (a probe cannot
+    ///     bind the port the listener reports) and stopping it releases the socket (the listener
+    ///     reports no port), not just that <c>IsRunning</c> changes. It always leaves DHCPv6
+    ///     stopped, since the order of test classes is not fixed, as
+    ///     <see cref="ServicesControllerCrudTests" /> does. It runs on a second host whose DHCPv6
+    ///     server port is 0, so the operating system picks the port and the test reads it from
+    ///     <see cref="Dhcpv6UdpListener.BoundPort" />. No probe follows the stop: the number is
+    ///     free again then, and a probe that bound it could not tell the released socket from
+    ///     one another process took in the meantime.
     /// </summary>
     [Fact]
     public async Task Start_OnDhcpv6_GenuinelyBindsTheRealSocket_AndStopGenuinelyReleasesIt()
     {
-        (WebApplicationFactory<Program> host, HttpClient client, int serverPort) =
-            await CreateHostOnReservedPortAsync();
-        using WebApplicationFactory<Program> hostToDispose = host;
-        using HttpClient clientToDispose = client;
+        using WebApplicationFactory<Program> host = factory.CreateSecondHost(builder =>
+            builder.UseSetting(
+                $"{Dhcpv6ProtocolOptions.SectionName}:{nameof(Dhcpv6ProtocolOptions.ServerPort)}",
+                "0"
+            )
+        );
+        using HttpClient client = await CreateAuthenticatedClientAsync(host);
+        Dhcpv6UdpListener listener = host.Services.GetRequiredService<Dhcpv6UdpListener>();
 
-        // Disabled at startup, not running, and the port is free.
+        // Disabled at startup, not running, and nothing is bound.
         DhcpServiceStatus before = await GetStatusAsync(client, DhcpServiceKindEnum.Dhcpv6);
         Assert.False(before.Enabled);
         Assert.False(before.IsRunning);
-        Assert.True(CanExclusivelyBindServerPort(serverPort));
+        Assert.Equal(0, listener.BoundPort);
 
         try
         {
@@ -175,7 +179,10 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
             Assert.Equal(DhcpServiceKindEnum.Dhcpv6, started.Kind);
             Assert.True(started.IsRunning);
 
-            // The socket is bound, so the probe can no longer bind the port.
+            // The socket is bound to a port the operating system chose, so the probe cannot
+            // bind it.
+            int serverPort = listener.BoundPort;
+            Assert.NotEqual(0, serverPort);
             Assert.False(CanExclusivelyBindServerPort(serverPort));
 
             // A second Start while running must be a no-op, not a crash or a second bind.
@@ -200,44 +207,8 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
             Assert.False(stopped.IsRunning);
         }
 
-        // The socket is released, so the probe can bind the port again.
-        Assert.True(CanExclusivelyBindServerPort(serverPort));
-    }
-
-    /// <summary>
-    ///     This constant is how many reserved ports <see cref="CreateHostOnReservedPortAsync" />
-    ///     tries before it gives up.
-    /// </summary>
-    private const int ReservedPortAttempts = 5;
-
-    /// <summary>
-    ///     This method starts a second host whose DHCPv6 server port is a reserved number and
-    ///     returns it with an authenticated client. It tries another number when the probe finds
-    ///     the first one taken, which is the race between the reservation and the host's start.
-    /// </summary>
-    private async Task<(
-        WebApplicationFactory<Program> Host,
-        HttpClient Client,
-        int ServerPort
-    )> CreateHostOnReservedPortAsync()
-    {
-        for (int attempt = 1; ; attempt++)
-        {
-            int serverPort = GetFreeUdpPort();
-            WebApplicationFactory<Program> host = factory.CreateSecondHost(builder =>
-                builder.UseSetting(
-                    $"{Dhcpv6ProtocolOptions.SectionName}:{nameof(Dhcpv6ProtocolOptions.ServerPort)}",
-                    serverPort.ToString()
-                )
-            );
-            HttpClient client = await CreateAuthenticatedClientAsync(host);
-
-            if (CanExclusivelyBindServerPort(serverPort) || attempt == ReservedPortAttempts)
-                return (host, client, serverPort);
-
-            client.Dispose();
-            host.Dispose();
-        }
+        // The socket is closed, so the listener reports no port.
+        Assert.Equal(0, listener.BoundPort);
     }
 
     /// <summary>
@@ -280,18 +251,5 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
         {
             return false;
         }
-    }
-
-    /// <summary>
-    ///     This method asks the operating system for a currently unused UDP port on the same
-    ///     dual-stack wildcard endpoint the DHCPv6 listener binds, by binding port 0 and reading
-    ///     back what was assigned. The caller binds it after this returns (see
-    ///     <see cref="CreateHostOnReservedPortAsync" />).
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using Socket probe = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        probe.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
-        return ((IPEndPoint)probe.LocalEndPoint).Port;
     }
 }

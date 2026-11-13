@@ -149,8 +149,14 @@ public sealed class DnsCryptListenAddressTests
                 if (
                     running.Udp.IsListening
                     && running.Tcp.IsListening
-                    && running.Udp.FailedListenAddresses.Count == expectedFailedAddresses
-                    && running.Tcp.FailedListenAddresses.Count == expectedFailedAddresses
+                    && ExpectedFailuresOnly(
+                        running.Udp.FailedListenAddresses,
+                        expectedFailedAddresses
+                    )
+                    && ExpectedFailuresOnly(
+                        running.Tcp.FailedListenAddresses,
+                        expectedFailedAddresses
+                    )
                 )
                     return running;
 
@@ -166,6 +172,22 @@ public sealed class DnsCryptListenAddressTests
             }
         }
 
+        /// <summary>
+        ///     This method reports whether the failed addresses are exactly the expected ones: as
+        ///     many as <paramref name="expectedFailedAddresses" />, all of them the unassigned
+        ///     address. Any other failure is a bind that should have worked.
+        /// </summary>
+        private static bool ExpectedFailuresOnly(
+            IReadOnlyList<string> failed,
+            int expectedFailedAddresses
+        ) =>
+            failed.Count == expectedFailedAddresses
+            && failed.All(entry => entry.StartsWith($"{LocalAddresses.Unassigned} ("));
+
+        /// <summary>
+        ///     This method makes one attempt: it reserves a port, starts the pipeline and both
+        ///     listeners on it, and returns them whether or not they bound.
+        /// </summary>
         private static async Task<RunningListeners> StartOnceAsync(
             string listenAddresses,
             CapturingLoggerFactory loggers
