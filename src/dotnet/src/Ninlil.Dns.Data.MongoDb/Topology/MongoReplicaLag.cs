@@ -33,9 +33,11 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 ///             far behind at the first check, a new member or a restarted monitor is never
 ///             reported below its lag; a stale replica serving reads is worse than a brief
 ///             fallback to the primary. The cost: a secondary a few milliseconds late right after
-///             the primary's idle no-op write reads as behind by the time since its previous
-///             operation (up to the 20 seconds between no-op writes on the pinned MongoDB 8
-///             image) for that one check, and is current at the next.
+///             the primary's idle no-op write (the next report arrives within milliseconds, and
+///             within a second on a loaded host) reads as behind by the time since its previous operation
+///             (the 20 seconds between no-op writes on the pinned MongoDB 8 image).
+///             <see cref="MeasureSettledAsync" /> reads again after a delay before it reports such
+///             a lag, so that moment is not reported and a stuck secondary still is.
 ///         </item>
 ///     </list>
 ///     The wall times are the primary's clock, so the arithmetic needs no clock synchronization
@@ -81,6 +83,34 @@ public static class MongoReplicaLag
         return worst is null
             ? (null, "The replica set has no healthy secondary, so the lag is unknown.")
             : (worst, "");
+    }
+
+    /// <summary>
+    ///     This method reads the status and measures the lag from it. A reading that shows the
+    ///     worst secondary more than <paramref name="settleDelay" /> behind is read again after
+    ///     that delay, and the second reading is the result. A secondary that lacks the primary's
+    ///     newest operation is either stuck or in the few milliseconds between the primary's
+    ///     idle no-op write and its own report of that write; one status cannot tell the two
+    ///     apart, and the second reading does. A stuck secondary is still behind then, with a
+    ///     lag that is at least as large. A reading that is current or behind by no more than the
+    ///     delay is final, so a healthy replica under steady writes costs no extra read.
+    /// </summary>
+    /// <param name="readStatus">Reads one <c>replSetGetStatus</c> reply from the primary.</param>
+    /// <param name="settleDelay">The wait before the second reading, and the lag above which one happens.</param>
+    /// <param name="stoppingToken">Cancels the wait and the reads.</param>
+    /// <returns>See <see cref="Measure" />.</returns>
+    public static async Task<(double? Lag, string Detail)> MeasureSettledAsync(
+        Func<CancellationToken, Task<BsonDocument>> readStatus,
+        TimeSpan settleDelay,
+        CancellationToken stoppingToken
+    )
+    {
+        (double? Lag, string Detail) first = Measure(await readStatus(stoppingToken));
+        if (first.Lag is null || first.Lag.Value <= settleDelay.TotalSeconds)
+            return first;
+
+        await Task.Delay(settleDelay, stoppingToken);
+        return Measure(await readStatus(stoppingToken));
     }
 
     private static bool IsCurrent(BsonDocument primary, BsonDocument secondary)

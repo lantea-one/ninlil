@@ -12,10 +12,12 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 ///         <item>
 ///             Lag: <c>replSetGetStatus</c> lists the last applied operation of every member, and
 ///             <see cref="MongoReplicaLag" /> turns it into the lag of the most delayed healthy
-///             secondary was last current, because the read preference may pick any of them. An
+///             secondary, because the read preference may pick any of them. An
 ///             idle set advances its optimes only on a write or on the primary's periodic no-op
-///             write, so an old optime that equals the primary's is not lag. No healthy secondary
-///             is "unknown".
+///             write, so an old optime that equals the primary's is not lag. A lag of more than
+///             <see cref="SettleDelay" /> is read again after that delay before it is reported (see
+///             <see cref="MongoReplicaLag.MeasureSettledAsync" />). No healthy secondary is
+///             "unknown".
 ///         </item>
 ///         <item>
 ///             Schema: the replica view (reading with the configured read preference) holds a
@@ -32,18 +34,28 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 public sealed class MongoReplicaHealthProbe(IMongoClient client, NinlilDnsMongoContext replicaView)
     : IReplicaHealthProbe
 {
+    /// <summary>
+    ///     This field contains the wait before a lag above it is measured again. A secondary
+    ///     that is only late with its report of the primary's idle no-op write is current well
+    ///     inside it (the members heartbeat every 2 seconds at most).
+    /// </summary>
+    public static readonly TimeSpan SettleDelay = TimeSpan.FromSeconds(2);
+
     /// <inheritdoc />
     public async Task<ReplicaProbeResult> ProbeAsync(CancellationToken stoppingToken)
     {
-        BsonDocument status = await client
-            .GetDatabase("admin")
-            .RunCommandAsync<BsonDocument>(
-                new BsonDocument("replSetGetStatus", 1),
-                ReadPreference.Primary,
-                stoppingToken
-            );
-
-        (double? lag, string detail) = MongoReplicaLag.Measure(status);
+        (double? lag, string detail) = await MongoReplicaLag.MeasureSettledAsync(
+            token =>
+                client
+                    .GetDatabase("admin")
+                    .RunCommandAsync<BsonDocument>(
+                        new BsonDocument("replSetGetStatus", 1),
+                        ReadPreference.Primary,
+                        token
+                    ),
+            SettleDelay,
+            stoppingToken
+        );
 
         List<string> stored = (
             await replicaView
