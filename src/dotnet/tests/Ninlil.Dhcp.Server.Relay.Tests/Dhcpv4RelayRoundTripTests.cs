@@ -29,10 +29,15 @@ public sealed class Dhcpv4RelayRoundTripTests
     [Fact]
     public async Task Discover_IsForwardedUpstream_AndTheUpstreamsOfferIsRelayedBackToTheClient()
     {
-        int relayListenPort = GetFreeUdpPort();
-        int relayClientPort = GetFreeUdpPort();
-        int upstreamPort = GetFreeUdpPort();
         IPAddress relayAgentAddress = IPAddress.Parse("127.0.0.21");
+
+        // The fake upstream server and the client bind first, on OS-assigned ports, because the
+        // relay's options name the ports it sends to. The relay's listener binds port 0 and
+        // reports its port.
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
+        int relayClientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
 
         Dhcpv4RelayOptions relayOptions = new()
         {
@@ -43,7 +48,7 @@ public sealed class Dhcpv4RelayRoundTripTests
         Dhcpv4ProtocolOptions protocolOptions = new()
         {
             Enable = true,
-            ServerPort = relayListenPort,
+            ServerPort = 0,
             ClientPort = relayClientPort,
         };
         Dhcpv4RelayAgent agent = new(
@@ -59,9 +64,7 @@ public sealed class Dhcpv4RelayRoundTripTests
         );
 
         await listener.StartAsync(CancellationToken.None);
-
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
-        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, relayClientPort));
+        int relayListenPort = listener.BoundPort;
 
         try
         {
@@ -160,16 +163,5 @@ public sealed class Dhcpv4RelayRoundTripTests
             await listener.StopAsync(CancellationToken.None);
             agent.Dispose();
         }
-    }
-
-    /// <summary>
-    ///     This method returns a free UDP port by binding to port 0, reading the assigned port and
-    ///     releasing it. Another process could take the port before the test binds it; the risk
-    ///     is accepted.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using UdpClient probe = new(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
     }
 }
