@@ -42,18 +42,18 @@ public sealed class RabbitMqConnectionLifecycleTests : IAsyncLifetime
         .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ReadyMessage))
         .Build();
 
-    // The broker opens its AMQP listener a few milliseconds before its boot finishes ("started TCP
-    // listener" precedes "Server startup complete" in its log), so an open port does not mean the
-    // broker serves clients; a connection in that window can be reset. The startup line is the
-    // broker's own statement that boot is done. A rabbitmq-diagnostics command run through exec
-    // is not used: it runs as root and can create the Erlang cookie file before the broker does,
-    // which then stops the broker from starting.
+    // The broker's log shows "started TCP listener" a few milliseconds before "Server startup
+    // complete", so an open port does not prove that boot is done. The startup line is the
+    // broker's own statement that it is. A rabbitmq-diagnostics command run through exec is not
+    // used as the check: when it ran before the broker had written its Erlang cookie file, the
+    // broker failed to start with "eacces" on /var/lib/rabbitmq/.erlang.cookie.
     private const string ReadyMessage = "Server startup complete";
 
-    // The mapped host port is served by Docker's proxy, which accepts a connection before it
-    // forwards it, so even a ready broker can reset a first connection on a loaded host. The
-    // direct connections of the tests therefore retry up to this many times, 250 ms apart
-    // (about 5 s at most; a healthy broker needs one attempt).
+    // The broker is reached through a host port mapping, and one refused or reset first attempt
+    // must not fail a test that is about something else. The direct connections of the tests
+    // therefore retry up to this many times, 250 ms apart. The bound is the 4.75 s of delays plus
+    // the time of each attempt, which can last up to the client's connection timeout. A healthy
+    // broker needs one attempt.
     private const int ConnectAttempts = 20;
 
     /// <inheritdoc />
