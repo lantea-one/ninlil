@@ -50,16 +50,16 @@ public sealed class DnsCryptExpiredCertificateTests
     }
 
     /// <summary>
-    ///     This constant is how long the test that expects a reply waits for it. It is a failure
+    ///     This field is how long the test that expects a reply waits for it. It is a failure
     ///     bound, not a delay: the wait ends when the reply arrives, so a loaded machine that
     ///     answers late still passes.
     /// </summary>
     private static readonly TimeSpan ReplyTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    ///     This constant is how long the tests that expect silence wait to confirm it. A silent
-    ///     listener always costs the whole window, so it stays short; a stalled machine can only
-    ///     make such a test pass, never fail.
+    ///     This field is how long the test that expects silence waits to confirm it. A silent
+    ///     listener always costs the whole window, so it stays short. The test asserts nothing
+    ///     but the missing reply, so a stalled machine can only make it pass.
     /// </summary>
     private static readonly TimeSpan SilenceWindow = TimeSpan.FromMilliseconds(500);
 

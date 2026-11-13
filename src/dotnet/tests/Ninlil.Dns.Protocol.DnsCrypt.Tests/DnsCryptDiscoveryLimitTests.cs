@@ -35,6 +35,9 @@ public sealed class DnsCryptDiscoveryLimitTests
         client.Connect(IPAddress.Loopback, running.Port);
         await client.SendAsync(BuildDiscoveryQuery());
 
+        // The limiter runs before any reply could be sent, so waiting for its call first makes
+        // the silence window measure "no reply after the server decided".
+        await WaitForLimiterAsync(limiter.AcquireCalled);
         Assert.Null(await TryReceiveAsync(client));
         Assert.Equal(1, limiter.AcquireCount);
     }
@@ -49,6 +52,9 @@ public sealed class DnsCryptDiscoveryLimitTests
         client.Connect(IPAddress.Loopback, running.Port);
         await client.SendAsync(BuildDiscoveryQuery());
 
+        // The subnet check runs before any reply could be sent, so wait for it before the
+        // silence window opens.
+        await WaitForLimiterAsync(limiter.SubnetChecked);
         Assert.Null(await TryReceiveAsync(client));
         Assert.True(limiter.LastSubnetCheckWasUdp);
     }
@@ -84,7 +90,6 @@ public sealed class DnsCryptDiscoveryLimitTests
 
         byte[] reply = await ReceiveReplyAsync(client);
 
-        Assert.NotNull(reply);
         Assert.Equal(
             2,
             DnsCryptWireTestHelper.ExtractCertificatesFromDiscoveryResponse(reply).Count
@@ -131,6 +136,9 @@ public sealed class DnsCryptDiscoveryLimitTests
         await client.ConnectAsync(IPAddress.Loopback, running.Port);
         using NetworkStream stream = client.GetStream();
         await WriteFramedAsync(stream, BuildDiscoveryQuery());
+
+        // The limiter runs before any reply could be sent, so wait for its call first.
+        await WaitForLimiterAsync(limiter.AcquireCalled);
 
         using CancellationTokenSource timeout = new(SilenceWindow);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -186,18 +194,36 @@ public sealed class DnsCryptDiscoveryLimitTests
     }
 
     /// <summary>
-    ///     This constant is how long a test waits for a reply that must come. It is a failure
+    ///     This field is how long a test waits for a reply or a server-side call that must
+    ///     happen. It is a failure
     ///     bound, not a delay: the wait ends when the datagram arrives, so a loaded machine that
     ///     answers late still passes.
     /// </summary>
     private static readonly TimeSpan ReplyTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    ///     This constant is how long a test waits to confirm that no reply comes. A silent
-    ///     listener always costs the whole window, so it stays short; a stalled machine can only
-    ///     make such a test pass, never fail.
+    ///     This field is how long a test waits to confirm that no reply comes, once the server
+    ///     has made its decision. A silent listener always costs the whole window, so it stays
+    ///     short. The tests that use it first wait for the limiter call with
+    ///     <see cref="ReplyTimeout" />, so a stalled machine delays them without failing them.
     /// </summary>
     private static readonly TimeSpan SilenceWindow = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    ///     This method waits up to <see cref="ReplyTimeout" /> for the limiter to record a call
+    ///     and fails the test when it does not.
+    /// </summary>
+    private static async Task WaitForLimiterAsync(Task called)
+    {
+        try
+        {
+            await called.WaitAsync(ReplyTimeout);
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail($"The rate limiter was not called within {ReplyTimeout}.");
+        }
+    }
 
     /// <summary>
     ///     This method waits up to <see cref="ReplyTimeout" /> for a datagram that must arrive
@@ -253,7 +279,22 @@ public sealed class DnsCryptDiscoveryLimitTests
         DnsSubnetRateLimitDecisionEnum subnetDecision = DnsSubnetRateLimitDecisionEnum.Allow
     ) : IDnsRateLimiter
     {
+        private readonly TaskCompletionSource _acquireCalled = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        private readonly TaskCompletionSource _subnetChecked = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         private int _acquireCount;
+
+        /// <summary>This task completes when <see cref="TryAcquireAsync" /> is first called.</summary>
+        public Task AcquireCalled => _acquireCalled.Task;
+
+        /// <summary>
+        ///     This task completes when <see cref="CheckSubnetLimitAsync" /> is first called,
+        ///     after it has recorded <see cref="LastSubnetCheckWasUdp" />.
+        /// </summary>
+        public Task SubnetChecked => _subnetChecked.Task;
 
         public int AcquireCount => Volatile.Read(ref _acquireCount);
 
@@ -265,6 +306,7 @@ public sealed class DnsCryptDiscoveryLimitTests
         )
         {
             Interlocked.Increment(ref _acquireCount);
+            _acquireCalled.TrySetResult();
             return ValueTask.FromResult(allow);
         }
 
@@ -275,6 +317,7 @@ public sealed class DnsCryptDiscoveryLimitTests
         )
         {
             LastSubnetCheckWasUdp = isUdp;
+            _subnetChecked.TrySetResult();
             return ValueTask.FromResult(subnetDecision);
         }
     }
