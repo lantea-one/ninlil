@@ -55,6 +55,7 @@ import {
   dhcpv4OptionHint,
   dhcpv4OptionTagValidator,
   dhcpv6OptionCodeValidator,
+  optionTagErrorMessage,
 } from '../../shared/dhcp-option-rules.util';
 import { decodeDhcpOptionValue, encodeDhcpOptionValue } from '../../shared/dhcp-option-value.util';
 
@@ -325,21 +326,7 @@ export class DhcpTagRuleFormComponent implements OnInit {
    * types. An empty tag has no message here: `required` is reported on save.
    */
   optionTagError(row: { controls: { optionTag: AbstractControl } }): string | null {
-    const errors = row.controls.optionTag.errors;
-    if (!errors) return null;
-    const isDhcpv6 = this.isDhcpv6Rule();
-    if (errors['min'] || errors['max']) {
-      return isDhcpv6
-        ? 'A DHCPv6 option code is between 1 and 255.'
-        : 'A DHCPv4 option tag is between 1 and 254 (0 is Pad and 255 is End).';
-    }
-    const reserved = errors['reservedTag'] as { tag: number; name?: string } | undefined;
-    if (reserved) {
-      return isDhcpv6
-        ? `Code ${reserved.tag} (${reserved.name}) is written by the server and cannot be set here.`
-        : `Tag ${reserved.tag} is set by the server or the relay agent and cannot be set here.`;
-    }
-    return null;
+    return optionTagErrorMessage(row.controls.optionTag.errors, this.isDhcpv6Rule());
   }
 
   /** This method returns the hint for an option row's tag (DHCPv4 rules only), or null. */
