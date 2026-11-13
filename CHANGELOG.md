@@ -11,15 +11,6 @@ outside Forgejo.
 
 ## Unreleased
 
-### Behaviour worth knowing
-
-- **On Windows a DNS listener refuses a port that another socket already shares.** Windows lets a
-  wildcard listener (the default, which covers IPv4 and IPv6) and a listener on one specific address
-  bind the same port, and sends clients to the specific one. Ninlil's UDP, TCP, DoT and DNSCrypt
-  listeners now bind exclusively there, so such a port is logged as a failed bind and skipped, the
-  same as a port that is in use on Linux, instead of losing clients silently.
-  ([#397](https://git.lantea.one/lantea-one/ninlil/issues/397))
-
 ## v2026.11.12.1
 
 ### Security
