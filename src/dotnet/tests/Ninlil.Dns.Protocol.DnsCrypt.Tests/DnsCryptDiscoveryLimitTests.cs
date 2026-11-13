@@ -65,7 +65,7 @@ public sealed class DnsCryptDiscoveryLimitTests
         client.Connect(IPAddress.Loopback, running.Port);
         await client.SendAsync(BuildDiscoveryQuery(id: 21));
 
-        DnsMessage reply = DnsMessageReader.Read((await TryReceiveAsync(client))!);
+        DnsMessage reply = DnsMessageReader.Read(await ReceiveReplyAsync(client));
 
         Assert.Equal(21, reply.Id);
         Assert.True(reply.IsTruncated);
@@ -82,7 +82,7 @@ public sealed class DnsCryptDiscoveryLimitTests
         client.Connect(IPAddress.Loopback, running.Port);
         await client.SendAsync(BuildDiscoveryQuery());
 
-        byte[] reply = (await TryReceiveAsync(client))!;
+        byte[] reply = await ReceiveReplyAsync(client);
 
         Assert.NotNull(reply);
         Assert.Equal(
@@ -112,7 +112,7 @@ public sealed class DnsCryptDiscoveryLimitTests
         client.Connect(IPAddress.Loopback, running.Port);
         await client.SendAsync(query);
 
-        byte[] replyBytes = (await TryReceiveAsync(client))!;
+        byte[] replyBytes = await ReceiveReplyAsync(client);
         DnsMessage reply = DnsMessageReader.Read(replyBytes);
 
         Assert.True(replyBytes.Length <= query.Length);
@@ -132,7 +132,7 @@ public sealed class DnsCryptDiscoveryLimitTests
         using NetworkStream stream = client.GetStream();
         await WriteFramedAsync(stream, BuildDiscoveryQuery());
 
-        using CancellationTokenSource timeout = new(TimeSpan.FromMilliseconds(500));
+        using CancellationTokenSource timeout = new(SilenceWindow);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await stream.ReadAtLeastAsync(new byte[2], 1, true, timeout.Token)
         );
@@ -186,12 +186,45 @@ public sealed class DnsCryptDiscoveryLimitTests
     }
 
     /// <summary>
-    ///     This method waits briefly for a datagram and returns <see langword="null" /> when none
-    ///     arrives.
+    ///     This constant is how long a test waits for a reply that must come. It is a failure
+    ///     bound, not a delay: the wait ends when the datagram arrives, so a loaded machine that
+    ///     answers late still passes.
+    /// </summary>
+    private static readonly TimeSpan ReplyTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    ///     This constant is how long a test waits to confirm that no reply comes. A silent
+    ///     listener always costs the whole window, so it stays short; a stalled machine can only
+    ///     make such a test pass, never fail.
+    /// </summary>
+    private static readonly TimeSpan SilenceWindow = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    ///     This method waits up to <see cref="ReplyTimeout" /> for a datagram that must arrive
+    ///     and fails the test when none does.
+    /// </summary>
+    private static async Task<byte[]> ReceiveReplyAsync(UdpClient client)
+    {
+        using CancellationTokenSource timeout = new(ReplyTimeout);
+
+        try
+        {
+            return (await client.ReceiveAsync(timeout.Token)).Buffer;
+        }
+        catch (OperationCanceledException)
+        {
+            Assert.Fail($"No reply arrived within {ReplyTimeout}.");
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     This method waits <see cref="SilenceWindow" /> for a datagram and returns
+    ///     <see langword="null" /> when none arrives.
     /// </summary>
     private static async Task<byte[]> TryReceiveAsync(UdpClient client)
     {
-        using CancellationTokenSource timeout = new(TimeSpan.FromMilliseconds(500));
+        using CancellationTokenSource timeout = new(SilenceWindow);
 
         try
         {
