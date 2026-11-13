@@ -108,7 +108,6 @@ public sealed class DnsOverHttpsDropTests
         IDnsQueryResolver resolver = null
     )
     {
-        int port = GetFreePort();
         DnsQueryProcessingPipeline pipeline = new(
             new DnsQueryDispatcher([resolver ?? new ThrowingResolver()], new NoOpEventPublisher()),
             new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
@@ -123,7 +122,7 @@ public sealed class DnsOverHttpsDropTests
         DnsOverHttpsHostedService service = new(
             pipeline,
             Options.Create(new DnsOverHttpsOptions { Enable = true }),
-            Options.Create(new DnsOverHttpsListenerOptions { Port = port }),
+            Options.Create(new DnsOverHttpsListenerOptions { Port = 0 }),
             NullLogger<DnsOverHttpsHostedService>.Instance
         );
 
@@ -138,7 +137,7 @@ public sealed class DnsOverHttpsDropTests
                 }
             )
             {
-                BaseAddress = new Uri($"https://127.0.0.1:{port}/dns-query"),
+                BaseAddress = new Uri($"https://127.0.0.1:{service.BoundPort}/dns-query"),
                 Timeout = TimeSpan.FromSeconds(10),
             };
 
@@ -188,13 +187,6 @@ public sealed class DnsOverHttpsDropTests
         content.Headers.ContentType = new MediaTypeHeaderValue("application/dns-message");
 
         return content;
-    }
-
-    private static int GetFreePort()
-    {
-        using TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
     [Fact]

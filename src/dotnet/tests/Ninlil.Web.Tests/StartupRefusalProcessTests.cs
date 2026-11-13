@@ -164,6 +164,11 @@ public sealed class StartupRefusalProcessTests : IDisposable
         startInfo.Environment["NINLIL_JWT_SIGNING_KEY"] = Convert.ToBase64String(
             RandomNumberGenerator.GetBytes(64)
         );
+        // The child reads its listener ports from the environment before it starts, so port 0
+        // and a read-back are not possible, as for NinlilDnsWebApplicationFactory. The child
+        // exits on a refused setting before it serves anything, and the test never connects to
+        // these ports, so a process taking one between the pick and the child's bind changes
+        // nothing the test checks.
         startInfo.Environment["NINLIL_DNS_SERVER_PROTOCOL_PLAIN_PORT"] =
             NinlilDnsWebApplicationFactory.GetFreePort().ToString();
         startInfo.Environment["NINLIL_DNS_SERVER_WEB_HTTP_PORT"] = NinlilDnsWebApplicationFactory

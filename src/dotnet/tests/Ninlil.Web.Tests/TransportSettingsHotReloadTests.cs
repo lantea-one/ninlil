@@ -24,9 +24,11 @@ namespace Ninlil.Web.Tests;
 ///     built before the write, without a restart, as <c>RecursiveOptionsHotReloadTests</c> does
 ///     for <see cref="Ninlil.Dns.Server.Recursive.RecursiveServerOptions" />. The listener is built
 ///     once on a minimal pipeline. With <c>Enable</c> off, starting it binds nothing and a UDP
-///     query to a free loopback port gets no answer; after <c>Enable</c>, <c>Port</c> and
-///     <c>ProviderName</c> are written, the same instance is started again and answers a
-///     plaintext certificate-discovery query; after it is stopped it answers nothing.
+///     query to a loopback socket that never replies gets no answer; after <c>Enable</c> and
+///     <c>ProviderName</c> are written (with <c>Port</c> 0, so the operating system picks the
+///     port), the same instance is started again and answers a plaintext
+///     certificate-discovery query on the port it reports; after it is stopped it answers
+///     nothing.
 ///     <para>
 ///         It uses its own <see cref="IConfigurationRoot" /> and <see cref="ServiceProvider" />
 ///         instead of <see cref="NinlilDnsWebApplicationFactory" />, whose settings file is not a
@@ -55,16 +57,6 @@ public class TransportSettingsHotReloadTests
                 },
             }
         );
-
-    /// <summary>
-    ///     This method finds a free UDP port on loopback for the listener.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)socket.LocalEndPoint).Port;
-    }
 
     /// <summary>
     ///     This method sends a single UDP packet at <c>127.0.0.1:<paramref name="port" /></c> and
@@ -108,7 +100,16 @@ public class TransportSettingsHotReloadTests
             .FullName;
         string configPath = Path.Combine(directory, "appsettings.json");
         string certificateStatePath = Path.Combine(directory, "certificates.json");
-        int port = GetFreeUdpPort();
+
+        // A loopback socket that receives and never replies stands for "nothing answers" while
+        // DNSCrypt is off. The test owns it, so no other process can take its port.
+        using Socket silentSocket = new(
+            AddressFamily.InterNetwork,
+            SocketType.Dgram,
+            ProtocolType.Udp
+        );
+        silentSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        int silentPort = ((IPEndPoint)silentSocket.LocalEndPoint).Port;
         const string providerName = "hot-reload-test.invalid.";
 
         try
@@ -165,7 +166,7 @@ public class TransportSettingsHotReloadTests
             // Enable is false, so ExecuteAsync returns at once without binding a socket. A UDP
             // query gets no reply, which is checked rather than IsListening.
             await listener.StartAsync(CancellationToken.None);
-            Assert.Null(await TrySendAndReceiveAsync(discoveryQuery, port));
+            Assert.Null(await TrySendAndReceiveAsync(discoveryQuery, silentPort));
             await listener.StopAsync(CancellationToken.None);
 
             // The same call TransportSettingsController.PatchDnsCrypt makes.
@@ -179,7 +180,7 @@ public class TransportSettingsHotReloadTests
                     new PresetConfigurationSetting(
                         DnsCryptOptions.SectionName,
                         nameof(DnsCryptOptions.Port),
-                        port
+                        0
                     ),
                     new PresetConfigurationSetting(
                         DnsCryptOptions.SectionName,
@@ -199,7 +200,7 @@ public class TransportSettingsHotReloadTests
                 attempt < 200
                     && !(
                         monitor.CurrentValue.Enable
-                        && monitor.CurrentValue.Port == port
+                        && monitor.CurrentValue.Port == 0
                         && monitor.CurrentValue.ProviderName == providerName
                     );
                 attempt++
@@ -207,7 +208,7 @@ public class TransportSettingsHotReloadTests
                 await Task.Delay(50);
 
             Assert.True(monitor.CurrentValue.Enable);
-            Assert.Equal(port, monitor.CurrentValue.Port);
+            Assert.Equal(0, monitor.CurrentValue.Port);
             Assert.Equal(providerName, monitor.CurrentValue.ProviderName);
 
             // The listener built before the write now binds and answers, with no restart or new
@@ -222,6 +223,10 @@ public class TransportSettingsHotReloadTests
             while (!listener.IsListening && DateTime.UtcNow < deadline)
                 await Task.Delay(TimeSpan.FromMilliseconds(10));
             Assert.True(listener.IsListening);
+
+            // Port 0 is what the file says; the port the socket got is on the listener.
+            int port = listener.BoundPort;
+            Assert.NotEqual(0, port);
 
             try
             {

@@ -587,10 +587,35 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method starts a separate pipeline and listener bound to the given listen addresses
-    ///     on <paramref name="port" /> (0 picks a free one), apart from the shared one in
-    ///     <see cref="InitializeAsync" />.
+    ///     This constant is the port number a test that needs one number on several listen
+    ///     addresses passes to <see cref="StartListenAddressListenerAsync" />. It is
+    ///     <c>-1</c>, a request for a reserved port: port 0 gives each socket its own number, so
+    ///     two bound addresses on one number need a number known before the listener starts.
+    ///     <see cref="StartListenAddressListenerAsync" /> reserves it with
+    ///     <see cref="LocalAddresses.GetFreePort" />, and starts again on a new number when
+    ///     another process takes it before the bind.
     /// </summary>
+    private const int ReservedPort = -1;
+
+    /// <summary>
+    ///     This constant is how many reserved ports <see cref="StartListenAddressListenerAsync" />
+    ///     tries before it gives up.
+    /// </summary>
+    private const int ReservedPortAttempts = 5;
+
+    /// <summary>
+    ///     This method starts a separate pipeline and listener bound to the given listen addresses
+    ///     on <paramref name="port" /> (0 picks a free one, <see cref="ReservedPort" /> a
+    ///     reserved one), apart from the shared one in <see cref="InitializeAsync" />.
+    /// </summary>
+    /// <param name="listenAddresses">The configured <c>ListenAddresses</c> value.</param>
+    /// <param name="logger">Where the listener logs to.</param>
+    /// <param name="port">The configured port, or <see cref="ReservedPort" />.</param>
+    /// <param name="expectedFailedAddresses">
+    ///     How many addresses cannot bind by design (all of them the unassigned address). With a
+    ///     reserved port, any other failure means
+    ///     the number was taken, and the listener starts again on another number.
+    /// </param>
     private static async Task<(
         DnsQueryProcessingPipeline Pipeline,
         DnsOverTlsListener Listener,
@@ -598,7 +623,52 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     )> StartListenAddressListenerAsync(
         string listenAddresses,
         ILogger<DnsOverTlsListener> logger,
-        int port = 0
+        int port = 0,
+        int expectedFailedAddresses = 0
+    )
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            (DnsQueryProcessingPipeline pipeline, DnsOverTlsListener listener) =
+                await StartListenAddressListenerOnceAsync(
+                    listenAddresses,
+                    logger,
+                    port == ReservedPort ? LocalAddresses.GetFreePort() : port
+                );
+
+            if (
+                port != ReservedPort
+                || (
+                    listener.BoundPort != 0
+                    && listener.FailedListenAddresses.Count == expectedFailedAddresses
+                    && listener.FailedListenAddresses.All(entry =>
+                        entry.StartsWith($"{LocalAddresses.Unassigned} (")
+                    )
+                )
+            )
+                return (pipeline, listener, listener.BoundPort);
+
+            await StopAsync(pipeline, listener);
+
+            if (attempt == ReservedPortAttempts)
+                throw new InvalidOperationException(
+                    "The listener did not bind on any reserved port."
+                );
+        }
+    }
+
+    /// <summary>
+    ///     This method makes one attempt: it starts a pipeline and a listener on
+    ///     <paramref name="port" /> and returns them once the listener has bound or finished
+    ///     without binding.
+    /// </summary>
+    private static async Task<(
+        DnsQueryProcessingPipeline Pipeline,
+        DnsOverTlsListener Listener
+    )> StartListenAddressListenerOnceAsync(
+        string listenAddresses,
+        ILogger<DnsOverTlsListener> logger,
+        int port
     )
     {
         DnsQueryProcessingPipeline pipeline = new(
@@ -629,11 +699,12 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         await listener.StartAsync(CancellationToken.None);
         await WaitUntilListeningAsync(listener);
 
-        return (pipeline, listener, listener.BoundPort);
+        return (pipeline, listener);
     }
 
     /// <summary>
-    ///     This method waits, for at most 10 seconds, until <paramref name="listener" /> is bound.
+    ///     This method waits, for at most 10 seconds, until <paramref name="listener" /> is bound
+    ///     or has finished without binding anything.
     ///     <c>ExecuteAsync</c> binds after <c>StartAsync</c> returns, and sets
     ///     <see cref="DnsOverTlsListener.IsListening" /> only once every address was tried and the
     ///     failed ones recorded, so it is the bind signal; a fixed sleep is not.
@@ -642,7 +713,9 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     {
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
-        while (!listener.IsListening)
+        // A listener that bound nothing finishes without listening; waiting for it to listen
+        // would only run into the timeout.
+        while (!listener.IsListening && !listener.ExecuteTask.IsCompleted)
             await Task.Delay(10, timeout.Token);
     }
 
@@ -743,9 +816,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
             await StartListenAddressListenerAsync(
                 $"127.0.0.1, {LocalAddresses.Unassigned}, {other}",
                 logger,
-                // Two bound addresses must share one port, but port 0 gives each socket its own,
-                // so this test needs a port known before the listener starts.
-                LocalAddresses.GetFreePort()
+                port: ReservedPort,
+                expectedFailedAddresses: 1
             );
 
         try

@@ -253,7 +253,10 @@ public sealed class DnsCryptProviderNameTests
                 );
 
             // A provider name that is not usable leaves both listeners unbound; the test still
-            // needs a port to prove that nothing answers there.
+            // needs a port to prove that nothing answers there. Port 0 cannot name such a port:
+            // nothing is bound, so there is no bound port to read, and a socket the test held
+            // open would accept the connection. The number is reserved and released, and only
+            // a process that takes it in the meantime could make the test fail.
             running.Port = port == 0 ? LocalAddresses.GetFreePort() : port;
             return running;
         }

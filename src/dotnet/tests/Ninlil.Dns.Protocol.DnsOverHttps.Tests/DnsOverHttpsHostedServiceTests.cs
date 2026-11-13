@@ -24,7 +24,6 @@ namespace Ninlil.Dns.Protocol.DnsOverHttps.Tests;
 /// </summary>
 public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
 {
-    private static readonly int TestPort = GetFreePort();
     private static readonly IPAddress ExpectedAnswer = IPAddress.Parse("192.0.2.124");
 
     private DnsQueryProcessingPipeline _pipeline;
@@ -53,7 +52,7 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
         _service = new DnsOverHttpsHostedService(
             _pipeline,
             Options.Create(options),
-            Options.Create(new DnsOverHttpsListenerOptions { Port = TestPort }),
+            Options.Create(new DnsOverHttpsListenerOptions { Port = 0 }),
             NullLogger<DnsOverHttpsHostedService>.Instance
         );
         await _service.StartAsync(CancellationToken.None);
@@ -64,7 +63,7 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
         };
         _client = new HttpClient(handler)
         {
-            BaseAddress = new Uri($"https://127.0.0.1:{TestPort}/dns-query"),
+            BaseAddress = new Uri($"https://127.0.0.1:{_service.BoundPort}/dns-query"),
             DefaultRequestVersion = HttpVersion.Version20,
             DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
         };
@@ -165,8 +164,6 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
     [Fact]
     public async Task RestrictingAllowedProtocolsToTls12AndTls13StillHandshakesSuccessfully()
     {
-        int restrictedPort = GetFreePort();
-
         DnsQueryDispatcher dispatcher = new(
             [new AlwaysAnswerAResolver(ExpectedAnswer)],
             new NoOpEventPublisher()
@@ -186,7 +183,7 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
             Options.Create(
                 new DnsOverHttpsListenerOptions
                 {
-                    Port = restrictedPort,
+                    Port = 0,
                     Certificate = new TlsCertificateOptions
                     {
                         AllowedProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
@@ -206,7 +203,7 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
             };
             using HttpClient client = new(handler)
             {
-                BaseAddress = new Uri($"https://127.0.0.1:{restrictedPort}/dns-query"),
+                BaseAddress = new Uri($"https://127.0.0.1:{service.BoundPort}/dns-query"),
             };
 
             byte[] queryBytes = DnsMessageWriter.Write(
@@ -311,19 +308,5 @@ public sealed class DnsOverHttpsHostedServiceTests : IAsyncLifetime
     private sealed class NoOpEventPublisher : IDnsServerEventPublisher
     {
         public void Publish(IDnsServerEvent domainEvent) { }
-    }
-
-    /// <summary>
-    ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned. Tests run on shared machines with their
-    ///     own DNS, DHCP and web services, and may run alongside another copy of this suite, so no
-    ///     test listener uses a fixed or well-known port.
-    /// </summary>
-    /// <returns>A free TCP port number.</returns>
-    private static int GetFreePort()
-    {
-        using System.Net.Sockets.TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
     }
 }
