@@ -832,10 +832,16 @@ The workflows are in [`.forgejo/workflows/`](./.forgejo/workflows/). The README'
   marked `RequiresDocker`. Every other job (version, draft, binaries, packages, image, smoke test,
   publish, Windows tests) shows as skipped, so a pull request leaves no pre-release behind.
   If a pull-request run shows a running build job, the run is wrong: stop it and report it.
-- **A push** to any branch other than a release branch runs the same checks with the Docker
-  socket, so the `RequiresDocker` tests run, and then publishes a pre-release build that expires
-  after 24 hours. A same-repository branch is pushed before its pull request, so its push build
-  covers the Docker tests.
+- **A push** to `develop`, `main` or a `hotfix/*` branch ([`build.yml`](./.forgejo/workflows/build.yml))
+  runs the same checks with the Docker socket, so the `RequiresDocker` tests run, and then the
+  packaging, the image and the smoke test, and publishes a pre-release build that expires after
+  24 hours. The whole .NET suite on Windows runs only in a build of `develop` or `main`, so a
+  hotfix push or a hand-started build of another branch skips it.
+- **A feature branch** has no push build: it gets its pull-request run only. The Docker-backed
+  tests, the Windows tests, the packages, the image and the smoke test run on `develop` after the
+  merge. To run all of them but the Windows tests on your branch earlier, open the Actions page,
+  pick the Build workflow, choose "Run workflow" and select your branch; the pre-release it
+  publishes expires after 24 hours.
 - **A pull request from a fork** waits for a maintainer's approval before its workflows run. The
   maintainer reads the diff of `.forgejo/` and of every script it runs first.
 

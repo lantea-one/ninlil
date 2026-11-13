@@ -3,8 +3,8 @@ name: 'Build'
 ## A pull request into develop or main runs the tests only: the lint job, the .NET tests without
 ## the Docker socket and without the tests marked RequiresDocker, and the admin console tests.
 ## It computes no version and builds, packs, pushes and publishes nothing, because the code is not
-## reviewed yet and the branch push build already published its pre-release. The develop or main
-## push build after the merge covers the rest.
+## reviewed yet. A feature branch has no push build, so the develop or main push build after the
+## merge covers the rest (a pre-release of a branch can be built by hand, see build.yml).
 ##
 ## The workflow is called 'Build', like build.yml, so a pull request's commit status stays
 ## "Build / Pipeline (pull_request)". It is a file of its own, and passes the literal kind
