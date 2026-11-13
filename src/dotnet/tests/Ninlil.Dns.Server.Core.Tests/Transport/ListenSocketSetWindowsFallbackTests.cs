@@ -76,8 +76,13 @@ public class ListenSocketSetWindowsFallbackTests
                 second.Bind(new IPEndPoint(IPAddress.Loopback, port))
             );
 
-            Assert.Single(logger.Warnings);
-            Assert.Contains("UDP port " + port, logger.Warnings[0]);
+            // One summary warning; a failed address, if any, is a warning too, never an error.
+            string summary = Assert.Single(
+                logger.Warnings,
+                message => message.Contains("wildcard address")
+            );
+            Assert.Contains("UDP port " + port, summary);
+            Assert.Empty(logger.Errors);
         }
         finally
         {
@@ -109,13 +114,16 @@ public class ListenSocketSetWindowsFallbackTests
     }
 
     /// <summary>
-    ///     This logger keeps the text of every warning, so a test can check that the fallback
-    ///     warns once and names the port and protocol.
+    ///     This logger keeps the text of every warning and error, so a test can check that the
+    ///     fallback warns once, names the port and protocol, and logs no error.
     /// </summary>
     private sealed class RecordingLogger : ILogger
     {
         /// <summary>This property contains the formatted text of every warning logged.</summary>
         public List<string> Warnings { get; } = [];
+
+        /// <summary>This property contains the formatted text of every error logged.</summary>
+        public List<string> Errors { get; } = [];
 
         /// <inheritdoc />
         public IDisposable BeginScope<TState>(TState state) => null;
@@ -134,6 +142,8 @@ public class ListenSocketSetWindowsFallbackTests
         {
             if (logLevel == LogLevel.Warning)
                 Warnings.Add(formatter(state, exception));
+            else if (logLevel == LogLevel.Error)
+                Errors.Add(formatter(state, exception));
         }
     }
 }

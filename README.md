@@ -774,17 +774,21 @@ The rule Windows applies, as measured: an exclusive bind of the dual-stack wildc
 default) or of `0.0.0.0` fails when another socket already holds the port on any address it
 overlaps, including a socket that is not exclusive itself. An exclusive bind of one specific
 address fails only against a socket that is itself exclusive or holds that same address, so it
-works beside another program's wildcard socket.
+works beside another program's wildcard socket. An explicit `::` listen address behaves like a
+specific address: it binds beside another program's wildcard socket on the same port.
 
 What Ninlil does when a bind fails depends on the listener:
 
 - **DNS over UDP and TCP, DNS-over-TLS and DNSCrypt, with no listen addresses set.** When the
   wildcard bind fails because another program holds the port on some address, Ninlil falls back to
-  one exclusive socket per local address (IPv4 and IPv6, loopback included), logs one warning that
-  names the transport, protocol and port, and lists the addresses it serves. An address added to
-  the machine later is not served until the transport restarts, and an address that cannot be
-  bound shows in the log and in `GET /status`. You can also set the transport's listen addresses
-  yourself, so Ninlil binds only those. If no address can be bound, the transport is not running.
+  one exclusive socket per local address, logs one warning that names the transport, protocol and
+  port, and lists the addresses it serves. These are the addresses (IPv4 and IPv6, loopback
+  included) of the interfaces that are up, except ones still tentative, duplicate or invalid. An
+  address added to the machine later is not served until the transport restarts. An address that
+  cannot be bound is logged as a Warning and shows in `GET /status`. When every address bound, the
+  transport shows as healthy in `GET /status`, so the Warning in the log is the only sign of the
+  fallback. You can also set the transport's listen addresses yourself, so Ninlil binds only those.
+  If no address can be bound, the transport is not running and the log has an Error.
 - **The same transports with listen addresses set.** Only an address that cannot be bound fails;
   the others keep serving.
 - **DHCPv4, DHCPv6 and TFTP.** They need their one wildcard socket (DHCP clients broadcast), so
@@ -796,11 +800,11 @@ What Ninlil does when a bind fails depends on the listener:
   documents no exclusive setting for it, so another program can still share that port.
 
 To find the program that holds a port, run `netstat -ano | findstr :53` in PowerShell and look the
-PID up with `Get-Process -Id <pid>`. The usual holders of UDP port 53 on Windows are connection
-sharing (Internet Connection Sharing, the `SharedAccess` service) and the Host Network Service
-(`hns`) that Hyper-V and WSL use; each runs a DNS proxy there. Stop that service, or give it another
-port, if you want Ninlil on the wildcard address of port 53. Linux and macOS are unchanged: they
-refuse a second bind of an address and port without any option.
+PID up with `Get-Process -Id <pid>`. Likely holders of UDP port 53 on Windows are the services behind connection sharing
+(Internet Connection Sharing, `SharedAccess`) and the Host Network Service (`hns`) that Hyper-V and
+WSL use. On a machine with both running, `svchost` was seen holding UDP port 53. Stop those
+services, or give them another port, if you want Ninlil on the wildcard address of port 53. Linux
+and macOS are unchanged: they refuse a second bind of an address and port without any option.
 
 Ports 53/67/69/80/443 are privileged on Linux/macOS. Either run with elevated privileges (or grant
 the process `CAP_NET_BIND_SERVICE` on Linux), or override the ports in configuration to something
@@ -3241,7 +3245,8 @@ A records (RFC 6147 §5.1.2), and an answer that failed DNSSEC validation never 
   overlaps. `netstat -ano | findstr :<port>` in PowerShell shows the PID, and
   `Get-Process -Id <pid>` the program. For UDP 53 it is usually connection sharing or the Hyper-V
   and WSL network service; the DNS transports then fall back to the machine's local addresses one
-  by one and log a Warning instead of an Error (see [Ports](#ports)).
+  by one. The log has a Warning for the fallback and a Warning for each address that failed; an
+  Error means no address could be bound (see [Ports](#ports)).
 - *DoQ clients are cut off.* A query with a message ID other than 0 closes the connection.
   Check the client.
 - *A DNSCrypt client cannot find the server.* Check that the stamp's provider name has the

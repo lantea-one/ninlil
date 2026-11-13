@@ -162,6 +162,7 @@ public sealed class ListenSocketSet
             port,
             protocolType,
             logger,
+            LogLevel.Error,
             failed,
             "Its other listen addresses keep serving."
         );
@@ -285,16 +286,21 @@ public sealed class ListenSocketSet
 
     /// <summary>
     ///     This method binds one socket per address, the way an explicit <c>ListenAddresses</c>
-    ///     list asks for. An address that cannot be bound is logged as an error, added to
+    ///     list asks for. An address that cannot be bound is logged, added to
     ///     <paramref name="failed" /> and skipped.
     /// </summary>
     /// <param name="transportName">The transport's name for log messages.</param>
     /// <param name="addresses">The addresses to bind, each with its own socket.</param>
     /// <param name="port">The port every socket binds.</param>
     /// <param name="protocolType"><see cref="ProtocolType.Udp" /> or <see cref="ProtocolType.Tcp" />.</param>
-    /// <param name="logger">The logger bind errors go to.</param>
+    /// <param name="logger">The logger bind failures go to.</param>
+    /// <param name="failureLevel">
+    ///     The level of each failure's log entry: an error for addresses the operator listed, a
+    ///     warning in the Windows fallback, where one failed address is expected and the
+    ///     transport still serves.
+    /// </param>
     /// <param name="failed">The list that receives "address (reason)" for each failure.</param>
-    /// <param name="consequence">The closing sentence of the error message.</param>
+    /// <param name="consequence">The closing sentence of the log message.</param>
     /// <returns>The sockets that bound.</returns>
     private static List<Socket> BindEachAddress(
         string transportName,
@@ -302,6 +308,7 @@ public sealed class ListenSocketSet
         int port,
         ProtocolType protocolType,
         ILogger logger,
+        LogLevel failureLevel,
         List<string> failed,
         string consequence
     )
@@ -330,7 +337,8 @@ public sealed class ListenSocketSet
             {
                 socket.Dispose();
                 failed.Add($"{address} ({exception.Message})");
-                logger.LogError(
+                logger.Log(
+                    failureLevel,
                     exception,
                     "{Transport} could not listen on {Address} port {Port}: {Reason}. {Consequence}",
                     transportName,
@@ -376,6 +384,7 @@ public sealed class ListenSocketSet
             port,
             protocolType,
             logger,
+            LogLevel.Warning,
             failed,
             "The transport's other local addresses keep serving."
         );
@@ -403,11 +412,14 @@ public sealed class ListenSocketSet
     /// <summary>
     ///     This method lists the local unicast addresses worth binding: every address of an
     ///     interface that is up, loopback included, IPv4 and IPv6. An IPv6 link-local address
-    ///     keeps its scope id (the interface index), which the bind needs. An address whose
-    ///     duplicate-address-detection state is not
-    ///     <see cref="DuplicateAddressDetectionState.Preferred" /> is skipped: a tentative
-    ///     address cannot be bound yet, a duplicate or invalid one is unusable, and a deprecated
-    ///     one is no longer chosen for new traffic. Repeated addresses are dropped.
+    ///     keeps its scope id (the interface index), which the bind needs. An address is skipped
+    ///     when its duplicate-address-detection state is
+    ///     <see cref="DuplicateAddressDetectionState.Tentative" /> (it cannot be bound yet),
+    ///     <see cref="DuplicateAddressDetectionState.Duplicate" /> (another host uses it) or
+    ///     <see cref="DuplicateAddressDetectionState.Invalid" /> (it is not usable). A
+    ///     <see cref="DuplicateAddressDetectionState.Deprecated" /> address stays: it can still
+    ///     be bound and still receives traffic, so a server address that aged to deprecated
+    ///     keeps being served. Repeated addresses are dropped.
     /// </summary>
     [SupportedOSPlatform("windows")]
     private static List<IPAddress> EnumerateBindableLocalAddresses()
@@ -431,7 +443,9 @@ public sealed class ListenSocketSet
                 {
                     if (
                         unicast.DuplicateAddressDetectionState
-                        != DuplicateAddressDetectionState.Preferred
+                        is DuplicateAddressDetectionState.Tentative
+                            or DuplicateAddressDetectionState.Duplicate
+                            or DuplicateAddressDetectionState.Invalid
                     )
                         continue;
 
