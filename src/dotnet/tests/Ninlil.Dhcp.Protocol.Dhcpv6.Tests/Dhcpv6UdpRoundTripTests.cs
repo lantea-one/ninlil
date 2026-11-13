@@ -31,14 +31,17 @@ public class Dhcpv6UdpRoundTripTests
         if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
             return;
 
-        int serverPort = GetFreeUdpPort();
-        int clientPort = GetFreeUdpPort();
+        // The client socket binds first, on an OS-assigned port, because the listener sends its
+        // replies to the configured client port. The server binds port 0 and reports its port.
+        using UdpClient client = new(AddressFamily.InterNetworkV6);
+        client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        int clientPort = ((IPEndPoint)client.Client.LocalEndPoint).Port;
 
         StubDhcpv6RequestHandler handler = new();
         Dhcpv6ProtocolOptions options = new()
         {
             Enable = true,
-            ServerPort = serverPort,
+            ServerPort = 0,
             ClientPort = clientPort,
         };
         Dhcpv6UdpListener listener = new(
@@ -48,6 +51,7 @@ public class Dhcpv6UdpRoundTripTests
         );
 
         await listener.StartAsync(CancellationToken.None);
+        int serverPort = listener.BoundPort;
 
         try
         {
@@ -57,9 +61,6 @@ public class Dhcpv6UdpRoundTripTests
                 await Task.Delay(10);
 
             Assert.True(listener.IsListening, "The listener never finished binding its socket.");
-
-            using UdpClient client = new(AddressFamily.InterNetworkV6);
-            client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, clientPort));
 
             byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
 
@@ -114,16 +115,5 @@ public class Dhcpv6UdpRoundTripTests
         {
             await listener.StopAsync(CancellationToken.None);
         }
-    }
-
-    /// <summary>
-    ///     This method gets an unused high IPv6 UDP port, as
-    ///     <c>Dhcpv4UdpRoundTripTests.GetFreeUdpPort</c> does for IPv4.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using Socket probe = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        probe.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
-        return ((IPEndPoint)probe.LocalEndPoint).Port;
     }
 }

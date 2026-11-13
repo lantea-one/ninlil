@@ -91,8 +91,11 @@ public class Dhcpv6ListenerResilienceTests
         if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
             return;
 
-        int serverPort = GetFreeUdpPort();
-        int clientPort = GetFreeUdpPort();
+        // The client socket binds first, on an OS-assigned port, because the listener sends its
+        // replies to the configured client port. The server binds port 0 and reports its port.
+        using UdpClient client = new(AddressFamily.InterNetworkV6);
+        client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        int clientPort = ((IPEndPoint)client.Client.LocalEndPoint).Port;
 
         // The signal fires once the handler has seen the failing request (or, for a garbage
         // datagram, right away), so the next send is known to queue behind it.
@@ -127,7 +130,7 @@ public class Dhcpv6ListenerResilienceTests
                 new Dhcpv6ProtocolOptions
                 {
                     Enable = true,
-                    ServerPort = serverPort,
+                    ServerPort = 0,
                     ClientPort = clientPort,
                 }
             ),
@@ -138,9 +141,7 @@ public class Dhcpv6ListenerResilienceTests
 
         try
         {
-            using UdpClient client = new(AddressFamily.InterNetworkV6);
-            client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, clientPort));
-            IPEndPoint server = new(IPAddress.IPv6Loopback, serverPort);
+            IPEndPoint server = new(IPAddress.IPv6Loopback, listener.BoundPort);
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
             if (firstFails is not null)
@@ -207,16 +208,5 @@ public class Dhcpv6ListenerResilienceTests
         };
         advertise.SetServerIdentifier(StubDhcpv6RequestHandler.ServerIdentifier);
         return advertise;
-    }
-
-    /// <summary>
-    ///     This method gets an unused high IPv6 UDP port, as
-    ///     <c>Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> does.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using Socket probe = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        probe.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
-        return ((IPEndPoint)probe.LocalEndPoint).Port;
     }
 }
