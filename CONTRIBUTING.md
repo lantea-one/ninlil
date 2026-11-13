@@ -862,6 +862,28 @@ going: the queued run stayed waiting after the re-run ended.
 As a precaution that lowers the chance, do not re-run a run and push to the same branch at the
 same time. Wait for the re-run to finish first.
 
+#### Re-running one job of a run
+
+Forgejo can re-run one failed job (a flaky test, say) instead of the whole run. The job and the
+jobs that need it run again; jobs that passed are not run again. The draft release is the
+hand-off between the jobs, so this matters for the jobs that build or use release files.
+
+- The "Stage Draft Release" job keeps an existing draft when it is for the same version and the
+  same commit, with the files already attached. The packaging jobs ("Build Arch Linux Packages",
+  "Build and Test Deb and RPM Packages", "Build and Push Image") then still find the binaries
+  that the first attempt attached. Every job that attaches a file replaces the file of the same
+  name, so a re-run never leaves two copies.
+- A draft for another commit is deleted and created again, as before.
+- A packaging job that fails in "Checkout Sources" with `The draft for <version> has no
+  attachment named <file>` found a draft without that file. Do this:
+
+  1. Open the run on the [Actions page](https://git.lantea.one/lantea-one/ninlil/actions). If it
+     is still running, cancel it.
+  2. Re-run the whole run ("Re-run all jobs"), not one job. The binaries are built and attached
+     again.
+  3. Check that "Stage Draft Release" and every "Build Binary" job run, and that the packaging
+     jobs pass.
+
 ## Cutting a release
 
 For maintainers. Every release goes through a release branch cut from `main`. A normal release
