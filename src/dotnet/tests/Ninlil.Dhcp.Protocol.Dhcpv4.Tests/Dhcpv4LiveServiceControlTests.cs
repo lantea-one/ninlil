@@ -27,14 +27,16 @@ public class Dhcpv4LiveServiceControlTests
         if (!OperatingSystem.IsLinux())
             return;
 
-        int serverPort = GetFreeUdpPort();
-        int clientPort = GetFreeUdpPort();
+        // The client socket binds first, on an OS-assigned port, because the listener sends its
+        // replies to the configured client port. One client socket serves every cycle.
+        using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int clientPort = ((IPEndPoint)client.Client.LocalEndPoint).Port;
 
         StubDhcpv4RequestHandler handler = new();
         Dhcpv4ProtocolOptions options = new()
         {
             Enable = true,
-            ServerPort = serverPort,
+            ServerPort = 0,
             ClientPort = clientPort,
         };
         Dhcpv4UdpListener listener = new(
@@ -46,7 +48,12 @@ public class Dhcpv4LiveServiceControlTests
         // First cycle: start and confirm a request is answered.
         await listener.StartAsync(CancellationToken.None);
         await WaitUntilListeningAsync(listener);
-        Assert.True(await TrySendDiscoverAndReceiveOfferAsync(serverPort, clientPort));
+        int serverPort = listener.BoundPort;
+        Assert.True(await TrySendDiscoverAndReceiveOfferAsync(client, serverPort));
+
+        // The second cycle must rebind this same port, so the options now name it instead of 0.
+        // The listener reads the option on every start.
+        options.ServerPort = serverPort;
 
         // Starting again while running must do nothing, not try a second bind on the port.
         await listener.StartAsync(CancellationToken.None);
@@ -56,20 +63,35 @@ public class Dhcpv4LiveServiceControlTests
         // configured ClientPort, so every call binds that same client port.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
-        Assert.False(await TrySendDiscoverAndReceiveOfferAsync(serverPort, clientPort));
+        Assert.False(await TrySendDiscoverAndReceiveOfferAsync(client, serverPort));
 
         // Stopping again while stopped must also do nothing.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
 
         // Second cycle on the same server port, which only works if StopAsync released the
-        // socket rather than just stopping the receive loop.
-        await listener.StartAsync(CancellationToken.None);
+        // socket rather than just stopping the receive loop. Port 0 cannot serve here, because
+        // the test needs the same number again. Another process could in theory take the number
+        // between the stop and this start, so an AddressInUse is retried a bounded number of
+        // times. A socket StopAsync failed to release keeps failing, so the retry cannot hide it.
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await listener.StartAsync(CancellationToken.None);
+                break;
+            }
+            catch (SocketException exception)
+                when (exception.SocketErrorCode == SocketError.AddressAlreadyInUse && attempt < 3)
+            {
+                await Task.Delay(50);
+            }
+        }
 
         try
         {
             await WaitUntilListeningAsync(listener);
-            Assert.True(await TrySendDiscoverAndReceiveOfferAsync(serverPort, clientPort));
+            Assert.True(await TrySendDiscoverAndReceiveOfferAsync(client, serverPort));
         }
         finally
         {
@@ -93,17 +115,15 @@ public class Dhcpv4LiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method sends one encoded DISCOVER to <paramref name="serverPort" /> and reports
-    ///     whether an OFFER arrived within a short timeout. A timeout returns
+    ///     This method sends one encoded DISCOVER from <paramref name="client" /> to
+    ///     <paramref name="serverPort" /> and reports whether an OFFER arrived within a short timeout. A timeout returns
     ///     <see langword="false" /> rather than throwing.
     /// </summary>
     private static async Task<bool> TrySendDiscoverAndReceiveOfferAsync(
-        int serverPort,
-        int clientPort
+        UdpClient client,
+        int serverPort
     )
     {
-        using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, clientPort));
-
         Dhcpv4Message discover = new()
         {
             OperationCode = Dhcpv4OperationCodeEnum.BootRequest,
@@ -132,15 +152,5 @@ public class Dhcpv4LiveServiceControlTests
         {
             return false;
         }
-    }
-
-    /// <summary>
-    ///     This method gets an unused high UDP port, as
-    ///     <c>Dhcpv4UdpRoundTripTests.GetFreeUdpPort</c> does.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using UdpClient probe = new(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
     }
 }

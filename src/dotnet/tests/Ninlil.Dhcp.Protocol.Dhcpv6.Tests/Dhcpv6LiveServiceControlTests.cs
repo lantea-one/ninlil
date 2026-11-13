@@ -30,14 +30,17 @@ public class Dhcpv6LiveServiceControlTests
         if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
             return;
 
-        int serverPort = GetFreeUdpPort();
-        int clientPort = GetFreeUdpPort();
+        // The client socket binds first, on an OS-assigned port, because the listener sends its
+        // replies to the configured client port. One client socket serves every cycle.
+        using UdpClient client = new(AddressFamily.InterNetworkV6);
+        client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        int clientPort = ((IPEndPoint)client.Client.LocalEndPoint).Port;
 
         StubDhcpv6RequestHandler handler = new();
         Dhcpv6ProtocolOptions options = new()
         {
             Enable = true,
-            ServerPort = serverPort,
+            ServerPort = 0,
             ClientPort = clientPort,
         };
         Dhcpv6UdpListener listener = new(
@@ -48,28 +51,50 @@ public class Dhcpv6LiveServiceControlTests
 
         await listener.StartAsync(CancellationToken.None);
         await WaitUntilListeningAsync(listener);
-        Assert.True(await TrySendSolicitAndReceiveAdvertiseAsync(serverPort, clientPort));
+        int serverPort = listener.BoundPort;
+        Assert.True(await TrySendSolicitAndReceiveAdvertiseAsync(client, serverPort));
+
+        // The second cycle must rebind this same port, so the options now name it instead of 0.
+        // The listener reads the option on every start.
+        options.ServerPort = serverPort;
 
         // Starting again while running must do nothing.
         await listener.StartAsync(CancellationToken.None);
         Assert.True(listener.IsListening);
 
-        // The server always replies to the configured ClientPort, so every call binds that same
-        // client port.
+        // The server always replies to the configured ClientPort, so every call uses the one
+        // client socket bound to it.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
-        Assert.False(await TrySendSolicitAndReceiveAdvertiseAsync(serverPort, clientPort));
+        Assert.False(await TrySendSolicitAndReceiveAdvertiseAsync(client, serverPort));
 
         // Stopping again while stopped must also do nothing.
         await listener.StopAsync(CancellationToken.None);
         Assert.False(listener.IsListening);
 
-        await listener.StartAsync(CancellationToken.None);
+        // Second cycle on the same server port, which only works if StopAsync released the
+        // socket. Port 0 cannot serve here, because the test needs the same number again.
+        // Another process could in theory take the number between the stop and this start, so
+        // an AddressInUse is retried a bounded number of times. A socket StopAsync failed to
+        // release keeps failing, so the retry cannot hide it.
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await listener.StartAsync(CancellationToken.None);
+                break;
+            }
+            catch (SocketException exception)
+                when (exception.SocketErrorCode == SocketError.AddressAlreadyInUse && attempt < 3)
+            {
+                await Task.Delay(50);
+            }
+        }
 
         try
         {
             await WaitUntilListeningAsync(listener);
-            Assert.True(await TrySendSolicitAndReceiveAdvertiseAsync(serverPort, clientPort));
+            Assert.True(await TrySendSolicitAndReceiveAdvertiseAsync(client, serverPort));
         }
         finally
         {
@@ -88,18 +113,15 @@ public class Dhcpv6LiveServiceControlTests
     }
 
     /// <summary>
-    ///     This method sends one encoded SOLICIT to <paramref name="serverPort" /> over IPv6
-    ///     loopback and reports whether an ADVERTISE arrived within a short timeout. A timeout
+    ///     This method sends one encoded SOLICIT from <paramref name="client" /> to
+    ///     <paramref name="serverPort" /> over IPv6 loopback and reports whether an ADVERTISE arrived within a short timeout. A timeout
     ///     returns <see langword="false" /> rather than throwing.
     /// </summary>
     private static async Task<bool> TrySendSolicitAndReceiveAdvertiseAsync(
-        int serverPort,
-        int clientPort
+        UdpClient client,
+        int serverPort
     )
     {
-        using UdpClient client = new(AddressFamily.InterNetworkV6);
-        client.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, clientPort));
-
         byte[] clientDuid = [0x00, 0x01, 0x00, 0x01, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC];
 
         Dhcpv6Message solicit = new()
@@ -128,16 +150,5 @@ public class Dhcpv6LiveServiceControlTests
         {
             return false;
         }
-    }
-
-    /// <summary>
-    ///     This method gets an unused high IPv6 UDP port, as
-    ///     <c>Dhcpv6UdpRoundTripTests.GetFreeUdpPort</c> does.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using Socket probe = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        probe.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
-        return ((IPEndPoint)probe.LocalEndPoint).Port;
     }
 }

@@ -21,8 +21,20 @@ namespace Ninlil.Dhcp.Server.Relay.Tests;
 ///     <see cref="Dhcpv6RelayRoundTripTests" />. The link-local tests also check the scope ID
 ///     the relay gives a client's address (a pure rule, and one live case on a real interface).
 /// </summary>
-public sealed class Dhcpv6RelayAgentTests
+public sealed class Dhcpv6RelayAgentTests : IDisposable
 {
+    /// <summary>
+    ///     This socket stands in for the upstream server of every agent the test builds: it holds
+    ///     an OS-assigned IPv6 loopback port that nothing else uses and no real DHCPv6 server
+    ///     listens on, so a forwarded message goes to a socket this test owns. It is
+    ///     <see langword="null" /> where IPv6 loopback cannot be bound; the tests that need the
+    ///     agent return early there.
+    /// </summary>
+    private readonly Socket _upstreamSink = CreateUpstreamSink();
+
+    /// <inheritdoc />
+    public void Dispose() => _upstreamSink?.Dispose();
+
     [Fact]
     public async Task HandleRequestAsync_WithNoUpstreamServersConfigured_IsDroppedRatherThanThrowing()
     {
@@ -231,7 +243,7 @@ public sealed class Dhcpv6RelayAgentTests
                 {
                     Enable = true,
                     UpstreamServerAddresses = ["::1"],
-                    UpstreamServerPort = GetFreePort(),
+                    UpstreamServerPort = UpstreamSinkPort,
                 }
             ),
             Options.Create(new Dhcpv6ProtocolOptions { ClientPort = clientPort }),
@@ -312,7 +324,7 @@ public sealed class Dhcpv6RelayAgentTests
     ///     This method hands the relay a RELAY-REPL addressed to a client socket on the loopback
     ///     address and says whether the inner message reached that socket.
     /// </summary>
-    private static async Task AssertRelayedAsync(
+    private async Task AssertRelayedAsync(
         Dhcpv6MessageTypeEnum innerType,
         IPAddress source,
         IPAddress linkAddress,
@@ -371,7 +383,7 @@ public sealed class Dhcpv6RelayAgentTests
     ///     This method builds a <see cref="Dhcpv6RelayAgent" /> by hand, without dependency
     ///     injection, with a fixed link address and the given upstream servers.
     /// </summary>
-    private static Dhcpv6RelayAgent CreateAgent(
+    private Dhcpv6RelayAgent CreateAgent(
         IReadOnlyList<string> upstreamServerAddresses,
         int clientPort = 546
     ) =>
@@ -382,7 +394,7 @@ public sealed class Dhcpv6RelayAgentTests
                     Enable = true,
                     UpstreamServerAddresses = [.. upstreamServerAddresses],
                     // Never the real DHCPv6 server port: a DHCP server may be listening there.
-                    UpstreamServerPort = GetFreePort(),
+                    UpstreamServerPort = UpstreamSinkPort,
                 }
             ),
             Options.Create(new Dhcpv6ProtocolOptions { ClientPort = clientPort }),
@@ -391,16 +403,23 @@ public sealed class Dhcpv6RelayAgentTests
         );
 
     /// <summary>
-    ///     This method asks the operating system for a currently unused port, by binding to port 0
-    ///     on loopback and reading back what was assigned. Tests run on shared machines that host
-    ///     DNS, DHCP and web services, and may run alongside another copy of this suite, so no
-    ///     test uses a fixed or well-known port.
+    ///     This property contains the port of <see cref="_upstreamSink" />, or 0 when there is
+    ///     none.
     /// </summary>
-    /// <returns>A free TCP port number.</returns>
-    private static int GetFreePort()
+    private int UpstreamSinkPort =>
+        _upstreamSink == null ? 0 : ((IPEndPoint)_upstreamSink.LocalEndPoint).Port;
+
+    /// <summary>
+    ///     This method binds the upstream sink to an OS-assigned port on IPv6 loopback, or returns
+    ///     <see langword="null" /> where that address cannot be bound.
+    /// </summary>
+    private static Socket CreateUpstreamSink()
     {
-        using TcpListener listener = new(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
+            return null;
+
+        Socket sink = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+        sink.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        return sink;
     }
 }
