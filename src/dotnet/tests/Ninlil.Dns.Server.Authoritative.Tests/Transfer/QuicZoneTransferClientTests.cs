@@ -192,6 +192,22 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
 
                 List<DnsMessage> messages = await handler(query, raw, tsigOffset);
 
+                // A null list resets the write side with no answer; an empty list ends the
+                // stream cleanly with no answer. Both end the exchange before any closing SOA.
+                if (messages is null)
+                {
+                    stream.Abort(QuicAbortDirection.Write, 0);
+                    await stream.WritesClosed.WaitAsync(timeout.Token);
+                    return;
+                }
+
+                if (messages.Count == 0)
+                    await stream.WriteAsync(
+                        ReadOnlyMemory<byte>.Empty,
+                        completeWrites: true,
+                        timeout.Token
+                    );
+
                 for (int i = 0; i < messages.Count; i++)
                 {
                     byte[] body = DnsMessageWriter.Write(messages[i]);
@@ -255,7 +271,7 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
     ) : QuicZoneTransferClient(tsigService, options)
     {
         /// <inheritdoc />
-        protected override async Task OnQueryWrittenAsync(
+        internal override async Task OnQueryWrittenAsync(
             QuicStream stream,
             CancellationToken stoppingToken
         )
@@ -479,15 +495,21 @@ public class QuicZoneTransferClientTests(TsigTransferFixture fixture)
         Assert.Equal((uint)100, result.FinalSerial);
     }
 
-    [Fact]
-    public async Task PullAsync_WhenThePrimaryAbortsWithoutAnswering_ReportsAFailureWithoutThrowing()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PullAsync_WhenThePrimaryEndsTheExchangeWithoutAnswering_ReportsAFailureWithoutThrowing(
+        bool reset
+    )
     {
         if (!IsQuicAvailable())
             return;
 
-        // The primary gives up its read side and sends no message at all, then ends its stream.
+        // The primary gives up its read side and then resets its write side (reset) or ends the
+        // stream with no message. The client sees the end before any closing SOA, so it fails
+        // at once and does not wait for its read timeout.
         await using FakeQuicPrimary primary = await FakeQuicPrimary.StartAsync(
-            (_, _, _) => Task.FromResult<List<DnsMessage>>([]),
+            (_, _, _) => Task.FromResult<List<DnsMessage>>(reset ? null : []),
             readClientEndOfStream: false
         );
         using CancellationTokenSource cts = new(TimeSpan.FromSeconds(60));

@@ -152,12 +152,12 @@ public class QuicZoneTransferClient(
 
             await OnQueryWrittenAsync(stream, stoppingToken);
 
-            // RFC 9250 §4.2: close the write side after the query to show nothing more will be
-            // sent, then read the responses. A primary may answer and drop the stream without
-            // reading this end of stream; its STOP_SENDING (RFC 9000 §3.5) then fails this write
-            // although the answer is on its way. The write is only a courtesy, so its failure is
-            // not the transfer's failure: the read below decides and reports an absent or
-            // incomplete answer.
+            // RFC 9250 §4.2: the client MUST close its write side after the query, so the write
+            // is always attempted. Only its failure is tolerated: a primary may answer and drop
+            // the stream without reading this end of stream, and its STOP_SENDING (RFC 9000
+            // §3.5) then fails the write although the answer is on its way. That is safe because
+            // the query is already written and the response read below decides: it reports an
+            // absent or incomplete answer as a failure.
             try
             {
                 await stream.WriteAsync(
@@ -200,14 +200,13 @@ public class QuicZoneTransferClient(
 
     /// <summary>
     ///     This method runs after the query is written and before the client ends its side of the
-    ///     stream. It does nothing; a test subclass overrides it to hold the end of stream back
+    ///     stream. It does nothing; a test subclass in the test assembly (visible through
+    ///     InternalsVisibleTo) overrides it to hold the end of stream back
     ///     until the primary has stopped reading, which a real primary does at a time the client
     ///     cannot choose.
     /// </summary>
     /// <param name="stream">The stream the query was written to.</param>
     /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
-    protected virtual Task OnQueryWrittenAsync(
-        QuicStream stream,
-        CancellationToken stoppingToken
-    ) => Task.CompletedTask;
+    internal virtual Task OnQueryWrittenAsync(QuicStream stream, CancellationToken stoppingToken) =>
+        Task.CompletedTask;
 }
