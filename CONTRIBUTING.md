@@ -826,9 +826,12 @@ still open, look at its dependencies and close it by hand.
 The workflows are in [`.forgejo/workflows/`](./.forgejo/workflows/). The README's
 [pipeline section](./README.md#the-pipeline) describes them in full.
 
-- **A pull request** into `develop` or `main` runs `verify`, which is three jobs: the C# format
-  check, a Release build and every test project; the console's lint, format check and unit tests;
-  and the lint job. It gets no Docker socket and skips the tests marked `RequiresDocker`.
+- **A pull request** into `develop` or `main` runs `verify` ([`pull-request.yml`](./.forgejo/workflows/pull-request.yml)),
+  which is three jobs: the C# format check, a Release build and every test project; the console's
+  lint, format check and unit tests; and the lint job. It gets no Docker socket and skips the tests
+  marked `RequiresDocker`. Every other job (version, draft, binaries, packages, image, smoke test,
+  publish, Windows tests) shows as skipped, so a pull request leaves no pre-release behind.
+  If a pull-request run shows a running build job, the run is wrong: stop it and report it.
 - **A push** to any branch other than a release branch runs the same checks with the Docker
   socket, so the `RequiresDocker` tests run, and then publishes a pre-release build that expires
   after 24 hours. A same-repository branch is pushed before its pull request, so its push build
@@ -838,9 +841,9 @@ The workflows are in [`.forgejo/workflows/`](./.forgejo/workflows/). The README'
 
 #### A run stays waiting
 
-Runs of one branch queue behind each other: [`build.yml`](./.forgejo/workflows/build.yml) puts
-them in the concurrency group `build-pull-request-<branch>` (a pull request) or
-`build-branch-<branch>` (a push or a hand-started run) with `cancel-in-progress: false`, so a new run waits for the
+Runs of one branch queue behind each other: [`pull-request.yml`](./.forgejo/workflows/pull-request.yml)
+puts them in the concurrency group `build-pull-request-<branch>` (a pull request) and
+[`build.yml`](./.forgejo/workflows/build.yml) in `build-branch-<branch>` (a push or a hand-started run) with `cancel-in-progress: false`, so a new run waits for the
 earlier one to finish. That wait is normal. A job that shows "Blocked by required conditions" is
 also normal: it is waiting for the jobs it needs.
 
