@@ -21,6 +21,8 @@ outside Forgejo.
   2001:db8::/32." and the DHCP scope and tag rule forms show
   `Option row N (tag T): "<text>" is not a valid IPv6 address.`
   ([#198](https://git.lantea.one/lantea-one/ninlil/issues/198))
+- **Every table in the admin console scrolls sideways inside its card on a narrow screen.** A long
+  value no longer widens the page. ([#195](https://git.lantea.one/lantea-one/ninlil/issues/195))
 
 ## v2026.11.13.1
 

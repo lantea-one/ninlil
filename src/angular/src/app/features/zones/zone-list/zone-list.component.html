@@ -25,7 +25,7 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="zones()" class="zone-table">
+    <table cdk-table cTable hover [responsive]="true" [dataSource]="zones()" class="zone-table">
       <ng-container cdkColumnDef="name">
         <th cdk-header-cell *cdkHeaderCellDef>Name</th>
         <td cdk-cell *cdkCellDef="let zone">{{ zone.name }}</td>

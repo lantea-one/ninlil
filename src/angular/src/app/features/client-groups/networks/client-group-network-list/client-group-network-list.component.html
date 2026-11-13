@@ -41,7 +41,14 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="networks()" class="network-table">
+    <table
+      cdk-table
+      cTable
+      hover
+      [responsive]="true"
+      [dataSource]="networks()"
+      class="network-table"
+    >
       <ng-container cdkColumnDef="cidr">
         <th cdk-header-cell *cdkHeaderCellDef>Matches by</th>
         <td cdk-cell *cdkCellDef="let network">

@@ -36,7 +36,7 @@
   />
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="leases()" class="lease-table">
+    <table cdk-table cTable hover [responsive]="true" [dataSource]="leases()" class="lease-table">
       <ng-container cdkColumnDef="scopeName">
         <th cdk-header-cell *cdkHeaderCellDef>Scope</th>
         <td cdk-cell *cdkCellDef="let lease">{{ lease.scopeName }}</td>
