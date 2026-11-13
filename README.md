@@ -765,22 +765,41 @@ The browser warns about the self-signed certificate on the HTTPS port. Accept it
 The web and DNS listeners bind every address unless their `ListenAddresses` setting (for example
 `DnsServer:Protocol:Plain:ListenAddresses`) names specific ones; see ENVIRONMENT.md.
 
-**On Windows, Ninlil claims each port exclusively.** The DNS (UDP and TCP, DNS-over-TLS, DNSCrypt),
-DHCPv4, DHCPv6 and TFTP sockets and the web and DNS-over-HTTPS listeners set
-`SO_EXCLUSIVEADDRUSE`, so no other program can bind a port Ninlil serves, not even on one specific
-address while Ninlil holds the wildcard address. Ninlil itself starts only when it can take the
-port the same way: a program that already holds the port, on any overlapping address, makes the
-bind fail. That is reported like any other bind failure (an error in the log, an entry in
-`/status`, the transport not running), and the rest of Ninlil keeps running. With the default
-configuration one wildcard socket serves a transport, so the whole transport is down; with an
-explicit `ListenAddresses` list only the address that fails is. To find the program that holds a
-port, run `netstat -ano | findstr :53` in PowerShell and look the PID up with
-`Get-Process -Id <pid>`. Port 53 on UDP is often held by a Windows service: Internet Connection
-Sharing (`SharedAccess`) and the Host Network Service (`hns`, which Hyper-V and WSL use) can both
-run a DNS proxy there. Stop that service, or give it another port, to free port 53 for Ninlil.
-DNS-over-QUIC is the exception: its QUIC library binds the UDP port itself and Microsoft documents
-no exclusive setting for it, so another program can still share that port. Linux and macOS are
-unchanged; they refuse a second bind of an address and port without any option.
+**On Windows, Ninlil claims each port exclusively.** The DNS (UDP and TCP, DNS-over-TLS,
+DNSCrypt), DHCPv4, DHCPv6 and TFTP sockets and the web listener (which also serves DNS-over-HTTPS)
+set `SO_EXCLUSIVEADDRUSE`, so no other program can bind a port Ninlil serves. A second program that
+tries fails to bind, whichever of the two started second. That includes a DHCP relay agent or
+another DHCP or TFTP program on the same host: it cannot share Ninlil's server port (67, 547 or 69).
+The rule Windows applies is this: an exclusive bind of the wildcard address (`0.0.0.0` or `::`)
+fails when another socket already holds the port on any address it overlaps, and an exclusive bind
+of one specific address fails only against a socket that is itself exclusive or holds that same
+address.
+
+What Ninlil does when a bind fails depends on the listener:
+
+- **DNS over UDP and TCP, DNS-over-TLS and DNSCrypt, with no listen addresses set.** When the
+  wildcard bind fails because another program holds the port on some address, Ninlil falls back to
+  one exclusive socket per local address (IPv4 and IPv6, loopback included), logs one warning that
+  names the transport, protocol and port, and lists the addresses it serves. An address added to
+  the machine later is not served until the transport restarts, and an address that cannot be
+  bound shows in the log and in `GET /status`. You can also set the transport's listen addresses
+  yourself, so Ninlil binds only those. If no address can be bound, the transport is not running.
+- **The same transports with listen addresses set.** Only an address that cannot be bound fails;
+  the others keep serving.
+- **DHCPv4, DHCPv6 and TFTP.** They need their one wildcard socket (DHCP clients broadcast), so
+  there is no fallback: the service does not start, the log has an Error with the reason and the
+  `netstat` hint, `GET /status` shows it as not running, and the rest of Ninlil keeps running.
+- **The web listener** (the REST API, the admin console and DNS-over-HTTPS). A bind failure stops
+  Ninlil, because nothing could fix it from inside. Choose another port, or free the port.
+- **DNS-over-QUIC** is not covered: its QUIC library binds the UDP port itself and Microsoft
+  documents no exclusive setting for it, so another program can still share that port.
+
+To find the program that holds a port, run `netstat -ano | findstr :53` in PowerShell and look the
+PID up with `Get-Process -Id <pid>`. The usual holders of UDP port 53 on Windows are connection
+sharing (Internet Connection Sharing, the `SharedAccess` service) and the Host Network Service
+(`hns`) that Hyper-V and WSL use; each runs a DNS proxy there. Stop that service, or give it another
+port, if you want Ninlil on the wildcard address of port 53. Linux and macOS are unchanged: they
+refuse a second bind of an address and port without any option.
 
 Ports 53/67/69/80/443 are privileged on Linux/macOS. Either run with elevated privileges (or grant
 the process `CAP_NET_BIND_SERVICE` on Linux), or override the ports in configuration to something
@@ -3215,6 +3234,13 @@ A records (RFC 6147 §5.1.2), and an answer that failed DNSSEC validation never 
      it.
   3. Restart Ninlil. A transport that failed to bind is not retried while Ninlil runs.
   4. Check that it worked: `GET /status` reports `transports` as `Healthy`.
+
+  On Windows Ninlil claims its ports exclusively, so `Only one usage of each socket address` or
+  `forbidden by its access permissions` means another program holds the port on an address that
+  overlaps. `netstat -ano | findstr :<port>` in PowerShell shows the PID, and
+  `Get-Process -Id <pid>` the program. For UDP 53 it is usually connection sharing or the Hyper-V
+  and WSL network service; the DNS transports then fall back to the machine's local addresses one
+  by one and log a Warning instead of an Error (see [Ports](#ports)).
 - *DoQ clients are cut off.* A query with a message ID other than 0 closes the connection.
   Check the client.
 - *A DNSCrypt client cannot find the server.* Check that the stamp's provider name has the

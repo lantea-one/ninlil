@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
 using Ninlil.Common.Extension.Sockets;
 
@@ -15,7 +16,8 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///         With no addresses configured, this binds one IPv6 wildcard socket with
 ///         <see cref="SocketOptionName.IPv6Only" /> turned off, which accepts IPv6 and (through the
 ///         operating system's IPv4-mapped addresses) IPv4 clients on every interface. A failure
-///         to bind it throws.
+///         to bind it is logged and leaves the set empty (see the Windows paragraph below for the
+///         one case that falls back).
 ///     </para>
 ///     <para>
 ///         With addresses configured, this binds one socket per address. Every IPv6 socket is
@@ -28,11 +30,14 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///     </para>
 ///     <para>
 ///         On Windows every socket claims its port exclusively (see
-///         <see cref="ExclusiveListenerPortSocketExtension" />). Another program that holds the
-///         port on any overlapping address, including one specific address while Ninlil would
-///         bind the wildcard, makes the bind fail and be reported as above. With the default
-///         single dual-stack socket that takes the whole transport down; it does not fall back
-///         to binding each local address on its own.
+///         <see cref="ExclusiveListenerPortSocketExtension" />). With addresses configured, a
+///         program that holds the same address and port makes that bind fail, and the failure is
+///         reported as above. With no addresses configured, a failed wildcard bind (another
+///         program holds the port on some address, typically UDP 53 held by connection sharing,
+///         Hyper-V or WSL) falls back to one exclusive socket per usable local unicast address,
+///         loopback included, with one warning. Addresses that fail are listed in
+///         <see cref="FailedAddresses" />; addresses the machine gains later are not served until
+///         the transport restarts. When no address binds, the set is empty and an error is logged.
 ///     </para>
 /// </summary>
 public sealed class ListenSocketSet
@@ -71,7 +76,10 @@ public sealed class ListenSocketSet
 
     /// <summary>
     ///     This method binds every socket the transport's settings ask for. A TCP socket is also
-    ///     put into the listening state; a UDP socket is ready to receive once this returns.
+    ///     put into the listening state; a UDP socket is ready to receive once this returns. On
+    ///     Windows, a listen-everywhere set whose exclusive wildcard bind fails with "address in
+    ///     use" or "access denied" binds each usable local address instead (see the class
+    ///     summary).
     /// </summary>
     /// <param name="transportName">The transport's human-readable name, used in log messages (for example "Plain DNS (UDP)").</param>
     /// <param name="configuredAddresses">The transport's <c>ListenAddresses</c> value.</param>
@@ -108,6 +116,26 @@ public sealed class ListenSocketSet
                 // reach the settings to fix the port. Report it instead: the listener ends
                 // without sockets, so the transports health check shows it as not listening.
                 dualStack.Dispose();
+
+                // On Windows another program may hold the port on some addresses (typically a
+                // DNS proxy such as Internet Connection Sharing on UDP 53). The exclusive
+                // wildcard bind then fails, but each local address is usually still free.
+                if (
+                    OperatingSystem.IsWindows()
+                    && exception.SocketErrorCode
+                        is SocketError.AddressAlreadyInUse
+                            or SocketError.AccessDenied
+                    && TryBindLocalAddresses(
+                        transportName,
+                        port,
+                        protocolType,
+                        logger,
+                        exception,
+                        out ListenSocketSet fallback
+                    )
+                )
+                    return fallback;
+
                 logger.LogError(
                     exception,
                     "{Transport} could not listen on {Address} port {Port}: {Reason}. This transport is not running; the rest of the server is unaffected. Fix the port or the listen addresses and restart Ninlil.",
@@ -128,40 +156,15 @@ public sealed class ListenSocketSet
         }
 
         List<string> failed = ReportUnusableEntries(transportName, resolution, logger);
-        List<Socket> sockets = [];
-
-        foreach (IPAddress address in resolution.Addresses)
-        {
-            Socket socket = CreateSocket(address.AddressFamily, protocolType);
-
-            try
-            {
-                // An explicit IPv6 socket must be IPv6-only: left dual-stack, "::" would also
-                // claim every IPv4 address and collide with a "0.0.0.0" entry on the same port.
-                if (address.AddressFamily == AddressFamily.InterNetworkV6)
-                    socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
-
-                socket.Bind(new IPEndPoint(address, port));
-
-                if (protocolType == ProtocolType.Tcp)
-                    socket.Listen();
-
-                sockets.Add(socket);
-            }
-            catch (SocketException exception)
-            {
-                socket.Dispose();
-                failed.Add($"{address} ({exception.Message})");
-                logger.LogError(
-                    exception,
-                    "{Transport} could not listen on {Address} port {Port}: {Reason}. Its other listen addresses keep serving.",
-                    transportName,
-                    address,
-                    port,
-                    exception.Message
-                );
-            }
-        }
+        List<Socket> sockets = BindEachAddress(
+            transportName,
+            resolution.Addresses,
+            port,
+            protocolType,
+            logger,
+            failed,
+            "Its other listen addresses keep serving."
+        );
 
         ReportNothingBound(transportName, sockets.Count, logger);
         return new ListenSocketSet(sockets, failed);
@@ -278,6 +281,172 @@ public sealed class ListenSocketSet
             );
 
         return failed;
+    }
+
+    /// <summary>
+    ///     This method binds one socket per address, the way an explicit <c>ListenAddresses</c>
+    ///     list asks for. An address that cannot be bound is logged as an error, added to
+    ///     <paramref name="failed" /> and skipped.
+    /// </summary>
+    /// <param name="transportName">The transport's name for log messages.</param>
+    /// <param name="addresses">The addresses to bind, each with its own socket.</param>
+    /// <param name="port">The port every socket binds.</param>
+    /// <param name="protocolType"><see cref="ProtocolType.Udp" /> or <see cref="ProtocolType.Tcp" />.</param>
+    /// <param name="logger">The logger bind errors go to.</param>
+    /// <param name="failed">The list that receives "address (reason)" for each failure.</param>
+    /// <param name="consequence">The closing sentence of the error message.</param>
+    /// <returns>The sockets that bound.</returns>
+    private static List<Socket> BindEachAddress(
+        string transportName,
+        IEnumerable<IPAddress> addresses,
+        int port,
+        ProtocolType protocolType,
+        ILogger logger,
+        List<string> failed,
+        string consequence
+    )
+    {
+        List<Socket> sockets = [];
+
+        foreach (IPAddress address in addresses)
+        {
+            Socket socket = CreateSocket(address.AddressFamily, protocolType);
+
+            try
+            {
+                // An explicit IPv6 socket must be IPv6-only: left dual-stack, "::" would also
+                // claim every IPv4 address and collide with a "0.0.0.0" entry on the same port.
+                if (address.AddressFamily == AddressFamily.InterNetworkV6)
+                    socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
+
+                socket.Bind(new IPEndPoint(address, port));
+
+                if (protocolType == ProtocolType.Tcp)
+                    socket.Listen();
+
+                sockets.Add(socket);
+            }
+            catch (SocketException exception)
+            {
+                socket.Dispose();
+                failed.Add($"{address} ({exception.Message})");
+                logger.LogError(
+                    exception,
+                    "{Transport} could not listen on {Address} port {Port}: {Reason}. {Consequence}",
+                    transportName,
+                    address,
+                    port,
+                    exception.Message,
+                    consequence
+                );
+            }
+        }
+
+        return sockets;
+    }
+
+    /// <summary>
+    ///     This method is the Windows fallback for a listen-everywhere transport whose exclusive
+    ///     wildcard bind failed: it binds every usable local unicast address on its own and logs
+    ///     one warning. The set is usable when at least one address bound. Replies need nothing
+    ///     extra: each listener answers from the socket that received the request, so a reply
+    ///     leaves from that socket's address, as with an explicit address list.
+    /// </summary>
+    /// <param name="transportName">The transport's name for log messages.</param>
+    /// <param name="port">The port every socket binds.</param>
+    /// <param name="protocolType"><see cref="ProtocolType.Udp" /> or <see cref="ProtocolType.Tcp" />.</param>
+    /// <param name="logger">The logger the warning and bind errors go to.</param>
+    /// <param name="wildcardFailure">The error of the failed wildcard bind.</param>
+    /// <param name="set">The per-address set, when this method returns <see langword="true" />.</param>
+    /// <returns>Whether at least one address bound.</returns>
+    [SupportedOSPlatform("windows")]
+    private static bool TryBindLocalAddresses(
+        string transportName,
+        int port,
+        ProtocolType protocolType,
+        ILogger logger,
+        SocketException wildcardFailure,
+        out ListenSocketSet set
+    )
+    {
+        List<string> failed = [];
+        List<Socket> sockets = BindEachAddress(
+            transportName,
+            EnumerateBindableLocalAddresses(),
+            port,
+            protocolType,
+            logger,
+            failed,
+            "The transport's other local addresses keep serving."
+        );
+
+        if (sockets.Count == 0)
+        {
+            set = null;
+            return false;
+        }
+
+        logger.LogWarning(
+            "{Transport} could not listen on the wildcard address {Address} {Protocol} port {Port} ({Reason}): another program holds that port on some address. Ninlil listens on these local addresses instead: {Bound}. An address added to this machine later is not served until the transport restarts. Find the other program with '{Command}', or set the transport's listen addresses.",
+            transportName,
+            IPAddress.IPv6Any,
+            protocolType.ToString().ToUpperInvariant(),
+            port,
+            wildcardFailure.Message,
+            string.Join(", ", sockets.Select(socket => ((IPEndPoint)socket.LocalEndPoint).Address)),
+            $"netstat -ano | findstr :{port}"
+        );
+        set = new ListenSocketSet(sockets, failed);
+        return true;
+    }
+
+    /// <summary>
+    ///     This method lists the local unicast addresses worth binding: every address of an
+    ///     interface that is up, loopback included, IPv4 and IPv6. An IPv6 link-local address
+    ///     keeps its scope id (the interface index), which the bind needs. An address whose
+    ///     duplicate-address-detection state is not
+    ///     <see cref="DuplicateAddressDetectionState.Preferred" /> is skipped: a tentative
+    ///     address cannot be bound yet, a duplicate or invalid one is unusable, and a deprecated
+    ///     one is no longer chosen for new traffic. Repeated addresses are dropped.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static List<IPAddress> EnumerateBindableLocalAddresses()
+    {
+        List<IPAddress> addresses = [];
+
+        try
+        {
+            foreach (
+                NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces()
+            )
+            {
+                if (networkInterface.OperationalStatus != OperationalStatus.Up)
+                    continue;
+
+                foreach (
+                    UnicastIPAddressInformation unicast in networkInterface
+                        .GetIPProperties()
+                        .UnicastAddresses
+                )
+                {
+                    if (
+                        unicast.DuplicateAddressDetectionState
+                        != DuplicateAddressDetectionState.Preferred
+                    )
+                        continue;
+
+                    if (!addresses.Contains(unicast.Address))
+                        addresses.Add(unicast.Address);
+                }
+            }
+        }
+        catch (NetworkInformationException)
+        {
+            // Without an interface list there is nothing to fall back to; the caller reports the
+            // original wildcard failure.
+        }
+
+        return addresses;
     }
 
     /// <summary>This method creates an unbound socket of the right shape for the protocol.</summary>

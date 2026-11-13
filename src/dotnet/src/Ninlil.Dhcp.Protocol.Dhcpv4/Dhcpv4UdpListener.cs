@@ -170,7 +170,11 @@ public sealed class Dhcpv4UdpListener(
                 // On a bind failure (port in use, for instance) leave IsListening false, keep the
                 // reason for the health check and let the caller see the exception.
                 socket.Dispose();
-                StartFailure = exception.Message;
+                StartFailure = ExclusiveListenerPortSocketExtension.DescribeBindFailure(
+                    exception,
+                    "UDP",
+                    options.Value.ServerPort
+                );
                 throw;
             }
 

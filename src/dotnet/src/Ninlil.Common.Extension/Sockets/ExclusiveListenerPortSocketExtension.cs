@@ -23,6 +23,32 @@ namespace Ninlil.Common.Extension.Sockets;
 public static class ExclusiveListenerPortSocketExtension
 {
     /// <summary>
+    ///     This method describes why a listening socket could not bind, for the reason the health
+    ///     check and the log show. On Windows an "address in use" or "access denied" error means
+    ///     another program holds the port (Ninlil claims it exclusively), so the text says so and
+    ///     names the <c>netstat</c> command that finds the program. In every other case it is the
+    ///     exception's own message.
+    /// </summary>
+    /// <param name="exception">The bind exception.</param>
+    /// <param name="protocolName">"UDP" or "TCP".</param>
+    /// <param name="port">The port that was requested.</param>
+    /// <returns>The reason text.</returns>
+    public static string DescribeBindFailure(Exception exception, string protocolName, int port)
+    {
+        if (
+            !OperatingSystem.IsWindows()
+            || exception
+                is not SocketException
+                {
+                    SocketErrorCode: SocketError.AddressAlreadyInUse or SocketError.AccessDenied,
+                }
+        )
+            return exception.Message;
+
+        return $"{exception.Message} On Windows Ninlil claims {protocolName} port {port} exclusively, so another program that holds that port on any overlapping address blocks it. Find it with 'netstat -ano | findstr :{port}'.";
+    }
+
+    /// <summary>
     ///     This extension method sets <see cref="Socket.ExclusiveAddressUse" /> on Windows and does
     ///     nothing elsewhere. Call it after creating the socket and before binding it. A socket
     ///     that claims its port this way must not also set <c>SO_REUSEADDR</c>: a caller that

@@ -294,7 +294,11 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                 // Leave the service stopped, not half-started, keep the reason for the health
                 // check and let the caller see the error.
                 socket.Dispose();
-                StartFailure = exception.Message;
+                StartFailure = ExclusiveListenerPortSocketExtension.DescribeBindFailure(
+                    exception,
+                    "UDP",
+                    options.Value.Port
+                );
                 throw;
             }
 
