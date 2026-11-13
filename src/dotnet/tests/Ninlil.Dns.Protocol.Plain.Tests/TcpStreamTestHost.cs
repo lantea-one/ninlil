@@ -133,6 +133,18 @@ internal sealed class TcpStreamTestHost : IAsyncDisposable
     }
 
     /// <summary>
+    ///     This constant is how many times a test with a sub-second idle timeout tries a fresh
+    ///     connection before it fails. The idle timer starts at accept, so on a starved machine
+    ///     the query can arrive after it and the listener closes the connection unanswered; the
+    ///     retry tolerates exactly that. Under extreme load (32 busy processes on 16 cores) about
+    ///     one attempt in ten lost that race, so four attempts fail falsely about once in ten
+    ///     thousand runs, and far less on an ordinary machine. The limit of the retry: a listener
+    ///     that closed some but not all first connections would pass, so the tests also assert
+    ///     everything after the first reply.
+    /// </summary>
+    public const int MaxFreshConnectionAttempts = 4;
+
+    /// <summary>
     ///     This method builds one length-prefixed query frame for a name and type.
     /// </summary>
     public static byte[] BuildFrame(
