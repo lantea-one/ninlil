@@ -15,6 +15,12 @@
   gap: var(--ninlil-space-2);
 }
 
+// A `legend` titles a group of checkboxes. Bootstrap sizes a bare `legend` like a heading, so it
+// takes the size of the other field labels instead.
+legend.form-label {
+  font-size: inherit;
+}
+
 .field-row {
   display: flex;
   flex-wrap: wrap;
