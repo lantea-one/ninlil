@@ -103,8 +103,10 @@ public sealed class TransportListenersHealthCheckTests
     [Fact]
     public async Task CheckHealthAsync_WithAPlainListenerThatCouldNotBind_NamesTheAddressAndTheReason()
     {
-        // Another socket holds the wildcard UDP port, so the listener's bind fails. The listener
-        // must end without throwing and the check must say why it is not listening.
+        // Another socket holds the wildcard UDP port, so the listener's bind of "::" fails. The
+        // address is listed explicitly because on Windows a listen-everywhere listener falls back
+        // to one socket per local address instead of failing. The listener must end without
+        // throwing and the check must say why it is not listening.
         using Socket occupant = new(
             AddressFamily.InterNetworkV6,
             SocketType.Dgram,
@@ -117,7 +119,9 @@ public sealed class TransportListenersHealthCheckTests
         // The pipeline is never used: the bind fails before the first receive.
         UdpDnsListener udp = new(
             null,
-            new MutableMonitor<PlainProtocolOptions>(new PlainProtocolOptions { Port = port }),
+            new MutableMonitor<PlainProtocolOptions>(
+                new PlainProtocolOptions { Port = port, ListenAddresses = "::" }
+            ),
             NullLogger<UdpDnsListener>.Instance
         );
         await udp.StartAsync(CancellationToken.None);
