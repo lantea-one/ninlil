@@ -92,6 +92,29 @@ public sealed class ArpNeighborTableClientIdentityResolverTests
         Assert.Null(resolution);
     }
 
+    [Fact]
+    public async Task ResolveAsync_ForAnAddressItAnswersWithNull_AllocatesNothingPerCall()
+    {
+        ArpNeighborTableClientIdentityResolver resolver = new(
+            NullLogger<ArpNeighborTableClientIdentityResolver>.Instance
+        );
+        await resolver.RefreshAsync();
+        IPAddress address = IPAddress.IPv6Loopback;
+
+        // Warm the call path so one-time costs (JIT, type loading) are not counted.
+        for (int i = 0; i < 100; i++)
+            Assert.True(resolver.ResolveAsync(address).IsCompletedSuccessfully);
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1_000; i++)
+            await resolver.ResolveAsync(address);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        // A task per call would allocate tens of kilobytes over 1,000 calls; the bound leaves
+        // room for the measurement itself.
+        Assert.True(allocated < 1_000, $"1,000 calls allocated {allocated} bytes.");
+    }
+
     /// <summary>
     ///     This test checks that an IPv4-mapped IPv6 address ("::ffff:x.x.x.x",
     ///     <see cref="System.Net.Sockets.AddressFamily.InterNetworkV6" />) resolves like its plain
