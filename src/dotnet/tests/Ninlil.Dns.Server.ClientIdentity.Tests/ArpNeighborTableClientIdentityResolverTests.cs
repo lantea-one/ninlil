@@ -110,8 +110,8 @@ public sealed class ArpNeighborTableClientIdentityResolverTests
             await resolver.ResolveAsync(address);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-        // A task per call would allocate tens of kilobytes over 1,000 calls; the bound leaves
-        // room for the measurement itself.
+        // This guards the miss path against a change that starts allocating per call; the
+        // bound leaves room for the measurement itself.
         Assert.True(allocated < 1_000, $"1,000 calls allocated {allocated} bytes.");
     }
 

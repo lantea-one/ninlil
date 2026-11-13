@@ -15,7 +15,7 @@ outside Forgejo.
 
 - **Library API (NuGet).** `IClientIdentityResolver.ResolveAsync` returns
   `ValueTask<ClientIdentityResolution>` instead of `Task<ClientIdentityResolution>`, so an answer
-  from memory allocates nothing. Code that implements the interface changes its return type
+  from memory allocates no task. Code that implements the interface changes its return type
   (`ValueTask.FromResult(...)` replaces `Task.FromResult(...)`); code that awaits the call needs
   no change, and code that stores the result or awaits it twice must call `AsTask()` first
   ([#228](https://git.lantea.one/lantea-one/ninlil/issues/228)).

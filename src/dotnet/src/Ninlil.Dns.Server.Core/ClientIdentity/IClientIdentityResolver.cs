@@ -28,7 +28,7 @@ public interface IClientIdentityResolver
     ///     The resolved identifier, or <see langword="null" /> if this resolver has no mapping for
     ///     <paramref name="remoteAddress" />. An unknown address is not an error; exceptions are
     ///     only for unexpected failures. The result is a <see cref="ValueTask{TResult}" /> so an
-    ///     answer from memory allocates nothing; a caller awaits it exactly once.
+    ///     answer from memory allocates no task; a caller awaits it exactly once.
     /// </returns>
     ValueTask<ClientIdentityResolution> ResolveAsync(
         IPAddress remoteAddress,
