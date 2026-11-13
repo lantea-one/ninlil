@@ -130,13 +130,11 @@ public sealed class TcpStreamSessionTests
     ///     timeout is short (500 ms) because it is also the write deadline under test, and it
     ///     starts when the listener accepts the connection. On a loaded machine the query can
     ///     reach the listener after it, and the listener then closes the connection unanswered,
-    ///     so the exchange retries on a new connection, up to ten times.
+    ///     so the exchange retries on a new connection, up to <see cref="TcpStreamTestHost.MaxFreshConnectionAttempts" /> times.
     /// </summary>
     private static async Task AssertAnsweredOnANewConnectionAsync(int port, ushort id)
     {
-        const int maxAttempts = 10;
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        for (int attempt = 1; attempt <= TcpStreamTestHost.MaxFreshConnectionAttempts; attempt++)
         {
             using TcpClient client = await ConnectAsync(port);
             NetworkStream stream = client.GetStream();
@@ -160,7 +158,9 @@ public sealed class TcpStreamSessionTests
             return;
         }
 
-        Assert.Fail($"No query was answered in {maxAttempts} attempts.");
+        Assert.Fail(
+            $"No query was answered in {TcpStreamTestHost.MaxFreshConnectionAttempts} attempts."
+        );
     }
 
     private static async Task<TcpClient> ConnectAsync(int port)

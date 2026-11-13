@@ -29,17 +29,16 @@ public sealed class TcpZoneTransferDurationTests
         // outlives the timeout. That outcome is told apart by the closed connection before the
         // first message, and the exchange retries on a fresh host. A listener that cut a
         // transfer in progress would fail every attempt at a later step, and one that always
-        // closed early would exhaust the attempts.
-        const int maxAttempts = 10;
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        // closed early would exhaust the attempts (see
+        // TcpStreamTestHost.MaxFreshConnectionAttempts for the bound and what the retry hides).
+        for (int attempt = 1; attempt <= TcpStreamTestHost.MaxFreshConnectionAttempts; attempt++)
         {
             if (await TryRunTransferAsync())
                 return;
         }
 
         Assert.Fail(
-            $"The listener closed the connection before the first message in all {maxAttempts} attempts."
+            $"The listener closed the connection before the first message in all {TcpStreamTestHost.MaxFreshConnectionAttempts} attempts."
         );
     }
 
