@@ -49,7 +49,7 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="keys()" class="key-table">
+    <table cdk-table cTable hover [responsive]="true" [dataSource]="keys()" class="key-table">
       <ng-container cdkColumnDef="role">
         <th cdk-header-cell *cdkHeaderCellDef>Role</th>
         <td cdk-cell *cdkCellDef="let key">

@@ -13,6 +13,20 @@ outside Forgejo.
 
 ### Behaviour worth knowing
 
+- **IPv6 addresses with an IPv4 tail are sent with the right bytes, and malformed IPv6 text is
+  refused.** In APL records and DHCP option values, the console turned the IPv4 part of
+  `::ffff:192.0.2.1` into wrong bytes and sent them without an error; such an address is now sent
+  as its 16 octets. The console also sent malformed text such as `12g::1` or `1:2:3:4:5:6:7:8::`.
+  For that text the APL record form now shows "Enter a valid CIDR prefix, e.g. 192.0.2.0/24 or
+  2001:db8::/32." and the DHCP scope and tag rule forms show
+  `Option row N (tag T): "<text>" is not a valid IPv6 address.`
+  ([#198](https://git.lantea.one/lantea-one/ninlil/issues/198))
+- **Every table in the admin console scrolls sideways inside its card on a narrow screen.** A long
+  value no longer widens the page. ([#195](https://git.lantea.one/lantea-one/ninlil/issues/195))
+- **The dashboard's Live Activity title and the zone form's key headings match the text around
+  them.** Live Activity has the size of the Getting Started header, and "Keys allowed to send
+  dynamic updates" and "Keys allowed to transfer this zone" have the size of the other field
+  labels. ([#196](https://git.lantea.one/lantea-one/ninlil/issues/196))
 - **On Windows, a port Ninlil serves can no longer be shared with another program.** The DNS,
   DNS-over-TLS, DNSCrypt, DHCPv4, DHCPv6, TFTP and web sockets claim their ports exclusively, so
   a second program that binds the same port, on a specific address or with address reuse, fails

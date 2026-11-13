@@ -8,6 +8,7 @@
  * forms catch the decode error and show that row as raw hex.
  */
 import { DhcpOptionValueTypeEnum } from '../../../api-client';
+import { parseIpv6 } from '../../../shared/ip-address/ip-address.util';
 
 /** This function splits one-entry-per-line text into trimmed, non-empty entries. */
 function splitLines(text: string): string[] {
@@ -37,49 +38,6 @@ function parseIpv4(address: string): number[] {
 /** This function formats 4 octets into a dotted-decimal IPv4 address. */
 function formatIpv4(bytes: readonly number[]): string {
   return bytes.join('.');
-}
-
-/**
- * This function parses an IPv6 address, with optional `::` compression (RFC 4291 §2.2), into 16
- * octets. The zones feature's `apl-cidr.util.ts` has the same parser; this copy keeps the DHCP
- * feature free of a cross-feature import.
- */
-function parseIpv6(address: string): number[] {
-  const halves = address.split('::');
-
-  if (halves.length > 2) {
-    throw new Error(`"${address}" is not a valid IPv6 address.`);
-  }
-
-  const head = halves[0].length > 0 ? halves[0].split(':') : [];
-  const tail = halves.length === 2 && halves[1].length > 0 ? halves[1].split(':') : [];
-  const missingGroupCount = 8 - head.length - tail.length;
-
-  if (halves.length === 1 && missingGroupCount !== 0) {
-    throw new Error(`"${address}" is not a valid IPv6 address.`);
-  }
-
-  if (missingGroupCount < 0) {
-    throw new Error(`"${address}" is not a valid IPv6 address.`);
-  }
-
-  const groups = [...head, ...Array<string>(missingGroupCount).fill('0'), ...tail];
-
-  if (groups.length !== 8) {
-    throw new Error(`"${address}" is not a valid IPv6 address.`);
-  }
-
-  const bytes: number[] = [];
-
-  for (const group of groups) {
-    const value = Number.parseInt(group, 16);
-    if (!Number.isInteger(value) || value < 0 || value > 0xffff || group.length === 0) {
-      throw new Error(`"${address}" is not a valid IPv6 address.`);
-    }
-    bytes.push((value >> 8) & 0xff, value & 0xff);
-  }
-
-  return bytes;
 }
 
 /** This function formats 16 octets as an IPv6 address without `::` compression. */

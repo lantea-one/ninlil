@@ -62,7 +62,14 @@
   <c-spinner class="loading-spinner" />
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="addresses()" class="address-table">
+    <table
+      cdk-table
+      cTable
+      hover
+      [responsive]="true"
+      [dataSource]="addresses()"
+      class="address-table"
+    >
       <ng-container cdkColumnDef="protocol">
         <th cdk-header-cell *cdkHeaderCellDef>Protocol</th>
         <td cdk-cell *cdkCellDef="let address">

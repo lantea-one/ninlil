@@ -5,6 +5,14 @@
   top: var(--ninlil-space-5);
 }
 
+// The heading stays an `h2` for screen-reader navigation. It takes the size and weight of the
+// plain-text header of the neighbouring Getting Started card, so the two headers match.
+.feed-header h2 {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+
 .connection-badge {
   text-transform: uppercase;
   letter-spacing: 0.04em;

@@ -30,8 +30,7 @@ import { NotificationService } from '../../../shared/notification/notification.s
 import { ClusterSyncInfoComponent } from '../../../shared/cluster-sync-info/cluster-sync-info.component';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
-
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../shared/pagination/default-page-size';
 
 /**
  * This component is the DNS Rewrites page (`/dns-rewrites`, `dnsrewrites:read`). A rewrite answers
