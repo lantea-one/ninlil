@@ -27,6 +27,16 @@ outside Forgejo.
   them.** Live Activity has the size of the Getting Started header, and "Keys allowed to send
   dynamic updates" and "Keys allowed to transfer this zone" have the size of the other field
   labels. ([#196](https://git.lantea.one/lantea-one/ninlil/issues/196))
+- **On Windows, a port Ninlil serves can no longer be shared with another program.** The DNS,
+  DNS-over-TLS, DNSCrypt, DHCPv4, DHCPv6, TFTP and web sockets claim their ports exclusively, so
+  a second program that binds the same port, on a specific address or with address reuse, fails
+  instead of taking some clients' traffic. When another program holds a DNS port on some address
+  (typically UDP 53 held by connection sharing, Hyper-V or WSL), the DNS transports with no listen
+  addresses set fall back to binding each local address on its own and log one warning; addresses
+  added to the machine later are served after the transport restarts. DHCPv4, DHCPv6 and TFTP do
+  not start beside another program on their port (a DHCP relay agent on the same host, for
+  example), and a failed web bind stops Ninlil as before. DNS-over-QUIC is not covered. See
+  [Ports](./README.md#ports). ([#403](https://git.lantea.one/lantea-one/ninlil/issues/403))
 
 ## v2026.11.13.1
 

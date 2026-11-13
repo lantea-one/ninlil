@@ -62,7 +62,7 @@ public sealed class Dhcpv4ListenerHostedService(
             logger.LogError(
                 exception,
                 "The DHCPv4 listener could not bind its socket: {Reason}. This service is not running; the rest of Ninlil is unaffected. Free the port or fix the permission, then restart Ninlil or start the service again from the DHCP service control.",
-                exception.Message
+                listener.StartFailure ?? exception.Message
             );
         }
     }

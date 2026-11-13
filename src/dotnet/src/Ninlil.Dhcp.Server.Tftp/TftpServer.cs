@@ -277,11 +277,16 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
 
             try
             {
-                socket.SetSocketOption(
-                    SocketOptionLevel.Socket,
-                    SocketOptionName.ReuseAddress,
-                    true
-                );
+                // On Windows the socket claims the TFTP port exclusively, so no other program can
+                // bind it. Exclusive use replaces SO_REUSEADDR there: with both, Windows lets
+                // another socket share the port. Elsewhere SO_REUSEADDR lets a restart re-bind
+                // at once.
+                if (!socket.ClaimPortExclusivelyOnWindows())
+                    socket.SetSocketOption(
+                        SocketOptionLevel.Socket,
+                        SocketOptionName.ReuseAddress,
+                        true
+                    );
                 socket.Bind(new IPEndPoint(IPAddress.Any, options.Value.Port));
             }
             catch (Exception exception)
@@ -289,7 +294,11 @@ public sealed class TftpServer(IOptions<TftpServerOptions> options, ILogger<Tftp
                 // Leave the service stopped, not half-started, keep the reason for the health
                 // check and let the caller see the error.
                 socket.Dispose();
-                StartFailure = exception.Message;
+                StartFailure = ExclusiveListenerPortSocketExtension.DescribeBindFailure(
+                    exception,
+                    "UDP",
+                    options.Value.Port
+                );
                 throw;
             }
 
