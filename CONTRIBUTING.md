@@ -831,6 +831,7 @@ The workflows are in [`.forgejo/workflows/`](./.forgejo/workflows/). The README'
   lint, format check and unit tests; and the lint job. It gets no Docker socket and skips the tests
   marked `RequiresDocker`. Every other job (version, draft, binaries, packages, image, smoke test,
   publish, Windows tests) shows as skipped, so a pull request leaves no pre-release behind.
+  If a pull-request run shows a running build job, the run is wrong: stop it and report it.
 - **A push** to any branch other than a release branch runs the same checks with the Docker
   socket, so the `RequiresDocker` tests run, and then publishes a pre-release build that expires
   after 24 hours. A same-repository branch is pushed before its pull request, so its push build
