@@ -11,7 +11,7 @@
       @if (logoUrl(); as logo) {
         <img [src]="logo" [alt]="brandTitle()" class="shell-brand-logo" />
       } @else {
-        <svg cIcon name="cilLan" size="xl" class="shell-brand-icon"></svg>
+        <svg cIcon [name]="brandIcon" size="xl" class="shell-brand-icon"></svg>
       }
       <span class="shell-brand-text sidebar-brand-full">{{ brandTitle() }}</span>
     </c-sidebar-brand>

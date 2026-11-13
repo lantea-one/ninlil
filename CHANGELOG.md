@@ -11,6 +11,11 @@ outside Forgejo.
 
 ## Unreleased
 
+- **The Zones menu entry has its own icon, and the Storage page offers no engine switch when its
+  status fails to load.** Zones no longer shares the logo's icon. Without the current status the
+  page shows the error and hides the switch form, so nobody schedules a switch blind.
+  ([#199](https://git.lantea.one/lantea-one/ninlil/issues/199))
+
 ## v2026.11.13.1
 
 ### Behaviour worth knowing
