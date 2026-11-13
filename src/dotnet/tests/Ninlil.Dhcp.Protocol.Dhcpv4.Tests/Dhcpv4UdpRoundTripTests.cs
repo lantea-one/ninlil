@@ -116,15 +116,23 @@ public class Dhcpv4UdpRoundTripTests
     ///     <para>
     ///         The "relay agent" is a second socket bound to <c>127.0.0.7</c> on the listener's
     ///         server port, while the listener has a wildcard bind on that port. Both set
-    ///         <c>SO_REUSEADDR</c> (see <see cref="Dhcpv4UdpListener.StartAsync" />), so the
+    ///         <c>SO_REUSEADDR</c> where the listener does (see <see cref="Dhcpv4UdpListener.StartAsync" />), so the
     ///         specific bind can coexist with the wildcard one and receives datagrams addressed to
     ///         <c>127.0.0.7</c>. If the reply were broadcast instead, the relay socket would get
     ///         nothing and the test would time out.
+    ///     </para>
+    ///     <para>
+    ///         On Windows the listener claims its port exclusively, so no second socket can sit
+    ///         on that port and the arrangement cannot be built; the test returns there.
+    ///         <see cref="Dhcpv4ExclusivePortTests" /> covers that behaviour.
     ///     </para>
     /// </summary>
     [Fact]
     public async Task RelayedDiscover_RepliesAreUnicastToTheRelayAgent_NotBroadcast()
     {
+        if (OperatingSystem.IsWindows())
+            return;
+
         IPAddress relayAgentAddress = IPAddress.Parse("127.0.0.7");
 
         StubDhcpv4RequestHandler handler = new();
