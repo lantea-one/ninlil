@@ -28,7 +28,7 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
 {
     private const string ReplicaSetName = "rs0";
 
-    private int[] _ports = [FreePort(), FreePort(), FreePort()];
+    private int[] _ports = FreePorts();
     private readonly List<IContainer> _members = [];
     private string _address = "localhost";
 
@@ -51,7 +51,7 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
             async number =>
             {
                 if (number > 0)
-                    _ports = [FreePort(), FreePort(), FreePort()];
+                    _ports = FreePorts();
                 first = CreateMember(0, null);
                 _members.Add(first);
                 await first.StartAsync();
@@ -116,6 +116,10 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
         await DisposeMembersAsync();
     }
 
+    /// <summary>
+    ///     This method disposes every member container that was created and clears the list, so
+    ///     a failed start and <see cref="DisposeAsync" /> share one cleanup.
+    /// </summary>
     private async Task DisposeMembersAsync()
     {
         // The first container owns the network namespace, so it goes last.
@@ -335,11 +339,33 @@ public sealed class MongoDbReplicaSetEngineHost : ReplicatedEngineHost
         return reply.GetValue("count", 0).ToInt64();
     }
 
-    private static int FreePort()
+    /// <summary>
+    ///     This method returns three distinct free ports. It holds all three listeners open until
+    ///     the last one is bound, so no draw can repeat a number. It probes every address
+    ///     (<see cref="IPAddress.Any" />) because Docker publishes the host port on 0.0.0.0, so a
+    ///     port held on another address must count as taken.
+    /// </summary>
+    private static int[] FreePorts()
     {
-        using TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
+        List<TcpListener> listeners = [];
+        try
+        {
+            for (int index = 0; index < 3; index++)
+            {
+                TcpListener listener = new(IPAddress.Any, 0);
+                listener.Start();
+                listeners.Add(listener);
+            }
+
+            return listeners
+                .Select(listener => ((IPEndPoint)listener.LocalEndpoint).Port)
+                .ToArray();
+        }
+        finally
+        {
+            foreach (TcpListener listener in listeners)
+                listener.Stop();
+        }
     }
 
     /// <summary>
