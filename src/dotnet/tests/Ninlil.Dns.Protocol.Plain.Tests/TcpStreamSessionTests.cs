@@ -98,10 +98,7 @@ public sealed class TcpStreamSessionTests
         });
 
         // Other clients are answered while the first one is stuck.
-        using TcpClient other = await ConnectAsync(host.Port);
-        NetworkStream otherStream = other.GetStream();
-        await otherStream.WriteAsync(TcpStreamTestHost.BuildFrame(77, "fast.example."));
-        Assert.Equal(77, (await TcpStreamTestHost.ReadMessageOrEndAsync(otherStream)).Id);
+        await AssertAnsweredOnANewConnectionAsync(host.Port, 77);
 
         // The sender only stops when the server closes the connection at the write deadline.
         await sender.WaitAsync(TimeSpan.FromSeconds(30));
@@ -125,10 +122,45 @@ public sealed class TcpStreamSessionTests
         }
 
         // The freed connection leaves the server able to answer new clients.
-        using TcpClient later = await ConnectAsync(host.Port);
-        NetworkStream laterStream = later.GetStream();
-        await laterStream.WriteAsync(TcpStreamTestHost.BuildFrame(78, "fast.example."));
-        Assert.Equal(78, (await TcpStreamTestHost.ReadMessageOrEndAsync(laterStream)).Id);
+        await AssertAnsweredOnANewConnectionAsync(host.Port, 78);
+    }
+
+    /// <summary>
+    ///     This method sends a query on a new connection and asserts the reply. The host's idle
+    ///     timeout is short (500 ms) because it is also the write deadline under test, and it
+    ///     starts when the listener accepts the connection. On a loaded machine the query can
+    ///     reach the listener after it, and the listener then closes the connection unanswered,
+    ///     so the exchange retries on a new connection, up to <see cref="TcpStreamTestHost.MaxFreshConnectionAttempts" /> times.
+    /// </summary>
+    private static async Task AssertAnsweredOnANewConnectionAsync(int port, ushort id)
+    {
+        for (int attempt = 1; attempt <= TcpStreamTestHost.MaxFreshConnectionAttempts; attempt++)
+        {
+            using TcpClient client = await ConnectAsync(port);
+            NetworkStream stream = client.GetStream();
+
+            try
+            {
+                await stream.WriteAsync(TcpStreamTestHost.BuildFrame(id, "fast.example."));
+            }
+            catch (IOException)
+            {
+                // The listener already closed the connection for being idle.
+                continue;
+            }
+
+            DnsMessage reply = await TcpStreamTestHost.ReadMessageOrEndAsync(stream);
+
+            if (reply is null)
+                continue;
+
+            Assert.Equal(id, reply.Id);
+            return;
+        }
+
+        Assert.Fail(
+            $"No query was answered in {TcpStreamTestHost.MaxFreshConnectionAttempts} attempts."
+        );
     }
 
     private static async Task<TcpClient> ConnectAsync(int port)

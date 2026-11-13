@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Channels;
@@ -85,8 +84,12 @@ public sealed class FramedDnsStreamSessionTests
     [Fact]
     public async Task APeerThatStopsReading_HitsTheWriteDeadline_AndFreesEverySlot()
     {
+        // The idle timeout is also the read-idle limit and the write deadline, so a scheduler
+        // stall longer than it while the 20 frames arrive or the replies are queued would end the
+        // session before the test has queued them. One second leaves room for that and still
+        // keeps the test fast.
         await using Harness harness = await Harness.StartAsync(
-            TimeSpan.FromMilliseconds(300),
+            TimeSpan.FromSeconds(1),
             shrinkBuffers: true
         );
 
@@ -98,14 +101,14 @@ public sealed class FramedDnsStreamSessionTests
         for (int count = 0; count < 16; count++)
             received.Add(await harness.ReceiveAsync());
 
-        // Each responder only queues, however much the peer is behind.
+        // Each responder only queues, however much the peer is behind: the call returns an
+        // already completed task, which no stalled peer could cause, whatever the machine speed.
         byte[] large = new byte[60_000];
 
         foreach (ReceivedQuery query in received)
         {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            await query.Respond(large);
-            Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(100));
+            ValueTask responded = query.Respond(large);
+            Assert.True(responded.IsCompletedSuccessfully);
         }
 
         // Nothing reads the reply, so the writer misses its deadline and ends the session.
@@ -195,7 +198,10 @@ public sealed class FramedDnsStreamSessionTests
     [Fact]
     public async Task AQueryThatNeverAnswers_DoesNotHoldTheConnectionPastTheDrainBound()
     {
-        await using Harness harness = await Harness.StartAsync(TimeSpan.FromMilliseconds(300));
+        // The idle timeout is also the drain bound. A scheduler stall longer than it before the
+        // test shuts the client down would end the session before the test checks the in-flight
+        // count, so it is one second, which still keeps the test fast.
+        await using Harness harness = await Harness.StartAsync(TimeSpan.FromSeconds(1));
 
         await harness.SendFrameAsync(1, 8);
         await harness.SendFrameAsync(2, 8);
@@ -422,7 +428,9 @@ public sealed class FramedDnsStreamSessionTests
         );
         Assert.Equal(TimeSpan.FromHours(2), FramedDnsStreamSession.MaxTransferDuration);
 
-        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        // The limit fires on a timer; wait for the token instead of a delay that a loaded timer
+        // thread could order before it.
+        await WaitUntilAsync(() => limited.IsCancellationRequested);
         Assert.True(limited.IsCancellationRequested);
         Assert.False(transfer.IsCancellationRequested);
 

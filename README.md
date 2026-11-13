@@ -6124,7 +6124,9 @@ trial.
 The image holds nothing but a prebuilt, self-contained `ninlil-linux-<arch>` executable, so
 build those first (see [Build the binaries and packages](./CONTRIBUTING.md#build-the-binaries-and-packages)), then point the
 [`Dockerfile`](./Dockerfile)'s `binaries` build context at them. It only copies files, so a
-two-architecture image needs no CPU emulation:
+two-architecture image needs no CPU emulation. The build needs Docker Engine 23.0 or later and buildx 0.8 or later: the `Dockerfile` has no
+`# syntax=` line, so the engine's built-in Dockerfile frontend must be 1.4 or newer (named build
+contexts need it), and buildx 0.8 added `--build-context`:
 
 ```bash
 .forgejo/scripts/publish-binary.sh linux-amd64 dist
@@ -6200,9 +6202,10 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 
 | Workflow | Runs on | Does |
 |---|---|---|
-| `build.yml` | Every push to a non-release branch; pull requests into `develop`/`main` | Tests, then (pushes only) builds and publishes a pre-release |
+| `build.yml` | Every push to a non-release branch, or by hand | Tests, then builds and publishes a pre-release |
+| `pull-request.yml` | Pull requests into `develop`/`main` | Tests and lint only (`verify`): no version, binaries, packages, image or publish. Also named `Build`, so the status reads `Build / Pipeline (pull_request)` |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
-| `pipeline.yml` | Called by both of the above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; the whole .NET test suite natively on Windows (builds of `develop` and `main` only; Docker tests excluded; the image, the NuGet packages and publish wait for it); and finally publish |
+| `pipeline.yml` | Called by the three above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; the whole .NET test suite natively on Windows (builds of `develop` and `main` only; Docker tests excluded; the image, the NuGet packages and publish wait for it); and finally publish |
 | `cleanup.yml` | Hourly | Removes pre-release releases, tags, container tags, and NuGet versions older than 24 hours |
 | `bump-pins.yml` | Mondays, or by hand | Refreshes the image digests and the checkout and upload-artifact commits (below) and opens a pull request into `develop` (by hand, any branch) |
 
@@ -6236,6 +6239,18 @@ console output of the suite, because no JUnit reporter is installed. The upload 
 the upload action, because the upstream one refuses to run outside GitHub. Its pin moves with the
 weekly bump but stays on major version 3: Forgejo refuses the artifact protocol of version 4, and
 the upload step then fails its job.
+
+**A run that stays waiting.** Runs of one branch queue behind each other. A queued run that
+never starts although the runners are idle is cleared by cancelling it, then re-running it or
+pushing again; see [A run stays waiting](./CONTRIBUTING.md#a-run-stays-waiting).
+
+**Pull requests.** A pull request runs `pull-request.yml`, which passes the literal kind `verify`
+to the pipeline: the lint job, `test-dotnet` and `test-admin-console` run, and the version, draft,
+binary, package, image, smoke-test and publish jobs show as skipped. The `Build / Pipeline
+(pull_request)` status therefore covers lint and the Linux tests only; the Windows tests, the
+builds and the packages run in the push build of the branch and, after the merge, of `develop`.
+Only the kinds `prerelease` and `release` open those jobs, so an unknown kind publishes nothing and
+gets no Docker socket. No secrets are passed to a pull-request run.
 
 **Pull requests and the Docker socket.** A pull-request build (`verify`) runs code nobody has
 reviewed yet, so its test job gets no Docker socket (it is root-equivalent on the runner host) and

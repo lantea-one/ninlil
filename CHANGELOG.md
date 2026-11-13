@@ -11,6 +11,22 @@ outside Forgejo.
 
 ## Unreleased
 
+## v2026.11.13.1
+
+### Behaviour worth knowing
+
+- **A QUIC zone transfer completes when the primary closes its stream early.** A secondary that
+  pulls a zone over QUIC no longer fails the transfer, or logs "Unhandled exception while checking
+  secondary zones", when the primary sends the whole answer and drops its stream without reading
+  the secondary's end of stream. A missing or incomplete answer still fails the transfer and
+  reports why. ([#350](https://git.lantea.one/lantea-one/ninlil/issues/350))
+- **Building the image yourself needs Docker Engine 23.0 or later and buildx 0.8 or later.** The
+  `Dockerfile` and `docker/ci.Dockerfile` no longer start with a `# syntax=` line, so a build makes no
+  request to Docker Hub for a Dockerfile frontend and uses the one built into the engine. An older
+  engine fails on the named build context. See [Building the image
+  yourself](./README.md#building-the-image-yourself).
+  ([#381](https://git.lantea.one/lantea-one/ninlil/issues/381))
+
 ## v2026.11.12.1
 
 ### Security

@@ -43,10 +43,10 @@ const DUAL_STACK_CLIENT: ClientDetail = {
   isOnline: true,
   // A getter, not a value computed when this file loads: Karma loads every spec file first and
   // runs the tests minutes later on a slow CI runner, which would turn "5 min ago" into
-  // "9 min ago". Each read measures from the moment the test builds its component. The extra
-  // 30 seconds keep the result at "5 min ago": the component reads its clock a moment before or
-  // after this getter runs, and exactly five minutes would round down to "4 min ago" when the
-  // getter runs last.
+  // "9 min ago". Each read measures from the moment the test builds its component. The
+  // component takes its clock first and reads this getter while it maps the rows, so exactly five
+  // minutes gives 299.999 seconds, which is "4 min ago", when the clock ticks in between. The extra
+  // 30 seconds keep the result at "5 min ago".
   get lastSeenUtc(): string {
     return new Date(Date.now() - 5 * 60_000 - 30_000).toISOString();
   },

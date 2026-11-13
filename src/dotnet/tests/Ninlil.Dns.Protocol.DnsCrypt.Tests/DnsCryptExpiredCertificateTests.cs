@@ -28,7 +28,11 @@ public sealed class DnsCryptExpiredCertificateTests
     [Fact]
     public async Task Udp_AQueryForACertificateThatExpiredTwoSecondsAgo_GetsNoReply()
     {
-        byte[] reply = await QueryAsync(validFromOffsetSeconds: -3600, validUntilOffsetSeconds: -2);
+        byte[] reply = await QueryAsync(
+            validFromOffsetSeconds: -3600,
+            validUntilOffsetSeconds: -2,
+            replyWait: SilenceWindow
+        );
 
         Assert.Null(reply);
     }
@@ -38,22 +42,38 @@ public sealed class DnsCryptExpiredCertificateTests
     {
         byte[] reply = await QueryAsync(
             validFromOffsetSeconds: -3600,
-            validUntilOffsetSeconds: 3600
+            validUntilOffsetSeconds: 3600,
+            replyWait: ReplyTimeout
         );
 
         Assert.NotNull(reply);
     }
 
     /// <summary>
+    ///     This field is how long the test that expects a reply waits for it. It is a failure
+    ///     bound, not a delay: the wait ends when the reply arrives, so a loaded machine that
+    ///     answers late still passes.
+    /// </summary>
+    private static readonly TimeSpan ReplyTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    ///     This field is how long the test that expects silence waits to confirm it. A silent
+    ///     listener always costs the whole window, so it stays short. The test asserts nothing
+    ///     but the missing reply, so a stalled machine can only make it pass.
+    /// </summary>
+    private static readonly TimeSpan SilenceWindow = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
     ///     This method starts a UDP listener over a store holding one XChaCha20-Poly1305
     ///     certificate valid from <paramref name="validFromOffsetSeconds" /> to
     ///     <paramref name="validUntilOffsetSeconds" /> seconds around now, sends it one encrypted
     ///     query, and returns the reply packet, or <see langword="null" /> when none arrives
-    ///     within 500 ms.
+    ///     within <paramref name="replyWait" />.
     /// </summary>
     private static async Task<byte[]> QueryAsync(
         int validFromOffsetSeconds,
-        int validUntilOffsetSeconds
+        int validUntilOffsetSeconds,
+        TimeSpan replyWait
     )
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -130,7 +150,7 @@ public sealed class DnsCryptExpiredCertificateTests
             client.Connect(IPAddress.Loopback, listener.BoundPort);
             await client.SendAsync(packet);
 
-            using CancellationTokenSource timeout = new(TimeSpan.FromMilliseconds(500));
+            using CancellationTokenSource timeout = new(replyWait);
 
             try
             {

@@ -826,15 +826,67 @@ still open, look at its dependencies and close it by hand.
 The workflows are in [`.forgejo/workflows/`](./.forgejo/workflows/). The README's
 [pipeline section](./README.md#the-pipeline) describes them in full.
 
-- **A pull request** into `develop` or `main` runs `verify`, which is three jobs: the C# format
-  check, a Release build and every test project; the console's lint, format check and unit tests;
-  and the lint job. It gets no Docker socket and skips the tests marked `RequiresDocker`.
+- **A pull request** into `develop` or `main` runs `verify` ([`pull-request.yml`](./.forgejo/workflows/pull-request.yml)),
+  which is three jobs: the C# format check, a Release build and every test project; the console's
+  lint, format check and unit tests; and the lint job. It gets no Docker socket and skips the tests
+  marked `RequiresDocker`. Every other job (version, draft, binaries, packages, image, smoke test,
+  publish, Windows tests) shows as skipped, so a pull request leaves no pre-release behind.
+  If a pull-request run shows a running build job, the run is wrong: stop it and report it.
 - **A push** to any branch other than a release branch runs the same checks with the Docker
   socket, so the `RequiresDocker` tests run, and then publishes a pre-release build that expires
   after 24 hours. A same-repository branch is pushed before its pull request, so its push build
   covers the Docker tests.
 - **A pull request from a fork** waits for a maintainer's approval before its workflows run. The
   maintainer reads the diff of `.forgejo/` and of every script it runs first.
+
+#### A run stays waiting
+
+Runs of one branch queue behind each other: [`pull-request.yml`](./.forgejo/workflows/pull-request.yml)
+puts them in the concurrency group `build-pull-request-<branch>` (a pull request) and
+[`build.yml`](./.forgejo/workflows/build.yml) in `build-branch-<branch>` (a push or a hand-started run) with `cancel-in-progress: false`, so a new run waits for the
+earlier one to finish. That wait is normal. A job that shows "Blocked by required conditions" is
+also normal: it is waiting for the jobs it needs.
+
+A run is stuck when all of these hold:
+
+- Its first jobs show "Waiting to run" and every other job shows "Blocked by required
+  conditions".
+- No earlier run of the same branch is still running.
+- The runners are idle.
+
+This has happened when a run was created while a re-run of an earlier run in the same group was
+going: the queued run stayed waiting after the re-run ended.
+
+1. Open the run on the [Actions page](https://git.lantea.one/lantea-one/ninlil/actions) and
+   cancel it.
+2. Start it again: re-run it, or push a new commit to the branch.
+3. Check that it worked: the first job changes from "Waiting to run" to running.
+
+As a precaution that lowers the chance, do not re-run a run and push to the same branch at the
+same time. Wait for the re-run to finish first.
+
+#### Re-running one job of a run
+
+Do not re-run one job of a run, for example "Test .NET" after a flaky test. Re-run the whole run.
+
+What was observed on the runner version in use (Forgejo runner v13.2.1): after one job was
+re-run alone, a matrix job that had not run in the first attempt (it was skipped behind the failed
+job) started only one of its legs. The draft release then held one binary instead of five, and
+"Build Arch Linux Packages", "Build and Test Deb and RPM Packages" and "Build and Push Image"
+failed in "Checkout Sources" with:
+
+```text
+The draft for <version> has no attachment named ninlil-linux-arm64.
+```
+
+This is an observation of Forgejo's behaviour, not a documented rule. The pipeline cannot repair
+it, and it does not wait for binaries that never arrive, so it fails at once with that message.
+
+1. Open the run on the [Actions page](https://git.lantea.one/lantea-one/ninlil/actions).
+2. If the run is still going, cancel it.
+3. Choose "Re-run all jobs", not the re-run of one job.
+4. Check that "Stage Draft Release" and all five "Build Binary" jobs run, and that the packaging
+   jobs pass.
 
 ## Cutting a release
 

@@ -37,7 +37,6 @@ public sealed class DnsOverHttpsCacheControlTests : IAsyncLifetime
     /// <inheritdoc />
     public async Task InitializeAsync()
     {
-        int port = GetFreePort();
         _pipeline = new DnsQueryProcessingPipeline(
             new DnsQueryDispatcher([new CannedResolver()], new NoOpEventPublisher()),
             new StaticOptionsMonitor<DnsQueryProcessingPipelineOptions>(
@@ -50,7 +49,7 @@ public sealed class DnsOverHttpsCacheControlTests : IAsyncLifetime
         _service = new DnsOverHttpsHostedService(
             _pipeline,
             Options.Create(new DnsOverHttpsOptions { Enable = true }),
-            Options.Create(new DnsOverHttpsListenerOptions { Port = port }),
+            Options.Create(new DnsOverHttpsListenerOptions { Port = 0 }),
             NullLogger<DnsOverHttpsHostedService>.Instance
         );
         await _service.StartAsync(CancellationToken.None);
@@ -62,7 +61,7 @@ public sealed class DnsOverHttpsCacheControlTests : IAsyncLifetime
             }
         )
         {
-            BaseAddress = new Uri($"https://127.0.0.1:{port}/dns-query"),
+            BaseAddress = new Uri($"https://127.0.0.1:{_service.BoundPort}/dns-query"),
             Timeout = TimeSpan.FromSeconds(10),
         };
     }
@@ -300,15 +299,5 @@ public sealed class DnsOverHttpsCacheControlTests : IAsyncLifetime
             IPAddress.Parse("192.0.2.77"),
             DnsOverHttpsRequestHandler.ClientAddressOf(context)
         );
-    }
-
-    /// <summary>
-    ///     This method asks the OS for a free loopback TCP port.
-    /// </summary>
-    private static int GetFreePort()
-    {
-        using System.Net.Sockets.TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

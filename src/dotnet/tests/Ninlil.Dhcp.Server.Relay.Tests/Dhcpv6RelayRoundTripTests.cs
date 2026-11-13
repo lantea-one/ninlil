@@ -31,9 +31,15 @@ public sealed class Dhcpv6RelayRoundTripTests
         if (!LocalAddresses.CanBind(IPAddress.IPv6Loopback))
             return;
 
-        int relayListenPort = GetFreeUdpPort();
-        int relayClientPort = GetFreeUdpPort();
-        int upstreamPort = GetFreeUdpPort();
+        // The fake upstream server and the client bind first, on OS-assigned ports, because the
+        // relay's options name the ports it sends to. The relay's listener binds port 0 and
+        // reports its port.
+        using UdpClient upstreamSocket = new(AddressFamily.InterNetworkV6);
+        upstreamSocket.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        using UdpClient clientSocket = new(AddressFamily.InterNetworkV6);
+        clientSocket.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
+        int relayClientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
 
         Dhcpv6RelayOptions relayOptions = new()
         {
@@ -44,7 +50,7 @@ public sealed class Dhcpv6RelayRoundTripTests
         Dhcpv6ProtocolOptions protocolOptions = new()
         {
             Enable = true,
-            ServerPort = relayListenPort,
+            ServerPort = 0,
             ClientPort = relayClientPort,
         };
 
@@ -63,11 +69,7 @@ public sealed class Dhcpv6RelayRoundTripTests
         // Start both the relay's receive loop and the listener; each carries one direction.
         await agent.StartAsync(CancellationToken.None);
         await listener.StartAsync(CancellationToken.None);
-
-        using UdpClient upstreamSocket = new(AddressFamily.InterNetworkV6);
-        upstreamSocket.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, upstreamPort));
-        using UdpClient clientSocket = new(AddressFamily.InterNetworkV6);
-        clientSocket.Client.Bind(new IPEndPoint(IPAddress.IPv6Loopback, relayClientPort));
+        int relayListenPort = listener.BoundPort;
 
         try
         {
@@ -205,17 +207,5 @@ public sealed class Dhcpv6RelayRoundTripTests
             await agent.StopAsync(CancellationToken.None);
             agent.Dispose();
         }
-    }
-
-    /// <summary>
-    ///     This method returns a free IPv6 UDP port by binding to port 0 on loopback, reading the
-    ///     assigned port and releasing it, as <c>Dhcpv4RelayRoundTripTests.GetFreeUdpPort</c> does
-    ///     for IPv4.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using Socket probe = new(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
-        probe.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
-        return ((IPEndPoint)probe.LocalEndPoint).Port;
     }
 }

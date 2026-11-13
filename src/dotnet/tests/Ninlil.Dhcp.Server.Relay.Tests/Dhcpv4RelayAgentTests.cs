@@ -24,11 +24,11 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task ChainedRequest_WithAnAlreadySetGiaddr_PreservesItButStillIncrementsHops()
     {
-        int upstreamPort = GetFreeUdpPort();
         IPAddress thisRelayAddress = IPAddress.Parse("127.0.0.11");
         IPAddress upstreamRelayAddress = IPAddress.Parse("127.0.0.12");
 
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             thisRelayAddress,
             upstreamServerAddresses: ["127.0.0.1"],
@@ -74,10 +74,10 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task FirstHopRequest_SetsGiaddrToThisRelaysOwnAddress_AndAddsOption82WhenConfigured()
     {
-        int upstreamPort = GetFreeUdpPort();
         IPAddress thisRelayAddress = IPAddress.Parse("127.0.0.13");
 
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             thisRelayAddress,
             upstreamServerAddresses: ["127.0.0.1"],
@@ -123,9 +123,8 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task RequestAtTheHopLimit_IsForwardedWithHopsIncremented()
     {
-        int upstreamPort = GetFreeUdpPort();
-
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             IPAddress.Parse("127.0.0.14"),
             upstreamServerAddresses: ["127.0.0.1"],
@@ -160,9 +159,8 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task RequestAboveTheHopLimit_IsDroppedRatherThanForwarded()
     {
-        int upstreamPort = GetFreeUdpPort();
-
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             IPAddress.Parse("127.0.0.17"),
             upstreamServerAddresses: ["127.0.0.1"],
@@ -229,10 +227,10 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task Reply_FromAnAddressThatIsNotAnUpstreamServer_IsNotRelayedToTheClient()
     {
-        int clientPort = GetFreeUdpPort();
         IPAddress relayAddress = IPAddress.Parse("127.0.0.16");
 
-        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, clientPort));
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int clientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             relayAddress,
             upstreamServerAddresses: ["127.0.0.1"],
@@ -256,10 +254,10 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task Reply_FromAConfiguredUpstreamServer_IsRelayedToTheClient()
     {
-        int clientPort = GetFreeUdpPort();
         IPAddress relayAddress = IPAddress.Parse("127.0.0.17");
 
-        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, clientPort));
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int clientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             relayAddress,
             upstreamServerAddresses: ["127.0.0.1"],
@@ -291,8 +289,8 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task InvalidConfiguredIds_ForwardWithoutOption82AndLogOneError()
     {
-        int upstreamPort = GetFreeUdpPort();
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         ErrorCountingLogger logger = new();
         using Dhcpv4RelayAgent agent = CreateAgent(
             IPAddress.Parse("127.0.0.16"),
@@ -324,8 +322,8 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task ClientRequestWithOption82AndNoGiaddr_IsNotForwarded()
     {
-        int upstreamPort = GetFreeUdpPort();
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             IPAddress.Parse("127.0.0.17"),
             upstreamServerAddresses: ["127.0.0.1"],
@@ -347,8 +345,8 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task ChainedRequestWithOption82_IsForwardedUnchanged()
     {
-        int upstreamPort = GetFreeUdpPort();
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             IPAddress.Parse("127.0.0.18"),
             upstreamServerAddresses: ["127.0.0.1"],
@@ -375,8 +373,8 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task ChainedRequestWithOption82_WhenTheRelayAddsIds_KeepsTheOptionAndGiaddrUnchanged()
     {
-        int upstreamPort = GetFreeUdpPort();
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             IPAddress.Parse("127.0.0.20"),
             upstreamServerAddresses: ["127.0.0.1"],
@@ -405,8 +403,8 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task ChainedRequestWithoutOption82_WhenTheRelayAddsIds_IsForwardedWithoutOne()
     {
-        int upstreamPort = GetFreeUdpPort();
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             IPAddress.Parse("127.0.0.22"),
             upstreamServerAddresses: ["127.0.0.1"],
@@ -436,9 +434,9 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task RequestWhoseGiaddrIsTheRelaysOwnAddress_WhenTheRelayAddsIds_IsNotForwarded()
     {
-        int upstreamPort = GetFreeUdpPort();
         IPAddress relayAddress = IPAddress.Parse("127.0.0.24");
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             relayAddress,
             upstreamServerAddresses: ["127.0.0.1"],
@@ -463,9 +461,9 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task RequestWhoseGiaddrIsTheRelaysOwnAddress_WhenTheRelayAddsNoIds_IsForwarded()
     {
-        int upstreamPort = GetFreeUdpPort();
         IPAddress relayAddress = IPAddress.Parse("127.0.0.25");
-        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, upstreamPort));
+        using UdpClient upstreamSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int upstreamPort = ((IPEndPoint)upstreamSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             relayAddress,
             upstreamServerAddresses: ["127.0.0.1"],
@@ -494,10 +492,10 @@ public sealed class Dhcpv4RelayAgentTests
         if (!CanBind(IPAddress.Parse("127.0.0.2")))
             return;
 
-        int clientPort = GetFreeUdpPort();
         IPAddress relayAddress = IPAddress.Parse("127.0.0.2");
 
-        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, clientPort));
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int clientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             relayAddress,
             upstreamServerAddresses: ["127.0.0.1"],
@@ -522,11 +520,11 @@ public sealed class Dhcpv4RelayAgentTests
     [Fact]
     public async Task Reply_ForAGiaddrNoInterfaceOwns_IsStillDeliveredAndOneWarningIsLogged()
     {
-        int clientPort = GetFreeUdpPort();
         IPAddress relayAddress = IPAddress.Parse("192.0.2.123");
         WarningCountingLogger<Dhcpv4RelayAgent> logger = new();
 
-        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, clientPort));
+        using UdpClient clientSocket = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int clientPort = ((IPEndPoint)clientSocket.Client.LocalEndPoint).Port;
         using Dhcpv4RelayAgent agent = CreateAgent(
             relayAddress,
             upstreamServerAddresses: ["127.0.0.1"],
@@ -671,15 +669,4 @@ public sealed class Dhcpv4RelayAgentTests
             new FixedDhcpv4RelayAgentAddressProvider(relayAddress),
             logger ?? NullLogger<Dhcpv4RelayAgent>.Instance
         );
-
-    /// <summary>
-    ///     This method returns a free UDP port by binding to port 0, reading the assigned port and
-    ///     releasing it. Another process could take the port before the test binds it; the risk
-    ///     is accepted.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using UdpClient probe = new(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
-    }
 }

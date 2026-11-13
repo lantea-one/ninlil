@@ -150,24 +150,63 @@ public class QuicZoneTransferClient(
 
             await ZoneTransferPullOverStream.WriteQueryAsync(stream, queryBytes, stoppingToken);
 
-            // RFC 9250 §4.2: close the write side after the query to show nothing more will be
-            // sent, then read the responses.
-            await stream.WriteAsync(
-                ReadOnlyMemory<byte>.Empty,
-                completeWrites: true,
-                stoppingToken
-            );
+            await OnQueryWrittenAsync(stream, stoppingToken);
 
-            return await ZoneTransferPullOverStream.ReadResponsesAsync(
-                stream,
-                tsigKeyName,
-                requestMac,
-                currentSerial,
-                tsigService,
-                options.CurrentValue.ReadTimeout,
-                stoppingToken,
-                QuicMessageId
-            );
+            // RFC 9250 §4.2: the client MUST close its write side after the query, so the write
+            // is always attempted. Only its failure is tolerated: a primary may answer and drop
+            // the stream without reading this end of stream, and its STOP_SENDING (RFC 9000
+            // §3.5) then fails the write although the answer is on its way. That is safe because
+            // the query is already written and the response read below decides: it reports an
+            // absent or incomplete answer as a failure.
+            try
+            {
+                await stream.WriteAsync(
+                    ReadOnlyMemory<byte>.Empty,
+                    completeWrites: true,
+                    stoppingToken
+                );
+            }
+            catch (QuicException exception)
+            {
+                logger?.LogDebug(
+                    exception,
+                    "Primary {Primary} stopped reading the QUIC stream before the end of stream was sent; reading the response anyway.",
+                    primaryAddress
+                );
+            }
+
+            try
+            {
+                return await ZoneTransferPullOverStream.ReadResponsesAsync(
+                    stream,
+                    tsigKeyName,
+                    requestMac,
+                    currentSerial,
+                    tsigService,
+                    options.CurrentValue.ReadTimeout,
+                    stoppingToken,
+                    QuicMessageId
+                );
+            }
+            catch (QuicException exception)
+            {
+                // The primary reset the stream or closed the connection mid-answer.
+                return ZoneTransferPullResult.Failure(
+                    $"Reading the transfer response failed: {exception.Message}"
+                );
+            }
         }
     }
+
+    /// <summary>
+    ///     This method runs after the query is written and before the client ends its side of the
+    ///     stream. It does nothing; a test subclass in the test assembly (visible through
+    ///     InternalsVisibleTo) overrides it to hold the end of stream back
+    ///     until the primary has stopped reading, which a real primary does at a time the client
+    ///     cannot choose.
+    /// </summary>
+    /// <param name="stream">The stream the query was written to.</param>
+    /// <param name="stoppingToken">The token used to observe cancellation of the operation.</param>
+    internal virtual Task OnQueryWrittenAsync(QuicStream stream, CancellationToken stoppingToken) =>
+        Task.CompletedTask;
 }

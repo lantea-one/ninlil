@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Net.Sockets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Ninlil.Dns.Common.Enum;
@@ -290,7 +289,6 @@ public sealed class DnsOverHttpsRequestBytesTests
             );
             await host._pipeline.StartAsync(CancellationToken.None);
 
-            int port = GetFreePort();
             host._service = new DnsOverHttpsHostedService(
                 host._pipeline,
                 Options.Create(
@@ -300,7 +298,7 @@ public sealed class DnsOverHttpsRequestBytesTests
                         MaxMessageSizeBytes = maxMessageSizeBytes,
                     }
                 ),
-                Options.Create(new DnsOverHttpsListenerOptions { Port = port }),
+                Options.Create(new DnsOverHttpsListenerOptions { Port = 0 }),
                 NullLogger<DnsOverHttpsHostedService>.Instance
             );
             await host._service.StartAsync(CancellationToken.None);
@@ -312,7 +310,7 @@ public sealed class DnsOverHttpsRequestBytesTests
                 }
             )
             {
-                BaseAddress = new Uri($"https://127.0.0.1:{port}/dns-query"),
+                BaseAddress = new Uri($"https://127.0.0.1:{host._service.BoundPort}/dns-query"),
                 DefaultRequestVersion = HttpVersion.Version20,
                 DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher,
                 Timeout = TimeSpan.FromSeconds(30),
@@ -328,12 +326,5 @@ public sealed class DnsOverHttpsRequestBytesTests
             await _pipeline.StopAsync(CancellationToken.None);
             await _pipeline.DisposeAsync();
         }
-    }
-
-    private static int GetFreePort()
-    {
-        using TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

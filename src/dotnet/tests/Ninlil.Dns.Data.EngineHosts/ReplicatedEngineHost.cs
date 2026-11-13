@@ -79,4 +79,73 @@ public abstract class ReplicatedEngineHost : EngineHost
             await Task.Delay(200);
         }
     }
+
+    /// <summary>
+    ///     This method runs <paramref name="attempt" /> and runs it again, up to
+    ///     <paramref name="maxAttempts" /> times in all, while it fails because Docker could not
+    ///     bind a published host port (see <see cref="IsPortConflict" />). Any other failure
+    ///     surfaces at once, and so does the last port conflict.
+    /// </summary>
+    /// <remarks>
+    ///     A host that must know its published ports before its containers start (a MongoDB
+    ///     replica set names its members by port) cannot let Docker assign them, so it reserves
+    ///     numbers with a port-0 bind and releases them. Nothing holds a number between that
+    ///     release and Docker's bind, and when the test process runs in a toolchain container the
+    ///     check happens in another network namespace than the host bind. A collision is therefore
+    ///     possible and rare, and picking new numbers cures it. Each attempt draws three fresh
+    ///     numbers, so the chance that every attempt collides is the collision chance to the power
+    ///     of <paramref name="maxAttempts" />: five attempts make a repeat negligible, and a
+    ///     conflict that persists past them is a real problem on the machine, which the last
+    ///     error should show.
+    /// </remarks>
+    /// <param name="attempt">
+    ///     One try. It picks its ports, starts the containers and throws if the start fails. It is
+    ///     given the zero-based attempt number.
+    /// </param>
+    /// <param name="cleanup">
+    ///     Disposes what a failed <paramref name="attempt" /> created, before the next one.
+    /// </param>
+    /// <param name="maxAttempts">The most attempts, at least 1.</param>
+    public static async Task RetryOnPortConflictAsync(
+        Func<int, Task> attempt,
+        Func<Task> cleanup,
+        int maxAttempts = 5
+    )
+    {
+        for (int number = 0; ; number++)
+        {
+            try
+            {
+                await attempt(number);
+                return;
+            }
+            catch (Exception exception) when (IsPortConflict(exception) && number + 1 < maxAttempts)
+            {
+                await cleanup();
+            }
+        }
+    }
+
+    /// <summary>
+    ///     This method returns true when <paramref name="exception" />, or an exception inside it,
+    ///     says Docker could not bind a published host port: the daemon's
+    ///     <c>failed to bind host port ...: address already in use</c>, or the older
+    ///     <c>port is already allocated</c>.
+    /// </summary>
+    /// <param name="exception">The failure from starting a container.</param>
+    public static bool IsPortConflict(Exception exception)
+    {
+        for (Exception current = exception; current != null; current = current.InnerException)
+        {
+            string message = current.Message ?? string.Empty;
+            if (
+                message.Contains("failed to bind host port", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("address already in use", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("port is already allocated", StringComparison.OrdinalIgnoreCase)
+            )
+                return true;
+        }
+
+        return false;
+    }
 }

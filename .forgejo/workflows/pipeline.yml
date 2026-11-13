@@ -1,7 +1,13 @@
 name: 'Ninlil Pipeline'
 ##
 ## The build, test, and publish pipeline shared by every entry point: branch builds
-## (build.yml), release builds (release.yml), and pull-request verification (build.yml).
+## (build.yml), release builds (release.yml), and pull-request verification (pull-request.yml).
+##
+## Input: kind, set by the calling workflow as a literal, never computed from the event. Only
+## 'prerelease' and 'release' open the version, draft, binary, package, image, smoke and publish
+## jobs; any other value (including 'verify') leaves them skipped and runs the lint and the two
+## test jobs without the Docker socket. Output: test results as run artifacts, and for the two
+## build kinds a pre-release or release.
 ##
 ## Every build and test step runs in a throwaway container of one of the toolchains in
 ## docker/ci.Dockerfile (.NET SDK; Node.js with Java and Chromium; makepkg; shellcheck and
@@ -30,10 +36,11 @@ name: 'Ninlil Pipeline'
 ## successful runs, with room for a cold builder image and one npm retry, so a hung step ends the
 ## job instead of holding the single runner until a person cancels it. `npm ci` has a tighter limit and one retry of its own (npm-ci.sh), because
 ## it has hung with no output. The limit sits on the jobs of this file: a job that calls a
-## reusable workflow (build.yml, release.yml) cannot carry timeout-minutes.
+## reusable workflow (build.yml, pull-request.yml, release.yml) cannot carry timeout-minutes.
 ##
-## Job graph (the tests and lint start alongside version; 'verify' runs only test-dotnet,
-## test-admin-console and lint; test-windows runs for builds of develop and main only, and the
+## Job graph (the tests and lint start alongside version; a 'verify' build, a pull request, runs
+## only test-dotnet, test-admin-console and lint, and every other job below is skipped;
+## test-windows runs for builds of develop and main only, and the
 ## three jobs that make a build visible outside the run wait for it, through windows-gate: image
 ## and packages, which push to the registries, and publish):
 ##
@@ -61,7 +68,7 @@ on:
       kind:
         description: >-
           'prerelease' for a branch build, 'release' for a release branch build, or 'verify' to
-          run only the tests (pull requests).
+          run only the tests and lint (pull requests). Any other value behaves like 'verify'.
         required: true
         type: string
 env:
@@ -72,12 +79,13 @@ env:
   DOTNET_NOLOGO: '1'
 jobs:
   ##
-  ## Computes every form of the version (compute-version.sh). Skipped for 'verify'.
+  ## Computes every form of the version (compute-version.sh). Runs for 'prerelease' and 'release'
+  ## only, as does every job below that carries the same condition.
   ##
   version:
     name: 'Compute Version'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     runs-on: 'asgard'
     timeout-minutes: 5
     outputs:
@@ -167,14 +175,17 @@ jobs:
           # query-log tests start a database container (Testcontainers) and carry the
           # RequiresDocker category. Pull-request builds (verify) run code nobody has reviewed
           # yet, so they get no Docker socket (it is root-equivalent on the runner host) and skip
-          # that category. Every other kind hands the container the socket and runs everything;
-          # a same-repo branch is pushed before its pull request, so its push build covers them.
-          docker_flag=(--docker)
-          category_filter=''
-          if [[ "${BUILD_KIND}" == 'verify' ]]; then
-              docker_flag=()
-              category_filter=' & Category!=RequiresDocker'
+          # that category. Only the two kinds that run for pushed code, prerelease and release,
+          # hand the container the socket and run everything; any other value, a typo included,
+          # gets no socket. A same-repo branch is pushed before its pull request, so its push
+          # build covers the Docker tests.
+          docker_flag=()
+          category_filter=' & Category!=RequiresDocker'
+          if [[ "${BUILD_KIND}" == 'prerelease' || "${BUILD_KIND}" == 'release' ]]; then
+              docker_flag=(--docker)
+              category_filter=''
           fi
+          echo "Build kind: '${BUILD_KIND}'; docker flag: ${docker_flag[*]:-none}; filter suffix: '${category_filter}'"
           # Each run writes TRX files (one per test project) into its own folder under
           # TestResults/ (git-ignored), which the next step uploads: the alone run must not mix
           # with, or overwrite, the first one's files.
@@ -286,7 +297,7 @@ jobs:
   draft:
     name: 'Stage Draft Release'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     needs:
       - 'version'
       - 'lint'
@@ -323,7 +334,7 @@ jobs:
   binaries:
     name: 'Build Binary (${{ matrix.binary }})'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     needs:
       - 'version'
       - 'draft'
@@ -383,7 +394,7 @@ jobs:
   arch-packages:
     name: 'Build Arch Linux Packages'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     needs:
       - 'version'
       - 'binaries'
@@ -428,7 +439,7 @@ jobs:
   linux-packages:
     name: 'Build and Test Deb and RPM Packages'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     needs:
       - 'version'
       - 'binaries'
@@ -477,7 +488,7 @@ jobs:
   image:
     name: 'Build and Push Image'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     needs:
       - 'version'
       - 'windows-gate'
@@ -547,7 +558,7 @@ jobs:
   packages:
     name: 'Pack and Push NuGet Packages (${{ matrix.family }})'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     needs:
       - 'version'
       - 'windows-gate'
@@ -628,7 +639,7 @@ jobs:
   windows-smoke:
     name: 'Smoke Test the Windows Binary'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     needs:
       - 'version'
       - 'binaries'
@@ -777,7 +788,7 @@ jobs:
   windows-gate:
     name: 'Windows Test Gate'
     if: >-
-      !cancelled() && inputs.kind != 'verify' &&
+      !cancelled() && (inputs.kind == 'prerelease' || inputs.kind == 'release') &&
       (needs.test-windows.result == 'success' || needs.test-windows.result == 'skipped')
     needs:
       - 'test-windows'
@@ -799,7 +810,7 @@ jobs:
   publish:
     name: 'Publish Release'
     if: >-
-      inputs.kind != 'verify'
+      inputs.kind == 'prerelease' || inputs.kind == 'release'
     needs:
       - 'version'
       - 'windows-gate'
