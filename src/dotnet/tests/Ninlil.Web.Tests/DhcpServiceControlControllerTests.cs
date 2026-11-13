@@ -142,19 +142,20 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
     ///     longer bind the port) and stopping it releases the socket (the probe can bind again),
     ///     not just that <c>IsRunning</c> changes. It always leaves DHCPv6 stopped, since the
     ///     order of test classes is not fixed, as <see cref="ServicesControllerCrudTests" /> does.
-    ///     It runs on a second host whose DHCPv6 server port is a free port.
+    ///     It runs on a second host whose DHCPv6 server port is a free port. Port 0 cannot serve
+    ///     this test: the host reads the port from its settings before it starts, and the probe
+    ///     below needs the number to bind it, so the number is reserved first, as for the
+    ///     environment-variable ports of <see cref="NinlilDnsWebApplicationFactory" />. When
+    ///     another process takes it before the first probe, the test starts a new host on another
+    ///     number, up to <see cref="ReservedPortAttempts" /> times.
     /// </summary>
     [Fact]
     public async Task Start_OnDhcpv6_GenuinelyBindsTheRealSocket_AndStopGenuinelyReleasesIt()
     {
-        int serverPort = GetFreeUdpPort();
-        using WebApplicationFactory<Program> host = factory.CreateSecondHost(builder =>
-            builder.UseSetting(
-                $"{Dhcpv6ProtocolOptions.SectionName}:{nameof(Dhcpv6ProtocolOptions.ServerPort)}",
-                serverPort.ToString()
-            )
-        );
-        using HttpClient client = await CreateAuthenticatedClientAsync(host);
+        (WebApplicationFactory<Program> host, HttpClient client, int serverPort) =
+            await CreateHostOnReservedPortAsync();
+        using WebApplicationFactory<Program> hostToDispose = host;
+        using HttpClient clientToDispose = client;
 
         // Disabled at startup, not running, and the port is free.
         DhcpServiceStatus before = await GetStatusAsync(client, DhcpServiceKindEnum.Dhcpv6);
@@ -204,6 +205,42 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
     }
 
     /// <summary>
+    ///     This constant is how many reserved ports <see cref="CreateHostOnReservedPortAsync" />
+    ///     tries before it gives up.
+    /// </summary>
+    private const int ReservedPortAttempts = 5;
+
+    /// <summary>
+    ///     This method starts a second host whose DHCPv6 server port is a reserved number and
+    ///     returns it with an authenticated client. It tries another number when the probe finds
+    ///     the first one taken, which is the race between the reservation and the host's start.
+    /// </summary>
+    private async Task<(
+        WebApplicationFactory<Program> Host,
+        HttpClient Client,
+        int ServerPort
+    )> CreateHostOnReservedPortAsync()
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            int serverPort = GetFreeUdpPort();
+            WebApplicationFactory<Program> host = factory.CreateSecondHost(builder =>
+                builder.UseSetting(
+                    $"{Dhcpv6ProtocolOptions.SectionName}:{nameof(Dhcpv6ProtocolOptions.ServerPort)}",
+                    serverPort.ToString()
+                )
+            );
+            HttpClient client = await CreateAuthenticatedClientAsync(host);
+
+            if (CanExclusivelyBindServerPort(serverPort) || attempt == ReservedPortAttempts)
+                return (host, client, serverPort);
+
+            client.Dispose();
+            host.Dispose();
+        }
+    }
+
+    /// <summary>
     ///     This method returns one service's status from <c>GET /api/dhcp-services</c>.
     /// </summary>
     private static async Task<DhcpServiceStatus> GetStatusAsync(
@@ -248,7 +285,8 @@ public class DhcpServiceControlControllerTests(NinlilDnsWebApplicationFactory fa
     /// <summary>
     ///     This method asks the operating system for a currently unused UDP port on the same
     ///     dual-stack wildcard endpoint the DHCPv6 listener binds, by binding port 0 and reading
-    ///     back what was assigned.
+    ///     back what was assigned. The caller binds it after this returns (see
+    ///     <see cref="CreateHostOnReservedPortAsync" />).
     /// </summary>
     private static int GetFreeUdpPort()
     {
