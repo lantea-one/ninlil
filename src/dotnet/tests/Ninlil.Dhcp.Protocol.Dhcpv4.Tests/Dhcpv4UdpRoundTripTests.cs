@@ -26,14 +26,16 @@ public class Dhcpv4UdpRoundTripTests
     [Fact]
     public async Task DiscoverThenOffer_RoundTripsOverARealSocket()
     {
-        int serverPort = GetFreeUdpPort();
-        int clientPort = GetFreeUdpPort();
+        // The client socket binds first, on an OS-assigned port, because the listener sends its
+        // replies to the configured client port. The server binds port 0 and reports its port.
+        using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int clientPort = ((IPEndPoint)client.Client.LocalEndPoint).Port;
 
         StubDhcpv4RequestHandler handler = new();
         Dhcpv4ProtocolOptions options = new()
         {
             Enable = true,
-            ServerPort = serverPort,
+            ServerPort = 0,
             ClientPort = clientPort,
         };
         Dhcpv4UdpListener listener = new(
@@ -43,6 +45,7 @@ public class Dhcpv4UdpRoundTripTests
         );
 
         await listener.StartAsync(CancellationToken.None);
+        int serverPort = listener.BoundPort;
 
         try
         {
@@ -54,8 +57,6 @@ public class Dhcpv4UdpRoundTripTests
                 await Task.Delay(10);
 
             Assert.True(listener.IsListening, "The listener never finished binding its socket.");
-
-            using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, clientPort));
 
             byte[] clientHardwareAddress = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
 
@@ -124,16 +125,16 @@ public class Dhcpv4UdpRoundTripTests
     [Fact]
     public async Task RelayedDiscover_RepliesAreUnicastToTheRelayAgent_NotBroadcast()
     {
-        int serverPort = GetFreeUdpPort();
-        int clientPort = GetFreeUdpPort();
         IPAddress relayAgentAddress = IPAddress.Parse("127.0.0.7");
 
         StubDhcpv4RequestHandler handler = new();
         Dhcpv4ProtocolOptions options = new()
         {
             Enable = true,
-            ServerPort = serverPort,
-            ClientPort = clientPort,
+            ServerPort = 0,
+            // A relayed reply goes to the relay agent on the server port, so nothing is ever sent
+            // to the client port and none is bound.
+            ClientPort = 0,
         };
         Dhcpv4UdpListener listener = new(
             handler,
@@ -142,6 +143,11 @@ public class Dhcpv4UdpRoundTripTests
         );
 
         await listener.StartAsync(CancellationToken.None);
+        int serverPort = listener.BoundPort;
+
+        // A relayed reply goes to the relay agent on the configured server port, so the options
+        // must name the port the listener got instead of 0. The listener reads it on every send.
+        options.ServerPort = serverPort;
 
         using Socket relaySocket = new(
             AddressFamily.InterNetwork,
@@ -207,16 +213,5 @@ public class Dhcpv4UdpRoundTripTests
         {
             await listener.StopAsync(CancellationToken.None);
         }
-    }
-
-    /// <summary>
-    ///     This method gets an unused high UDP port by binding to port 0, reading the assigned
-    ///     port and releasing it. Something else could take the port before the test binds it;
-    ///     that small race is accepted.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using UdpClient probe = new(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
     }
 }

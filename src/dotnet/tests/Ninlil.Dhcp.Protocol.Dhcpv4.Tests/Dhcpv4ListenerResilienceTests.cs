@@ -88,8 +88,10 @@ public class Dhcpv4ListenerResilienceTests
         Func<Dhcpv4Message, Dhcpv4Message> firstFails
     )
     {
-        int serverPort = GetFreeUdpPort();
-        int clientPort = GetFreeUdpPort();
+        // The client socket binds first, on an OS-assigned port, because the listener sends its
+        // replies to the configured client port. The server binds port 0 and reports its port.
+        using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, 0));
+        int clientPort = ((IPEndPoint)client.Client.LocalEndPoint).Port;
 
         // The signal fires once the handler has seen the failing request (or, for a garbage
         // datagram, right away), so the next send is known to queue behind it.
@@ -124,7 +126,7 @@ public class Dhcpv4ListenerResilienceTests
                 new Dhcpv4ProtocolOptions
                 {
                     Enable = true,
-                    ServerPort = serverPort,
+                    ServerPort = 0,
                     ClientPort = clientPort,
                 }
             ),
@@ -135,8 +137,7 @@ public class Dhcpv4ListenerResilienceTests
 
         try
         {
-            using UdpClient client = new(new IPEndPoint(IPAddress.Loopback, clientPort));
-            IPEndPoint server = new(IPAddress.Loopback, serverPort);
+            IPEndPoint server = new(IPAddress.Loopback, listener.BoundPort);
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
             if (firstFails is not null)
@@ -210,15 +211,5 @@ public class Dhcpv4ListenerResilienceTests
         };
         offer.SetMessageType(Dhcpv4MessageTypeEnum.Offer);
         return offer;
-    }
-
-    /// <summary>
-    ///     This method gets an unused high UDP port, as
-    ///     <c>Dhcpv4UdpRoundTripTests.GetFreeUdpPort</c> does.
-    /// </summary>
-    private static int GetFreeUdpPort()
-    {
-        using UdpClient probe = new(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)probe.Client.LocalEndPoint).Port;
     }
 }
