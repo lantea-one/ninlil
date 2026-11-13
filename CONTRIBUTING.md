@@ -57,14 +57,14 @@ To run Ninlil rather than change it, read the [README](./README.md).
 Check each tool with its command. The "Expected" column shows what a working machine prints (your
 values differ).
 
-| Tool              | Needed for                                                 | Check                                | Expected                                                |
-| ----------------- | ---------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------- |
-| git               | Everything                                                 | `git --version`                      | `git version 2.56.0`                                    |
-| .NET SDK          | Build and test the backend                                 | `dotnet --version`                   | `10.0.113`                                              |
-| Node.js and npm   | Build and test the admin console                           | `node --version` and `npm --version` | `v24.22.1` and `12.2.1`                                 |
-| A Java runtime    | The OpenAPI generator that writes the console's API client | `java -version`                      | a version banner such as `openjdk version "27.0.1.0.3"` |
-| Chromium          | The console's unit tests and the smoke harness             | `chromium --version`                 | `Chromium 156.0.8078.79`                                |
-| Docker (optional) | Database tests, the lint container                         | `docker --version`                   | `Docker version 29.9.2`                                 |
+| Tool | Needed for | Check | Expected |
+|---|---|---|---|
+| git | Everything | `git --version` | `git version 2.56.0` |
+| .NET SDK | Build and test the backend | `dotnet --version` | `10.0.113` |
+| Node.js and npm | Build and test the admin console | `node --version` and `npm --version` | `v24.22.1` and `12.2.1` |
+| A Java runtime | The OpenAPI generator that writes the console's API client | `java -version` | a version banner such as `openjdk version "27.0.1.0.3"` |
+| Chromium | The console's unit tests and the smoke harness | `chromium --version` | `Chromium 156.0.8078.79` |
+| Docker (optional) | Database tests, the lint container | `docker --version` | `Docker version 29.9.2` |
 
 Version rules:
 
@@ -307,7 +307,6 @@ idle. The harness is not part of the pipeline: run it by hand after a change to 
    ```
 
    The list continues (123 lines); the first lines are shown.
-
 2. Run one page at one width, in one theme, as one user. This takes about 20 seconds:
 
    ```bash
@@ -361,9 +360,9 @@ failed checks first; `shots/` holds one full-page screenshot per visit; `host.lo
 
 #### When something goes wrong
 
-- _A check fails._ Open `report.md`, then the matching screenshot in `shots/`, then `host.log`.
-- _Exit code `2` and `No Chromium found`._ Set `CHROME_BIN` or pass `--chrome <path>`.
-- _The host does not start._ Build first (or drop `--skip-build`), and make sure `wwwroot/` holds
+- *A check fails.* Open `report.md`, then the matching screenshot in `shots/`, then `host.log`.
+- *Exit code `2` and `No Chromium found`.* Set `CHROME_BIN` or pass `--chrome <path>`.
+- *The host does not start.* Build first (or drop `--skip-build`), and make sure `wwwroot/` holds
   the console.
 
 #### More scripts for manual checks
@@ -396,7 +395,6 @@ Both formatters are pipeline gates.
 
    Generated EF migrations are skipped by `.csharpierignore`. Never format them by hand or remove
    that entry.
-
 2. Angular, from `src/angular/`:
 
    ```bash
@@ -421,7 +419,6 @@ Both formatters are pipeline gates.
    block-scoped C# namespaces, the agent definitions
    (`ok: 9 roles, 36 definitions`) and the script self-tests. A clean tree ends with
    `Lint passed.`; otherwise the last line is `Lint failed:` and the names of the failed steps.
-
 4. Every C# file uses a file-scoped namespace (`namespace X;`) preceded by the line
    `// Define our namespace.`, with the `using` directives above it.
 
@@ -548,7 +545,6 @@ per provider. Never put two providers' migrations in one assembly.
    `dotnet ef` writes block-scoped namespaces; the script rewrites the generated files to the
    file-scoped form and leaves converted files alone. The lint job fails on a block-scoped
    namespace.
-
 3. Do not edit or reformat the generated migration, its `*.Designer.cs` or
    `NinlilDnsContextModelSnapshot.cs`. One exception: when the change alters how existing rows are
    stored (for example a date column moves to ticks), add the data conversion
@@ -594,7 +590,6 @@ discard such an experiment, delete the two files per provider.
    A wrong total fails with the right count, for example
    `The document states 331 individual settings; the registry has 332.` Put the count the test
    reports into the sentence.
-
 6. When the behaviour is visible to operators, update the README guide that describes it.
 
 #### Check that it worked
@@ -625,8 +620,7 @@ component, each in its own subfolder. Feature pages follow that "list + form" sh
    permission (the `client-static-address-mappings` entry shows list, `new` and `:id/edit`).
 5. Add the sidebar entry to `NAV_ITEMS` in
    `src/angular/src/app/layout/app-shell/nav-item.model.ts`. Its `permission` is the read
-   permission of the controller behind the page, and its icon must be registered in
-   `src/app/core/icons/core-ui-icons.ts`.
+   permission of the controller behind the page, and its icon must be registered in `src/app/core/icons/core-ui-icons.ts`.
 6. Write TSDoc (`/** */`) on every exported component, service, guard, function, constant and
    interface: what it is, why it exists and what uses it.
 7. Write a Jasmine spec next to each component, following an existing spec (TestBed setup, a mocked
@@ -715,15 +709,15 @@ Every other problem and every proposal goes to the
    [`.forgejo/labels.json`](./.forgejo/labels.json) and on the tracker's
    [label page](https://git.lantea.one/lantea-one/ninlil/labels).
 
-   | Scope         | Meaning                                                   | Examples                                                                      |
-   | ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |
-   | `kind/`       | What sort of work                                         | `kind/bug`, `kind/feature`, `kind/epic`, `kind/docs`                          |
-   | `area/`       | Which part of Ninlil                                      | `area/dns`, `area/dhcp`, `area/console`, `area/storage`                       |
-   | `priority/`   | How soon                                                  | `priority/high`, `priority/medium`, `priority/low`                            |
-   | `status/`     | Where the issue stands                                    | `status/needs-design`, `status/ready`, `status/in-progress`, `status/blocked` |
-   | `agent/`      | Which [agent role](./AGENTS.md#code-conventions) takes it | `agent/coder`, `agent/docs-writer`                                            |
-   | `theme/`      | Which line of work it belongs to                          | `theme/valkey`, `theme/parity-query`, `theme/later`                           |
-   | `resolution/` | Why it closed without a change                            | `resolution/duplicate`, `resolution/wontfix`, `resolution/not-a-bug`          |
+   | Scope | Meaning | Examples |
+   |---|---|---|
+   | `kind/` | What sort of work | `kind/bug`, `kind/feature`, `kind/epic`, `kind/docs` |
+   | `area/` | Which part of Ninlil | `area/dns`, `area/dhcp`, `area/console`, `area/storage` |
+   | `priority/` | How soon | `priority/high`, `priority/medium`, `priority/low` |
+   | `status/` | Where the issue stands | `status/needs-design`, `status/ready`, `status/in-progress`, `status/blocked` |
+   | `agent/` | Which [agent role](./AGENTS.md#code-conventions) takes it | `agent/coder`, `agent/docs-writer` |
+   | `theme/` | Which line of work it belongs to | `theme/valkey`, `theme/parity-query`, `theme/later` |
+   | `resolution/` | Why it closed without a change | `resolution/duplicate`, `resolution/wontfix`, `resolution/not-a-bug` |
 
 4. A milestone is a release, named `Release: <scope>`. The release is cut when its milestone has
    no open issue, so a milestone holds only the issues that must ship in it. An issue that is not
@@ -755,12 +749,12 @@ second run prints only `unchanged` lines. The new issue shows its labels in the 
 
 1. Branch from `develop` for a feature, from `main` for a hotfix:
 
-   | Branch      | Created from | Pushed to directly | Merges into                     | Through                          |
-   | ----------- | ------------ | ------------------ | ------------------------------- | -------------------------------- |
-   | `feature/*` | `develop`    | Yes                | `develop`                       | Pull request                     |
-   | `hotfix/*`  | `main`       | Yes                | `main`                          | Pull request                     |
-   | `develop`   | none         | No                 | `main`                          | Pull request                     |
-   | `main`      | none         | No                 | `v<yyyy>.<mm>.<dd>.<increment>` | A release branch created from it |
+   | Branch | Created from | Pushed to directly | Merges into | Through |
+   |---|---|---|---|---|
+   | `feature/*` | `develop` | Yes | `develop` | Pull request |
+   | `hotfix/*` | `main` | Yes | `main` | Pull request |
+   | `develop` | none | No | `main` | Pull request |
+   | `main` | none | No | `v<yyyy>.<mm>.<dd>.<increment>` | A release branch created from it |
 
    ```bash
    git switch develop && git pull
@@ -791,7 +785,6 @@ second run prints only `unchanged` lines. The new issue shows its labels in the 
    ```
 
    The commit keyword acts only when the commit reaches `main`, so it is a backstop.
-
 3. Run the checks from [Format and lint](#format-and-lint) and the
    [`AGENTS.md` checklist](./AGENTS.md#before-you-finish).
 4. Push the branch and open a pull request into `develop` (a hotfix goes into `main`):
@@ -801,7 +794,6 @@ second run prints only `unchanged` lines. The new issue shows its labels in the 
    ```
 
    Never commit secrets. Contributors without write access push to their fork.
-
 5. Name the issue in the pull request description. Issues close when their work reaches
    `develop`: write `Closes #<n>` for the issue the pull request finishes, and Forgejo closes it
    when the pull request merges. A hotfix pull request into `main` uses the same lines and closes
@@ -818,7 +810,6 @@ second run prints only `unchanged` lines. The new issue shows its labels in the 
 
    Check that it worked: `git diff develop... -- CHANGELOG.md` shows the new line under
    `## Unreleased` and no change below it.
-
 6. Watch for two traps:
    - A closing keyword on an issue with open dependencies does nothing, silently. Merge the
      dependency's pull request first, or close the issue by hand once its dependencies are closed.
@@ -928,7 +919,6 @@ Then:
       `2026-09-24, v2026.09.24.1`) and says what changed. "No change" is a valid comment.
 
    Check that it worked: the comment shows at the bottom of the issue.
-
 4. Create the release branch from `main`, named for the release's date and that day's increment:
 
    ```bash
@@ -948,7 +938,6 @@ Then:
 
    Check that it worked: on the [milestones page](https://git.lantea.one/lantea-one/ninlil/milestones?state=closed) the milestone is listed as
    closed and its description names the version.
-
 8. Check that the next release milestone exists. If it does not, create it as
    `Release: <scope>` and move into it the issues that must ship in that release. An issue that
    is not planned for a release keeps no milestone.

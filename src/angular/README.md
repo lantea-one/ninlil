@@ -43,10 +43,10 @@ test, then the client, and commit both together; the steps are in
 [Change the REST API](../../CONTRIBUTING.md#change-the-rest-api).
 
 `npm run build` prints one generator line, `WARN ... ModelUtils - Failed to get the schema name:
-null`. It comes from the named `examples` that the PATCH settings responses and others carry in
-the snapshot (they document the "restart needed" notes): the Java generator logs the line for any
-operation whose response has an `examples` map, and the generated client is the same with or
-without it. It stays until the generator is replaced.
+null`. The Java generator logs it for operations whose responses carry a named `examples` map (94
+in the snapshot, the settings PATCH responses among them, which document the "restart needed"
+notes). A snapshot without those maps does not print it, and the client generated from either
+snapshot is identical file for file. The line stays until the generator is replaced.
 
 ## Conventions
 

@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { IconSetService } from '@coreui/icons-angular';
 import { DnsClientDeviceIconEnum } from '../../../api-client';
+import { coreUiIcons } from '../../../core/icons/core-ui-icons';
 import { DEVICE_ICON_CATALOG } from '../shared/device-icon.model';
 import { findDeviceIcon } from '../shared/device-icon.util';
 import { DeviceIconPickerComponent } from './device-icon-picker.component';
@@ -40,11 +41,9 @@ describe('DeviceIconPickerComponent', () => {
 
   it('draws only icons this app actually registers with CoreUI', async () => {
     await createHost();
-    // The test bed does not run the app.config.ts icon registration, so check the names against
-    // the @coreui/icons exports.
-    const icons = await import('@coreui/icons');
+    // An icon the picker offers but `coreUiIcons` (the list the app registers) lacks renders blank.
     for (const option of DEVICE_ICON_CATALOG) {
-      expect((icons as Record<string, unknown>)[option.icon])
+      expect((coreUiIcons as Record<string, unknown>)[option.icon])
         .withContext(option.icon)
         .toBeDefined();
     }

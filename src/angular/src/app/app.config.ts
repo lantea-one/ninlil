@@ -15,7 +15,10 @@ import { provideCoreUiIcons } from './core/icons/core-ui-icons';
 import { ThemeService } from './core/theme/theme.service';
 import { routes } from './app.routes';
 
-/** The root providers of the console: routing, HTTP with the auth interceptor, the API client, the icon set and the start-up session restore. */
+/**
+ * The root providers of the console: routing, HTTP with the auth interceptor, the API client,
+ * the icon set and the start-up session restore.
+ */
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),

@@ -75,14 +75,14 @@ import {
 } from '@coreui/icons';
 
 /**
- * The CoreUI icons the app uses, registered in `IconSetService` by the app initializer in
- * `app.config.ts` and by the global spec setup (`src/test-setup.spec.ts`). How CoreUI is set up:
+ * The CoreUI icons the app uses, registered in `IconSetService` by `provideCoreUiIcons()` (used by
+ * `app.config.ts`) and by the global spec setup (`src/test-setup.spec.ts`). How CoreUI is set up:
  *
  * - Its components and directives are standalone, so each page imports what it uses. No
  *   `provideXxx()` or `NgModule` is needed.
- * - `IconSetService` starts with no icons. The app initializer in `app.config.ts` fills it from this object,
- *   which takes icon data from `@coreui/icons` (`@coreui/icons-angular` supplies only the `cIcon`
- *   component and the service). Add each new icon here instead of importing the whole `freeSet`,
+ * - `IconSetService` starts with no icons. `provideCoreUiIcons()` below fills it from this
+ *   object, which takes icon data from `@coreui/icons` (`@coreui/icons-angular` supplies only the
+ *   `cIcon` component and the service). Add each new icon here instead of importing the whole `freeSet`,
  *   so the bundle carries only the icons in use. An icon missing from this list renders blank.
  * - CoreUI's compiled CSS is a global stylesheet in the `styles` array of `angular.json` (build
  *   and test), loaded before `src/styles.scss`. It is not pulled in through Sass, because
