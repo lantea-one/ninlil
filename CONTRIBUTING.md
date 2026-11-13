@@ -864,25 +864,26 @@ same time. Wait for the re-run to finish first.
 
 #### Re-running one job of a run
 
-Forgejo can re-run one failed job (a flaky test, say) instead of the whole run. The job and the
-jobs that need it run again; jobs that passed are not run again. The draft release is the
-hand-off between the jobs, so this matters for the jobs that build or use release files.
+Do not re-run one job of a run, for example "Test .NET" after a flaky test. Re-run the whole run.
 
-- The "Stage Draft Release" job keeps an existing draft when it is for the same version and the
-  same commit, with the files already attached. The packaging jobs ("Build Arch Linux Packages",
-  "Build and Test Deb and RPM Packages", "Build and Push Image") then still find the binaries
-  that the first attempt attached. Every job that attaches a file replaces the file of the same
-  name, so a re-run never leaves two copies.
-- A draft for another commit is deleted and created again, as before.
-- A packaging job that fails in "Checkout Sources" with `The draft for <version> has no
-  attachment named <file>` found a draft without that file. Do this:
+What was observed on the runner version in use (Forgejo runner v13.2.1): after one job was
+re-run alone, a matrix job that had not run in the first attempt (it was skipped behind the failed
+job) started only one of its legs. The draft release then held one binary instead of five, and
+"Build Arch Linux Packages", "Build and Test Deb and RPM Packages" and "Build and Push Image"
+failed in "Checkout Sources" with:
 
-  1. Open the run on the [Actions page](https://git.lantea.one/lantea-one/ninlil/actions). If it
-     is still running, cancel it.
-  2. Re-run the whole run ("Re-run all jobs"), not one job. The binaries are built and attached
-     again.
-  3. Check that "Stage Draft Release" and every "Build Binary" job run, and that the packaging
-     jobs pass.
+```text
+The draft for <version> has no attachment named ninlil-linux-arm64.
+```
+
+This is an observation of Forgejo's behaviour, not a documented rule. The pipeline cannot repair
+it, and it does not wait for binaries that never arrive, so it fails at once with that message.
+
+1. Open the run on the [Actions page](https://git.lantea.one/lantea-one/ninlil/actions).
+2. If the run is still going, cancel it.
+3. Choose "Re-run all jobs", not the re-run of one job.
+4. Check that "Stage Draft Release" and all five "Build Binary" jobs run, and that the packaging
+   jobs pass.
 
 ## Cutting a release
 
