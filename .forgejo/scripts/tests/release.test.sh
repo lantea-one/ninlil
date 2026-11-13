@@ -4,7 +4,8 @@
 #
 # Covers: stage puts the Deb and RPM install commands in the release notes; publish merges the per-file checksums; a successful upload exits 0 and the token is on no curl command line; a failing asset
 # upload exits non-zero; a failing second page of the draft listing exits non-zero instead of
-# reading as "no draft"; a missing draft exits non-zero.
+# reading as "no draft"; a missing draft exits non-zero; a draft without the wanted attachment
+# exits non-zero and says to re-run the whole run.
 #
 # Usage: .forgejo/scripts/tests/release.test.sh
 # Needs: bash, python3, curl, jq. Never contacts a real server.
@@ -93,5 +94,14 @@ set_routes "{\"GET ${releases}#1\": [200, [{\"id\": 3, \"tag_name\": \"other\", 
 run_script RELEASE_TAG="${tag}" -- bash "${scripts}/release.sh" upload "${artifact}"
 if [[ "${status}" -ne 0 ]]; then pass 'release: a missing draft exits non-zero'; else fail 'release: a missing draft exits non-zero' "${output}"; fi
 assert_contains 'release: a missing draft says so' "${output}" 'No draft release exists'
+
+# --- Draft without the wanted attachment -------------------------------------------------------
+# A re-run of one job leaves the draft without some binaries; the packaging jobs must fail at once
+# with a message that names the file and the remedy.
+set_routes "$(draft_routes 201)"
+run_script RELEASE_TAG="${tag}" -- bash "${scripts}/release.sh" download ninlil-linux-arm64 "${work_root}/dl"
+if [[ "${status}" -ne 0 ]]; then pass 'release: a missing attachment exits non-zero'; else fail 'release: a missing attachment exits non-zero' "${output}"; fi
+assert_contains 'release: a missing attachment is named' "${output}" 'has no attachment named ninlil-linux-arm64'
+assert_contains 'release: a missing attachment says to re-run the whole run' "${output}" 're-run the whole run'
 
 finish

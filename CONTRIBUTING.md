@@ -865,6 +865,29 @@ going: the queued run stayed waiting after the re-run ended.
 As a precaution that lowers the chance, do not re-run a run and push to the same branch at the
 same time. Wait for the re-run to finish first.
 
+#### Re-running one job of a run
+
+Do not re-run one job of a run, for example "Test .NET" after a flaky test. Re-run the whole run.
+
+What was observed on the runner version in use (Forgejo runner v13.2.1): after one job was
+re-run alone, a matrix job that had not run in the first attempt (it was skipped behind the failed
+job) started only one of its legs. The draft release then held one binary instead of five, and
+"Build Arch Linux Packages", "Build and Test Deb and RPM Packages" and "Build and Push Image"
+failed in "Checkout Sources" with:
+
+```text
+The draft for <version> has no attachment named ninlil-linux-arm64.
+```
+
+This is an observation of Forgejo's behaviour, not a documented rule. The pipeline cannot repair
+it, and it does not wait for binaries that never arrive, so it fails at once with that message.
+
+1. Open the run on the [Actions page](https://git.lantea.one/lantea-one/ninlil/actions).
+2. If the run is still going, cancel it.
+3. Choose "Re-run all jobs", not the re-run of one job.
+4. Check that "Stage Draft Release" and all five "Build Binary" jobs run, and that the packaging
+   jobs pass.
+
 ## Cutting a release
 
 For maintainers. Every release goes through a release branch cut from `main`. A normal release

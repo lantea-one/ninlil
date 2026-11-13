@@ -31,7 +31,8 @@
 #
 # The token reaches curl through a config file (forgejo-api.sh), never on a command line.
 #
-# Exits non-zero on any failed API call, and when upload, download or publish finds no draft.
+# Exits non-zero on any failed API call, when upload, download or publish finds no draft, and when
+# download finds the draft without the named attachment (the message says to re-run the whole run).
 
 set -euo pipefail
 shopt -s inherit_errexit
@@ -203,6 +204,10 @@ download() {
         | jq -r --arg name "${name}" '.[] | select(.name == $name) | .browser_download_url')"
     if [[ -z "${url}" ]]; then
         echo "The draft for ${RELEASE_TAG} has no attachment named ${name}." >&2
+        # Forgejo runs only part of a matrix job when one job of a run is re-run alone, so the
+        # binaries the draft should hold are missing. Waiting would not help: they never arrive.
+        echo "This happens when one job of a run was re-run alone. Cancel the run if it is still" >&2
+        echo "running and re-run the whole run (CONTRIBUTING.md, 'Re-running one job of a run')." >&2
         exit 1
     fi
     mkdir -p "${directory}"
