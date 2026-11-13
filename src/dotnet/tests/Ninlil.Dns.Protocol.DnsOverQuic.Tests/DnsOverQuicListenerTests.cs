@@ -551,9 +551,8 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
             await StartListenAddressListenerAsync(
                 $"127.0.0.1, {LocalAddresses.Unassigned}, {other}",
                 logger,
-                // Two bound addresses must share one port, but port 0 gives each listener its
-                // own, so this test needs a port known before the listener starts.
-                port: LocalAddresses.GetFreePort()
+                port: ReservedPort,
+                expectedFailedAddresses: 1
             );
 
         try
@@ -628,10 +627,36 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
     }
 
     /// <summary>
+    ///     This constant is the port number a test that needs one number on several listen
+    ///     addresses passes to <see cref="StartListenAddressListenerAsync" />. It is
+    ///     <c>-1</c>, a request for a reserved port: port 0 gives each socket its own number, so
+    ///     two bound addresses on one number need a number known before the listener starts.
+    ///     <see cref="StartListenAddressListenerAsync" /> reserves it with
+    ///     <see cref="LocalAddresses.GetFreePort" />, and starts again on a new number when
+    ///     another process takes it before the bind.
+    /// </summary>
+    private const int ReservedPort = -1;
+
+    /// <summary>
+    ///     This constant is how many reserved ports <see cref="StartListenAddressListenerAsync" />
+    ///     tries before it gives up.
+    /// </summary>
+    private const int ReservedPortAttempts = 5;
+
+    /// <summary>
     ///     This method starts a separate pipeline and listener bound to the given listen addresses
-    ///     on <paramref name="port" /> (0 picks a free one), apart from the shared one in <see cref="InitializeAsync" /> (which
+    ///     on <paramref name="port" /> (0 picks a free one, <see cref="ReservedPort" /> a
+    ///     reserved one), apart from the shared one in <see cref="InitializeAsync" /> (which
     ///     listens on every address).
     /// </summary>
+    /// <param name="listenAddresses">The configured <c>ListenAddresses</c> value.</param>
+    /// <param name="logger">Where the listener logs to.</param>
+    /// <param name="configure">Changes the listener's options before it starts.</param>
+    /// <param name="port">The configured port, or <see cref="ReservedPort" />.</param>
+    /// <param name="expectedFailedAddresses">
+    ///     How many addresses cannot bind by design. With a reserved port, any other failure means
+    ///     the number was taken, and the listener starts again on another number.
+    /// </param>
     private async Task<(
         DnsQueryProcessingPipeline Pipeline,
         DnsOverQuicListener Listener,
@@ -640,7 +665,47 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
         string listenAddresses,
         ILogger<DnsOverQuicListener> logger,
         Action<DnsOverQuicOptions> configure = null,
-        int port = 0
+        int port = 0,
+        int expectedFailedAddresses = 0
+    )
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            (DnsQueryProcessingPipeline pipeline, DnsOverQuicListener listener) =
+                await StartListenAddressListenerOnceAsync(
+                    listenAddresses,
+                    logger,
+                    configure,
+                    port == ReservedPort ? LocalAddresses.GetFreePort() : port
+                );
+
+            if (
+                port != ReservedPort
+                || (
+                    listener.BoundPort != 0
+                    && listener.FailedListenAddresses.Count == expectedFailedAddresses
+                )
+            )
+                return (pipeline, listener, listener.BoundPort);
+
+            await listener.StopAsync(CancellationToken.None);
+            await pipeline.StopAsync(CancellationToken.None);
+
+            if (attempt == ReservedPortAttempts)
+                throw new InvalidOperationException(
+                    "The listener did not bind on any reserved port."
+                );
+        }
+    }
+
+    private async Task<(
+        DnsQueryProcessingPipeline Pipeline,
+        DnsOverQuicListener Listener
+    )> StartListenAddressListenerOnceAsync(
+        string listenAddresses,
+        ILogger<DnsOverQuicListener> logger,
+        Action<DnsOverQuicOptions> configure,
+        int port
     )
     {
         DnsQueryProcessingPipeline pipeline = new(
@@ -673,12 +738,13 @@ public sealed class DnsOverQuicListenerTests : IAsyncLifetime
 
         // ExecuteAsync binds after StartAsync returns, and sets IsListening only once every
         // address was tried and the failed ones recorded, so waiting for it is the bind signal.
+        // A listener that bound nothing finishes without listening, so that ends the wait too.
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
-        while (!listener.IsListening)
+        while (!listener.IsListening && !listener.ExecuteTask.IsCompleted)
             await Task.Delay(10, timeout.Token);
 
-        return (pipeline, listener, listener.BoundPort);
+        return (pipeline, listener);
     }
 
     /// <summary>
