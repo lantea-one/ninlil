@@ -27,8 +27,8 @@ public static class LocalAddresses
     ///     This method returns a port that is free for both UDP and TCP on every address, by
     ///     briefly holding it through dual-stack wildcard sockets. The caller binds it after this
     ///     returns, so the listener tests that need one number for UDP, TCP or several addresses
-    ///     (port 0 gives each socket its own) use it, and a test that can bind port 0 and read the
-    ///     port back does that instead.
+    ///     (port 0 gives each socket its own) and the test that needs a port where nothing listens
+    ///     use it, and a test that can bind port 0 and read the port back does that instead.
     ///     <para>
     ///         The port is picked at random from the dynamic range (49152 to 65535) and bound
     ///         explicitly. It is not taken from a port-0 bind, because Windows hands out port-0

@@ -33,7 +33,10 @@ public sealed class DnsCryptListenAddressTests
         if (other is null)
             return;
 
-        await using RunningListeners running = await RunningListeners.StartAsync("127.0.0.1");
+        await using RunningListeners running = await RunningListeners.StartAsync(
+            "127.0.0.1",
+            expectedFailedAddresses: 0
+        );
 
         Assert.True(running.Udp.IsListening);
         Assert.True(running.Tcp.IsListening);
@@ -55,6 +58,7 @@ public sealed class DnsCryptListenAddressTests
         CapturingLoggerFactory loggers = new();
         await using RunningListeners running = await RunningListeners.StartAsync(
             $"127.0.0.1, {LocalAddresses.Unassigned}, {other}",
+            expectedFailedAddresses: 1,
             loggers
         );
 
@@ -103,7 +107,11 @@ public sealed class DnsCryptListenAddressTests
 
     /// <summary>
     ///     This class starts a pipeline plus both DNSCrypt listeners on a free port with the
-    ///     given listen addresses, and stops them all when disposed.
+    ///     given listen addresses, and stops them all when disposed. Port 0 cannot serve these
+    ///     tests: UDP and TCP, and every listen address, must share one port number, but port 0
+    ///     gives each socket a port of its own. The number is therefore reserved first and the
+    ///     listeners bind it after it is released, so another process can take it in between;
+    ///     <see cref="StartAsync" /> then starts again on a new number, a bounded number of times.
     /// </summary>
     private sealed class RunningListeners : IAsyncDisposable
     {
@@ -115,11 +123,52 @@ public sealed class DnsCryptListenAddressTests
 
         public int Port { get; private set; }
 
+        /// <summary>
+        ///     This constant is how many reserved ports <see cref="StartAsync" /> tries before it
+        ///     gives up.
+        /// </summary>
+        private const int BindAttempts = 5;
+
         /// <param name="listenAddresses">The configured <c>ListenAddresses</c> value.</param>
+        /// <param name="expectedFailedAddresses">
+        ///     How many of the addresses cannot bind by design (such as an unassigned one). Any
+        ///     other failure means the reserved port was taken, and the listeners start again on
+        ///     another port.
+        /// </param>
         /// <param name="loggers">Where the listeners log to; nowhere when omitted.</param>
         public static async Task<RunningListeners> StartAsync(
             string listenAddresses,
+            int expectedFailedAddresses,
             CapturingLoggerFactory loggers = null
+        )
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                RunningListeners running = await StartOnceAsync(listenAddresses, loggers);
+
+                if (
+                    running.Udp.IsListening
+                    && running.Tcp.IsListening
+                    && running.Udp.FailedListenAddresses.Count == expectedFailedAddresses
+                    && running.Tcp.FailedListenAddresses.Count == expectedFailedAddresses
+                )
+                    return running;
+
+                // The reserved port was taken between the reservation and the bind. The
+                // loggers keep the failed attempt's errors; the tests only look for an error
+                // that names the unassigned address, which every attempt logs.
+                await running.DisposeAsync();
+
+                if (attempt == BindAttempts)
+                    throw new InvalidOperationException(
+                        "The DNSCrypt listeners did not bind on any reserved port."
+                    );
+            }
+        }
+
+        private static async Task<RunningListeners> StartOnceAsync(
+            string listenAddresses,
+            CapturingLoggerFactory loggers
         )
         {
             ILogger<DnsCryptUdpListener> udpLogger = loggers is null
@@ -141,9 +190,7 @@ public sealed class DnsCryptListenAddressTests
             // these tests never send, so an empty store is enough.
             InMemoryDnsCryptCertificateStore store = new(algorithm.GenerateKeyPair());
 
-            // Two bound addresses, UDP and TCP must share one port number, but port 0 gives
-            // every socket its own, so the number is reserved first (see
-            // LocalAddresses.GetFreePort) and the listeners start on it.
+            // See the class summary: the number is reserved first (LocalAddresses.GetFreePort).
             RunningListeners running = new() { Port = LocalAddresses.GetFreePort() };
             StaticOptionsMonitor<DnsCryptOptions> options = new(
                 new DnsCryptOptions
