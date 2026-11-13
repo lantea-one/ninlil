@@ -149,14 +149,20 @@ public sealed class Dhcpv4UdpListener(
 
             try
             {
-                // SO_REUSEADDR lets this wildcard bind coexist with a socket bound to a specific
-                // local address on the same port (that socket gets datagrams for its address,
-                // this one the rest), and lets a quick restart re-bind without a conflict.
-                socket.SetSocketOption(
-                    SocketOptionLevel.Socket,
-                    SocketOptionName.ReuseAddress,
-                    true
-                );
+                // On Windows the socket claims port 67 exclusively, so no other program can
+                // bind it (a socket on a specific address would otherwise take that address's
+                // datagrams away). Exclusive use replaces SO_REUSEADDR there: with both, Windows
+                // lets another socket share the port. Elsewhere SO_REUSEADDR lets this wildcard
+                // bind coexist with a socket bound to a specific local address on the same port
+                // (that socket gets datagrams for its address, this one the rest), and lets a
+                // quick restart re-bind without a conflict. Ninlil never binds the server port
+                // twice itself: the relay agent sends from its own ephemeral sockets.
+                if (!socket.ClaimPortExclusivelyOnWindows())
+                    socket.SetSocketOption(
+                        SocketOptionLevel.Socket,
+                        SocketOptionName.ReuseAddress,
+                        true
+                    );
                 socket.Bind(new IPEndPoint(IPAddress.Any, options.Value.ServerPort));
             }
             catch (Exception exception)

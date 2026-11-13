@@ -26,6 +26,14 @@ namespace Ninlil.Dns.Server.Core.Transport;
 ///         check, and skipped. The other addresses keep serving and nothing is thrown, so one
 ///         stale address cannot take the whole server down.
 ///     </para>
+///     <para>
+///         On Windows every socket claims its port exclusively (see
+///         <see cref="ExclusiveListenerPortSocketExtension" />). Another program that holds the
+///         port on any overlapping address, including one specific address while Ninlil would
+///         bind the wildcard, makes the bind fail and be reported as above. With the default
+///         single dual-stack socket that takes the whole transport down; it does not fall back
+///         to binding each local address on its own.
+///     </para>
 /// </summary>
 public sealed class ListenSocketSet
 {
@@ -286,6 +294,11 @@ public sealed class ListenSocketSet
         // warning in the log that an off-path sender can provoke at will.
         if (protocolType == ProtocolType.Udp)
             socket.IgnoreIcmpPortUnreachable();
+
+        // On Windows no other socket may share the port, whether it binds a wildcard or a
+        // specific address. A conflict then fails the bind, which Bind reports as a failed
+        // address, instead of leaving Ninlil up beside a socket that takes some clients' traffic.
+        socket.ClaimPortExclusivelyOnWindows();
 
         return socket;
     }
