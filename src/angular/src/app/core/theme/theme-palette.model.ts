@@ -33,7 +33,7 @@ export interface ModeOption {
   readonly value: UiThemeModeEnum;
   /** The human-readable label shown next to this option's icon. */
   readonly label: string;
-  /** The `@coreui/icons` icon shown for this option; it must be registered in `app.config.ts`. */
+  /** The `@coreui/icons` icon shown for this option; it must be registered in `core/icons/core-ui-icons.ts`. */
   readonly icon: string;
 }
 

@@ -78,7 +78,7 @@
   </p>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="rows()" class="client-table">
+    <table cdk-table cTable hover [responsive]="true" [dataSource]="rows()" class="client-table">
       <ng-container cdkColumnDef="favorite">
         <th cdk-header-cell *cdkHeaderCellDef class="favorite-cell">
           <span class="visually-hidden">Favorite</span>

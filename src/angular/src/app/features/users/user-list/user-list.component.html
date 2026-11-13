@@ -25,7 +25,7 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="users()" class="user-table">
+    <table cdk-table cTable hover [responsive]="true" [dataSource]="users()" class="user-table">
       <ng-container cdkColumnDef="userName">
         <th cdk-header-cell *cdkHeaderCellDef>User name</th>
         <td cdk-cell *cdkCellDef="let user">

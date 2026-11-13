@@ -67,6 +67,15 @@ describe('QueryLogListComponent', () => {
     expect(fixture.componentInstance.loading()).toBeFalse();
   });
 
+  it('scrolls the table sideways inside its card on a narrow screen', async () => {
+    const fixture = await createComponent();
+
+    // CoreUI adds this wrapper only when `[responsive]="true"` reaches the table.
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.table-responsive > table'),
+    ).not.toBeNull();
+  });
+
   it('hides the clear-log action when the session lacks querylog:write', async () => {
     const fixture = await createComponent(() =>
       authServiceSpy.hasPermission.and.returnValue(false),

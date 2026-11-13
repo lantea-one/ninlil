@@ -1,7 +1,5 @@
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { IconSetService } from '@coreui/icons-angular';
-import { cilStorage } from '@coreui/icons';
 import { EmptyStateComponent } from './empty-state.component';
 
 // A host component, so a test can check content projection into the action slot.
@@ -25,10 +23,6 @@ describe('EmptyStateComponent', () => {
     await TestBed.configureTestingModule({
       imports: [EmptyStateComponent, EmptyStateTestHostComponent],
     }).compileComponents();
-
-    // The app initializer in app.config.ts normally registers icons; seed the one this renders so
-    // cIcon does not warn.
-    TestBed.inject(IconSetService).icons = { cilStorage };
   });
 
   it('renders the icon, heading, and description', () => {

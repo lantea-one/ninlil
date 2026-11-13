@@ -620,7 +620,7 @@ component, each in its own subfolder. Feature pages follow that "list + form" sh
    permission (the `client-static-address-mappings` entry shows list, `new` and `:id/edit`).
 5. Add the sidebar entry to `NAV_ITEMS` in
    `src/angular/src/app/layout/app-shell/nav-item.model.ts`. Its `permission` is the read
-   permission of the controller behind the page, and its icon must be registered in `app.config.ts`.
+   permission of the controller behind the page, and its icon must be registered in `src/app/core/icons/core-ui-icons.ts`.
 6. Write TSDoc (`/** */`) on every exported component, service, guard, function, constant and
    interface: what it is, why it exists and what uses it.
 7. Write a Jasmine spec next to each component, following an existing spec (TestBed setup, a mocked

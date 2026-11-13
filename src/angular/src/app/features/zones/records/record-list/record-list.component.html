@@ -41,7 +41,7 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="records()" class="record-table">
+    <table cdk-table cTable hover [responsive]="true" [dataSource]="records()" class="record-table">
       <ng-container cdkColumnDef="name">
         <th cdk-header-cell *cdkHeaderCellDef>Name</th>
         <td cdk-cell *cdkCellDef="let record">{{ record.name }}</td>
