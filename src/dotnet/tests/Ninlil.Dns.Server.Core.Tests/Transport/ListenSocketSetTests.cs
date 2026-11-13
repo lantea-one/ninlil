@@ -223,6 +223,32 @@ public class ListenSocketSetTests
                 logger
             );
 
+            if (OperatingSystem.IsWindows())
+            {
+                // Windows falls back to one exclusive socket per local address, which bind
+                // beside the occupant's non-exclusive wildcard socket (see
+                // ListenSocketSetWindowsFallbackTests). Nothing is bound on the wildcard.
+                try
+                {
+                    Assert.NotEmpty(set.Sockets);
+                    Assert.All(
+                        set.Sockets,
+                        socket =>
+                        {
+                            IPAddress address = ((IPEndPoint)socket.LocalEndPoint).Address;
+                            Assert.False(address.Equals(IPAddress.IPv6Any));
+                            Assert.False(address.Equals(IPAddress.Any));
+                        }
+                    );
+                }
+                finally
+                {
+                    set.Close();
+                }
+
+                return;
+            }
+
             Assert.Empty(set.Sockets);
             string failed = Assert.Single(set.FailedAddresses);
             Assert.StartsWith("::", failed);

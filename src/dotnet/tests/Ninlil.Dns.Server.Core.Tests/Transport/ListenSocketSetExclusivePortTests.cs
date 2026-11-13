@@ -69,7 +69,7 @@ public class ListenSocketSetExclusivePortTests
     [Theory]
     [InlineData(ProtocolType.Udp)]
     [InlineData(ProtocolType.Tcp)]
-    public void DualStackSet_OnWindows_WhenASpecificAddressSocketHoldsThePort_FailsAndIsReported(
+    public void DualStackSet_OnWindows_WhenASpecificAddressSocketHoldsThePort_BindsTheOtherAddressesAndReportsThatOne(
         ProtocolType protocolType
     )
     {
@@ -77,7 +77,9 @@ public class ListenSocketSetExclusivePortTests
             return;
 
         // The other order: the specific-address socket is up first. Without exclusive use the
-        // wildcard bind succeeds beside it and the set never sees that address's clients.
+        // wildcard bind succeeds beside it and the set never sees that address's clients. With
+        // it the wildcard bind fails, the set falls back to the local addresses one by one, and
+        // the held address is reported as failed.
         using Socket occupant = CreateSocket(AddressFamily.InterNetwork, protocolType);
         occupant.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         int port = ((IPEndPoint)occupant.LocalEndPoint).Port;
@@ -92,8 +94,16 @@ public class ListenSocketSetExclusivePortTests
 
         try
         {
-            Assert.Empty(set.Sockets);
-            Assert.Single(set.FailedAddresses);
+            Assert.All(
+                set.Sockets,
+                socket =>
+                {
+                    IPAddress address = ((IPEndPoint)socket.LocalEndPoint).Address;
+                    Assert.False(address.Equals(IPAddress.IPv6Any));
+                    Assert.False(address.Equals(IPAddress.Loopback));
+                }
+            );
+            Assert.Contains(set.FailedAddresses, failed => failed.StartsWith("127.0.0.1 "));
         }
         finally
         {
