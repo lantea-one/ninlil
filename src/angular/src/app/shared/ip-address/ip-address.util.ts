@@ -33,7 +33,8 @@ export function isIpv6Address(text: string): boolean {
 
     if (group.includes('.')) {
       // The dotted quad takes the place of the two lowest groups, so it can only end the address.
-      if (!isLast || !isDottedQuad(group)) {
+      // A "::" after it leaves it in the last group split out, so the text must end with it too.
+      if (!isLast || !text.endsWith(group) || !isDottedQuad(group)) {
         return false;
       }
       groupCount += 2;
