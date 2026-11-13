@@ -1,6 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { IconSetService } from '@coreui/icons-angular';
-import { cilReload } from '@coreui/icons';
 import { ClusterSyncInfoComponent } from './cluster-sync-info.component';
 
 /**
@@ -12,9 +10,6 @@ describe('ClusterSyncInfoComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ClusterSyncInfoComponent],
     }).compileComponents();
-
-    // The app initializer in app.config.ts normally registers icons; seed the one this renders.
-    TestBed.inject(IconSetService).icons = { cilReload };
   });
 
   it('renders nothing at all when lastModifiedUtc is absent', () => {

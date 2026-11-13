@@ -20,12 +20,9 @@ import {
 } from '@coreui/angular';
 import { ForwardersService } from '../../../api-client';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
+import { assignBulkLineNumbers } from '../../../shared/bulk-create/bulk-line-numbers.util';
 import { NotificationService } from '../../../shared/notification/notification.service';
-import {
-  KNOWN_FORWARDER_OPTIONS,
-  assignBulkLineNumbers,
-  deriveForwarderName,
-} from '../forwarder.model';
+import { KNOWN_FORWARDER_OPTIONS, deriveForwarderName } from '../forwarder.model';
 
 /** The request body of every forwarder `POST` and `PUT` this page sends. */
 interface ForwarderWriteRequestValue {

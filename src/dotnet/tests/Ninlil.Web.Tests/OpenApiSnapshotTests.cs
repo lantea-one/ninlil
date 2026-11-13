@@ -38,7 +38,7 @@ public class OpenApiSnapshotTests(NinlilDnsWebApplicationFactory factory)
 
         if (Environment.GetEnvironmentVariable(UpdateVariableName) == "true")
         {
-            // Written as served, the same bytes `npm run fetch:openapi` would save.
+            // Written as served, the bytes a running host returns at /swagger/v1/swagger.json.
             await File.WriteAllTextAsync(snapshotPath, served);
             return;
         }
