@@ -1,4 +1,6 @@
-# syntax=docker/dockerfile:1
+# There is no `# syntax=` line on purpose: it makes BuildKit fetch a frontend image from Docker
+# Hub on every build, an unpinned network dependency. The built-in frontend must be Dockerfile 1.4
+# or newer, so building needs Docker Engine 23.0 or later and buildx 0.8 or later.
 #
 # Ninlil's container image.
 #

@@ -32,6 +32,16 @@ namespace Ninlil.Dns.Protocol.DnsOverTls.Tests;
 /// </summary>
 public sealed class DnsOverTlsListenerTests : IAsyncLifetime
 {
+    /// <summary>
+    ///     This field is the idle timeout of every listener in this class. The listener also uses
+    ///     it as the TLS handshake deadline and starts it at accept, so a short value closes the
+    ///     connection of a client that is only slow, which a loaded machine produces (certificate
+    ///     load, JIT, a starved thread pool). No test here is about the timeout, so it is long
+    ///     enough that a loaded machine cannot lose against it. The timeout itself is tested in
+    ///     <see cref="DnsOverTlsSessionTests" />, with a short value and retries.
+    /// </summary>
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(10);
+
     private static readonly IPAddress ExpectedAnswer = IPAddress.Parse("192.0.2.123");
 
     private DnsQueryProcessingPipeline _pipeline;
@@ -58,7 +68,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
         {
             Enable = true,
             Port = 0,
-            IdleTimeout = TimeSpan.FromMilliseconds(400),
+            IdleTimeout = IdleTimeout,
         };
 
         _listener = new DnsOverTlsListener(
@@ -269,7 +279,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
                 {
                     Enable = true,
                     Port = 0,
-                    IdleTimeout = TimeSpan.FromMilliseconds(400),
+                    IdleTimeout = IdleTimeout,
                     Certificate = new TlsCertificateOptions
                     {
                         AllowedProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
@@ -402,10 +412,7 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
                 {
                     Enable = true,
                     Port = 0,
-                    // The listener bounds the TLS handshake by the idle timeout, so a short one
-                    // aborts the first handshake of a busy machine (certificate load, JIT) before
-                    // it ends. These tests prove the PROXY header handling, not the timeout.
-                    IdleTimeout = TimeSpan.FromSeconds(10),
+                    IdleTimeout = IdleTimeout,
                     ProxyProtocol = proxyProtocolOptions,
                 }
             ),
