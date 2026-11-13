@@ -11,6 +11,11 @@ outside Forgejo.
 
 ## Unreleased
 
+- **The dashboard's Live Activity title and the zone form's key headings match the text around
+  them.** Live Activity has the size of the Getting Started header, and "Keys allowed to send
+  dynamic updates" and "Keys allowed to transfer this zone" have the size of the other field
+  labels. ([#196](https://git.lantea.one/lantea-one/ninlil/issues/196))
+
 ## v2026.11.13.1
 
 ### Behaviour worth knowing
