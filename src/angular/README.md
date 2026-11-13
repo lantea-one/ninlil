@@ -42,6 +42,12 @@ test, then the client, and commit both together; the steps are in
 [`AGENTS.md`](../../AGENTS.md#changing-the-rest-api) and
 [Change the REST API](../../CONTRIBUTING.md#change-the-rest-api).
 
+`npm run build` prints one generator line, `WARN ... ModelUtils - Failed to get the schema name:
+null`. It comes from the named `examples` that the PATCH settings responses and others carry in
+the snapshot (they document the "restart needed" notes): the Java generator logs the line for any
+operation whose response has an `examples` map, and the generated client is the same with or
+without it. It stays until the generator is replaced.
+
 ## Conventions
 
 - **Angular 22, standalone components, signals-based state, zoneless** — there is no `zone.js`,
@@ -79,6 +85,11 @@ test, then the client, and commit both together; the steps are in
 - **CoreUI `cTable` needs `[responsive]="true"` to scroll sideways on a narrow screen.** The input
   has no boolean transform, so a bare `responsive` attribute passes an empty string, which is
   falsy, and the table gets no `table-responsive` wrapper.
+- **Every spec gets the app's CoreUI icon set.** `src/test-setup.spec.ts` registers
+  `core/icons/core-ui-icons.ts` in each test bed, so no spec seeds `IconSetService` and
+  `CoreUI WARN: Icon ... is not registered` never appears. A spec that calls
+  `TestBed.resetTestingModule()` inside a test adds `provideCoreUiIcons()` to its providers again.
+  A new icon goes into `core-ui-icons.ts`.
 - **A spec that calls `setValue` or `patchValue` on a form from code calls
   `ChangeDetectorRef.markForCheck()` before `fixture.detectChanges()`** when the template reads
   control state (such as an error message) rather than a signal. Typing marks the view itself;

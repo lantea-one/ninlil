@@ -2,8 +2,6 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
-import { IconSetService } from '@coreui/icons-angular';
-import { cilCog } from '@coreui/icons';
 import { throwError } from 'rxjs';
 import { AppShellComponent } from './app-shell.component';
 import { AuthService } from '../../core/auth/auth.service';
@@ -64,10 +62,6 @@ describe('AppShellComponent', () => {
         },
       ],
     }).compileComponents();
-
-    // The app initializer in app.config.ts normally fills IconSetService; outside it the set is
-    // empty, so seed the Services item's icon (`cilCog`).
-    TestBed.inject(IconSetService).icons = { cilCog };
   });
 
   it('shows only the nav items the current permissions actually grant', () => {
