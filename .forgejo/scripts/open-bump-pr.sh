@@ -11,8 +11,8 @@
 #
 # Inputs (environment):
 #   BASE_BRANCH         the branch the pull request targets; also the branch checked out
-#   NINLIL_CI_TOKEN     a Forgejo token that may push and open pull requests. A push by this token
-#                       (unlike the job's own) starts the branch's build.
+#   NINLIL_CI_TOKEN     a Forgejo token that may push and open pull requests. A pull request
+#                       opened with this token (unlike the job's own) starts its run.
 #   FORGEJO_SERVER_URL / GITHUB_SERVER_URL, FORGEJO_REPOSITORY / GITHUB_REPOSITORY
 #                       set by the Actions runner
 #   BUMP_DATE           the date in the branch name (default: today, UTC)
