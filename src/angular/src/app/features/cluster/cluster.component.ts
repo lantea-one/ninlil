@@ -42,9 +42,7 @@ import {
 } from '../../shared/reveal-secret-dialog/reveal-secret-dialog.component';
 import { EditNodeDialogComponent } from './edit-node-dialog/edit-node-dialog.component';
 import { IfPermissionDirective } from '../../shared/if-permission/if-permission.directive';
-
-/** The page size the peer list starts with, as on the other list pages. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../shared/pagination/default-page-size';
 
 /**
  * This component is the Cluster page (`/cluster`, `clusternodes:read`). It lists this node's

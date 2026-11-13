@@ -29,9 +29,7 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../../shared/if-permission/has-permission.pipe';
-
-/** How many records one page of this list shows. The backend's `PaginationQuery` default is 50. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../../shared/pagination/default-page-size';
 
 /**
  * This component is a zone's records page (`/zones/:zoneId/records`). It lists the zone's records

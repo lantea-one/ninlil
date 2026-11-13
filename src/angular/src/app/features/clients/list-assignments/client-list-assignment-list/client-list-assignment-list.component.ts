@@ -29,9 +29,7 @@ import { extractErrorMessage } from '../../../../shared/http-error/http-error.ut
 import { NotificationService } from '../../../../shared/notification/notification.service';
 import { IfPermissionDirective } from '../../../../shared/if-permission/if-permission.directive';
 import { AuthService } from '../../../../core/auth/auth.service';
-
-/** The page size the list starts with, as on the other list pages. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../../shared/pagination/default-page-size';
 
 /** This interface pairs one raw assignment with the filter list name resolved for display. */
 interface AssignmentRow {
