@@ -7,10 +7,8 @@
 # to repository writers and creates no git tag, so a run that fails part-way publishes nothing
 # (cleanup.sh removes stale drafts after 24 hours).
 #
-#   release.sh stage                  Creates the empty draft for RELEASE_TAG. A draft left over
-#                                     from an earlier attempt for the same commit is kept with its
-#                                     attachments (a single-job re-run needs them) and gets the
-#                                     new notes; a draft for another commit is replaced.
+#   release.sh stage                  Creates the empty draft for RELEASE_TAG, replacing a draft
+#                                     left over from an earlier attempt at the same tag.
 #   release.sh upload <file>...       Attaches each file to the draft, with a <file>.sha256
 #                                     checksum next to it.
 #   release.sh download <name> <dir>  Downloads the draft's attachment <name> into <dir>.
@@ -59,12 +57,6 @@ find_draft() {
         '[.[] | select(.draft and .tag_name == $tag) | .id][0] // empty' "${drafts}"
 }
 
-# Prints the commit the draft with the given id targets, read from the list find_draft just wrote.
-draft_commit() {
-    jq -rs --argjson id "$1" '[.[] | select(.id == $id) | .target_commitish][0] // empty' \
-        "${forgejo_work}/drafts.jsonl"
-}
-
 # Prints the id of the draft release for RELEASE_TAG, failing when there is none.
 require_draft() {
     local id
@@ -83,6 +75,13 @@ stage() {
     : "${DEB_VERSION:?DEB_VERSION is required}"
     : "${RPM_VERSION:?RPM_VERSION is required}"
     : "${RPM_RELEASE:?RPM_RELEASE is required}"
+
+    local existing
+    existing="$(find_draft)"
+    if [[ -n "${existing}" ]]; then
+        echo "Replacing earlier draft ${existing} for ${RELEASE_TAG}"
+        forgejo_api DELETE "/releases/${existing}" > /dev/null
+    fi
 
     local kind='Release'
     if [[ "${RELEASE_PRERELEASE}" == 'true' ]]; then
@@ -167,26 +166,6 @@ EOF
         --arg body "${body}" \
         --argjson prerelease "${RELEASE_PRERELEASE}" \
         '{tag_name: $tag, target_commitish: $target, name: $tag, body: $body, draft: true, prerelease: $prerelease}')"
-
-    # A draft for the same tag and the same commit is kept with its attachments. Forgejo's
-    # "re-run job" on one job (a flaky test, say) runs this job and its dependents again but
-    # not the binary jobs that had passed, so deleting the draft here would leave the packaging
-    # jobs without the binaries those jobs attached. Every job that attaches a file replaces
-    # the attachment of the same name, so a whole-run re-run still ends with the files of its
-    # own attempt. A draft for another commit (a tag reused after a force-push) is replaced.
-    local existing
-    existing="$(find_draft)"
-    if [[ -n "${existing}" ]]; then
-        if [[ "$(draft_commit "${existing}")" == "${COMMIT_SHA}" ]]; then
-            forgejo_api PATCH "/releases/${existing}" --header 'Content-Type: application/json' \
-                --data "${payload}" > /dev/null
-            echo "Kept draft release ${existing} for ${RELEASE_TAG} with its attachments"
-            return
-        fi
-        echo "Replacing earlier draft ${existing} for ${RELEASE_TAG}"
-        forgejo_api DELETE "/releases/${existing}" > /dev/null
-    fi
-
     id="$(forgejo_api POST '/releases' --header 'Content-Type: application/json' --data "${payload}" | jq -r '.id')"
     echo "Created draft release ${id} for ${RELEASE_TAG}"
 }
@@ -224,7 +203,6 @@ download() {
         | jq -r --arg name "${name}" '.[] | select(.name == $name) | .browser_download_url')"
     if [[ -z "${url}" ]]; then
         echo "The draft for ${RELEASE_TAG} has no attachment named ${name}." >&2
-        echo "If this is a re-run of single jobs, re-run the whole run instead (CONTRIBUTING.md, 'Re-running one job of a run')." >&2
         exit 1
     fi
     mkdir -p "${directory}"

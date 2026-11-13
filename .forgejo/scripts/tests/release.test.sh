@@ -2,7 +2,7 @@
 # Tests release.sh (upload and draft lookup) against a fake Forgejo server (fake-forgejo.py)
 # with the real curl and jq.
 #
-# Covers: stage keeps a draft of the same commit and replaces one of another; stage puts the Deb and RPM install commands in the release notes; publish merges the per-file checksums; a successful upload exits 0 and the token is on no curl command line; a failing asset
+# Covers: stage puts the Deb and RPM install commands in the release notes; publish merges the per-file checksums; a successful upload exits 0 and the token is on no curl command line; a failing asset
 # upload exits non-zero; a failing second page of the draft listing exits non-zero instead of
 # reading as "no draft"; a missing draft exits non-zero.
 #
@@ -46,25 +46,6 @@ assert_contains 'release: the notes install the RPM with dnf' "$(cat "${argv_log
 set_routes "{}"
 run_script "${stage_env[@]}" -- bash "${scripts}/release.sh" stage
 if [[ "${status}" -ne 0 && "${output}" == *'DEB_VERSION is required'* ]]; then pass 'release: stage without the package versions fails'; else fail 'release: stage without the package versions fails' "${output}"; fi
-
-# --- Stage after a single-job re-run keeps the draft of the same commit ---------------------------
-# Forgejo's per-job re-run runs stage again but not the binary jobs that passed, so the draft and
-# its attachments must survive; a draft for another commit is replaced.
-stage_versions=(DEB_VERSION=2026.01.01.1 RPM_VERSION=2026.01.01.1 RPM_RELEASE=1)
-set_routes "{\"GET ${releases}#1\": [200, [{\"id\": 7, \"tag_name\": \"${tag}\", \"draft\": true, \"target_commitish\": \"abc1234def\"}]],
-  \"PATCH ${releases}/7\": [200, {\"id\": 7}]}"
-run_script "${stage_env[@]}" "${stage_versions[@]}" -- bash "${scripts}/release.sh" stage
-assert_eq 'release: stage keeping a draft of the same commit exits 0' 0 "${status}"
-assert_contains 'release: stage says it kept the draft' "${output}" 'Kept draft release 7'
-assert_eq 'release: stage keeping a draft deletes nothing' 0 "$(grep -c '^DELETE' "${request_log}")"
-assert_eq 'release: stage keeping a draft creates nothing' 0 "$(grep -c '^POST' "${request_log}")"
-assert_eq 'release: stage keeping a draft refreshes its notes' 1 "$(grep -c '^PATCH' "${request_log}")"
-set_routes "{\"GET ${releases}#1\": [200, [{\"id\": 7, \"tag_name\": \"${tag}\", \"draft\": true, \"target_commitish\": \"0000000\"}]],
-  \"DELETE ${releases}/7\": [204, {}], \"POST ${releases}\": [201, {\"id\": 9}]}"
-run_script "${stage_env[@]}" "${stage_versions[@]}" -- bash "${scripts}/release.sh" stage
-assert_eq 'release: stage replacing a draft of another commit exits 0' 0 "${status}"
-assert_eq 'release: stage deletes a draft of another commit' 1 "$(grep -c '^DELETE' "${request_log}")"
-assert_eq 'release: stage creates the new draft' 1 "$(grep -c '^POST' "${request_log}")"
 
 # --- Successful upload -------------------------------------------------------------------------
 set_routes "$(draft_routes 201)"
