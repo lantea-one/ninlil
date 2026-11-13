@@ -262,4 +262,35 @@ public sealed class MongoReplicaLagTests
         Assert.Equal(1, reads);
         Assert.Equal(0.7, seconds.Value, 2);
     }
+
+    /// <summary>
+    ///     A token cancelled during the settle delay ends the call with
+    ///     <see cref="OperationCanceledException" /> and no second read.
+    /// </summary>
+    [Fact]
+    public async Task MeasureSettledAsync_WhenCancelledDuringTheDelay_ThrowsWithoutASecondRead()
+    {
+        BsonDocument primary = Member("p", "PRIMARY", 120, 20.1);
+        BsonDocument secondary = Member("s", "SECONDARY", 100, 0.1);
+        using CancellationTokenSource source = new();
+        int reads = 0;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await MongoReplicaLag.MeasureSettledAsync(
+                _ =>
+                {
+                    reads++;
+                    // Cancels once the first reading is taken, so the delay that follows
+                    // ends at once.
+                    source.Cancel();
+                    return Task.FromResult(Status(20.2, primary, secondary));
+                },
+                // Below the 20 s lag of the first reading, so the call waits for the delay.
+                TimeSpan.FromSeconds(10),
+                source.Token
+            )
+        );
+
+        Assert.Equal(1, reads);
+    }
 }

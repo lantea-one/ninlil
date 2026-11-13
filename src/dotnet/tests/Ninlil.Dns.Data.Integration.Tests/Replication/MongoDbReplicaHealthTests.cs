@@ -79,18 +79,49 @@ public sealed class MongoDbReplicaHealthTests(MongoDbReplicaSetEngineFixture fix
     }
 
     /// <summary>
-    ///     A secondary that lacks the primary's newest operation and catches up inside the settle
-    ///     delay is reported with no lag. This forces what an idle set does for a few milliseconds
-    ///     after each no-op write of the primary: the secondary is paused, the primary writes, and
-    ///     the secondary resumes while the probe waits for its second reading. The first reading
+    ///     A secondary that lacks the primary's newest operation and catches up before the second
+    ///     reading is reported with no lag. This forces what an idle set does for a few
+    ///     milliseconds after each no-op write of the primary: the secondaries are paused, the
+    ///     primary writes, and the secondaries resume between the two readings. The first reading
     ///     alone would report a lag of more than the settle delay. A secondary that stays paused
     ///     is still reported, by the other tests of this class.
+    ///     <para>
+    ///         The order is forced by the read delegate, not by timers: the first call reads the
+    ///         status while the secondaries are paused, then resumes replication and waits until
+    ///         a direct reading shows no lag, and only then returns the first status. The second
+    ///         call reads a caught-up set. No wall-clock margin between the readings and the
+    ///         resume can fail on a slow host.
+    ///     </para>
     /// </summary>
     [Fact]
     public async Task Probe_WhenTheSecondaryCatchesUpDuringTheSettleDelay_ReportsNoLag()
     {
         string name = $"health_{Guid.NewGuid():N}";
         MongoClient client = new(fixture.Replicated.BuildConnectionString(name));
+        Task<BsonDocument> ReadStatusAsync(CancellationToken token) =>
+            client
+                .GetDatabase("admin")
+                .RunCommandAsync<BsonDocument>(
+                    new BsonDocument("replSetGetStatus", 1),
+                    ReadPreference.Primary,
+                    token
+                );
+
+        async Task WaitUntilAsync(Func<double?, bool> condition, string what)
+        {
+            DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+            while (true)
+            {
+                (double? lag, _) = MongoReplicaLag.Measure(
+                    await ReadStatusAsync(CancellationToken.None)
+                );
+                if (condition(lag))
+                    return;
+                Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting for {what}.");
+                await Task.Delay(100);
+            }
+        }
+
         await fixture.Replicated.WaitForCatchUpAsync();
         await fixture.Replicated.PauseReplicationAsync();
         try
@@ -101,33 +132,36 @@ public sealed class MongoDbReplicaHealthTests(MongoDbReplicaSetEngineFixture fix
                 .WithWriteConcern(WriteConcern.W1)
                 .InsertOneAsync(new BsonDocument("a", 1));
 
-            // The secondary's last operation must be older than the settle delay, or the first
-            // reading is final and the wait never happens.
-            await Task.Delay(MongoReplicaHealthProbe.SettleDelay + TimeSpan.FromSeconds(1));
+            // The first reading is final unless the lag is above the settle delay, so wait until
+            // the paused secondaries are that far behind.
+            await WaitUntilAsync(
+                lag => lag > MongoReplicaHealthProbe.SettleDelay.TotalSeconds,
+                "the paused secondaries to fall behind"
+            );
+
             int reads = 0;
-            Task<(double? Lag, string Detail)> measuring = MongoReplicaLag.MeasureSettledAsync(
-                token =>
+            (double? settledLag, string detail) = await MongoReplicaLag.MeasureSettledAsync(
+                async token =>
                 {
                     reads++;
-                    return client
-                        .GetDatabase("admin")
-                        .RunCommandAsync<BsonDocument>(
-                            new BsonDocument("replSetGetStatus", 1),
-                            ReadPreference.Primary,
-                            token
-                        );
+                    BsonDocument status = await ReadStatusAsync(token);
+                    if (reads == 1)
+                    {
+                        await fixture.Replicated.ResumeReplicationAsync();
+                        await WaitUntilAsync(lag => lag == 0, "the secondaries to catch up");
+                    }
+
+                    return status;
                 },
                 MongoReplicaHealthProbe.SettleDelay,
                 CancellationToken.None
             );
 
-            // Half of the delay after the first reading, well inside the wait.
-            await Task.Delay(MongoReplicaHealthProbe.SettleDelay / 2);
-            await fixture.Replicated.ResumeReplicationAsync();
-            (double? lag, string detail) = await measuring;
-
             Assert.Equal(2, reads);
-            Assert.True(lag == 0, $"The caught-up replica was reported {lag} s behind: {detail}");
+            Assert.True(
+                settledLag == 0,
+                $"The caught-up replica was reported {settledLag} s behind: {detail}"
+            );
         }
         finally
         {

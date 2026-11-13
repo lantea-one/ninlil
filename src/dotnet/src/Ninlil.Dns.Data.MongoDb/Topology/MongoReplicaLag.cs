@@ -34,8 +34,8 @@ namespace Ninlil.Dns.Data.MongoDb.Topology;
 ///             reported below its lag; a stale replica serving reads is worse than a brief
 ///             fallback to the primary. The cost: a secondary a few milliseconds late right after
 ///             the primary's idle no-op write (the next report arrives within milliseconds, and
-///             within a second on a loaded host) reads as behind by the time since its previous operation
-///             (the 20 seconds between no-op writes on the pinned MongoDB 8 image).
+///             within a second on a loaded host) reads as behind by the time since its previous
+///             operation (the 20 seconds between no-op writes on the pinned MongoDB 8 image).
 ///             <see cref="MeasureSettledAsync" /> reads again after a delay before it reports such
 ///             a lag, so that moment is not reported and a stuck secondary still is.
 ///         </item>
@@ -96,7 +96,9 @@ public static class MongoReplicaLag
     ///     delay is final, so a healthy replica under steady writes costs no extra read.
     /// </summary>
     /// <param name="readStatus">Reads one <c>replSetGetStatus</c> reply from the primary.</param>
-    /// <param name="settleDelay">The wait before the second reading, and the lag above which one happens.</param>
+    /// <param name="settleDelay">
+    ///     The wait before the second reading, and the lag above which one happens.
+    /// </param>
     /// <param name="stoppingToken">Cancels the wait and the reads.</param>
     /// <returns>See <see cref="Measure" />.</returns>
     public static async Task<(double? Lag, string Detail)> MeasureSettledAsync(
