@@ -22,7 +22,14 @@
   />
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="attempts()" class="attempts-table">
+    <table
+      cdk-table
+      cTable
+      hover
+      [responsive]="true"
+      [dataSource]="attempts()"
+      class="attempts-table"
+    >
       <ng-container cdkColumnDef="eventTypeName">
         <th cdk-header-cell *cdkHeaderCellDef>Event</th>
         <td cdk-cell *cdkCellDef="let attempt">{{ attempt.eventTypeName }}</td>

@@ -47,7 +47,14 @@
     </p>
   }
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="rows()" class="assignment-table">
+    <table
+      cdk-table
+      cTable
+      hover
+      [responsive]="true"
+      [dataSource]="rows()"
+      class="assignment-table"
+    >
       <ng-container cdkColumnDef="listName">
         <th cdk-header-cell *cdkHeaderCellDef>Filter list</th>
         <td cdk-cell *cdkCellDef="let row">{{ row.listName }}</td>

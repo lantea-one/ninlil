@@ -58,7 +58,7 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="entries()" class="entry-table">
+    <table cdk-table cTable hover [responsive]="true" [dataSource]="entries()" class="entry-table">
       <ng-container cdkColumnDef="value">
         <th cdk-header-cell *cdkHeaderCellDef>Value</th>
         <td cdk-cell *cdkCellDef="let entry">{{ entry.value }}</td>

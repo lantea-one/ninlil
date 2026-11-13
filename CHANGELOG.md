@@ -11,6 +11,9 @@ outside Forgejo.
 
 ## Unreleased
 
+- **Every table in the admin console scrolls sideways inside its card on a narrow screen.** A long
+  value no longer widens the page. ([#195](https://git.lantea.one/lantea-one/ninlil/issues/195))
+
 ## v2026.11.13.1
 
 ### Behaviour worth knowing

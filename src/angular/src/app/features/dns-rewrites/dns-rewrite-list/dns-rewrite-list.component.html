@@ -30,7 +30,14 @@
   </app-empty-state>
 } @else {
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="rewrites()" class="rewrite-table">
+    <table
+      cdk-table
+      cTable
+      hover
+      [responsive]="true"
+      [dataSource]="rewrites()"
+      class="rewrite-table"
+    >
       <ng-container cdkColumnDef="domain">
         <th cdk-header-cell *cdkHeaderCellDef>Domain</th>
         <td cdk-cell *cdkCellDef="let rewrite">
