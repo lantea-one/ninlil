@@ -770,10 +770,11 @@ DNSCrypt), DHCPv4, DHCPv6 and TFTP sockets and the web listener (which also serv
 set `SO_EXCLUSIVEADDRUSE`, so no other program can bind a port Ninlil serves. A second program that
 tries fails to bind, whichever of the two started second. That includes a DHCP relay agent or
 another DHCP or TFTP program on the same host: it cannot share Ninlil's server port (67, 547 or 69).
-The rule Windows applies is this: an exclusive bind of the wildcard address (`0.0.0.0` or `::`)
-fails when another socket already holds the port on any address it overlaps, and an exclusive bind
-of one specific address fails only against a socket that is itself exclusive or holds that same
-address.
+The rule Windows applies, as measured: an exclusive bind of the dual-stack wildcard (Ninlil's
+default) or of `0.0.0.0` fails when another socket already holds the port on any address it
+overlaps, including a socket that is not exclusive itself. An exclusive bind of one specific
+address fails only against a socket that is itself exclusive or holds that same address, so it
+works beside another program's wildcard socket.
 
 What Ninlil does when a bind fails depends on the listener:
 
