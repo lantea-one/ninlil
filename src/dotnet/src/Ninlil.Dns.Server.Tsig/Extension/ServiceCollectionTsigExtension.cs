@@ -14,14 +14,16 @@ namespace Ninlil.Dns.Server.Tsig.Extension;
 public static class ServiceCollectionTsigExtension
 {
     /// <summary>
-    ///     This method registers <see cref="ITsigService" /> (scoped),
+    ///     This method registers <see cref="ITsigService" /> (singleton),
     ///     <see cref="TsigSecretProtector" />, <see cref="TsigKeyLookupCache" /> (singleton),
     ///     <see cref="TimeProvider.System" /> (if no clock is registered),
     ///     <see cref="IDnsTransactionSignatureService" /> (singleton) and
     ///     <see cref="TsigServiceOptions" />. The caller
     ///     must also register an
     ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.ITsigKeyRepository" />
-    ///     implementation.
+    ///     implementation and an
+    ///     <see cref="Ninlil.Dns.Data.Abstractions.Repository.IEntityChangeNotifier" />, which
+    ///     <see cref="TsigKeyLookupCache" /> uses to learn of key changes.
     /// </summary>
     /// <param name="instance">The current <see cref="IServiceCollection" /> instance.</param>
     /// <param name="configuration">The application configuration to read TSIG settings from.</param>
@@ -41,7 +43,7 @@ public static class ServiceCollectionTsigExtension
         instance.AddSingleton<TsigSecretProtector>();
         instance.TryAddSingleton(TimeProvider.System);
         instance.AddSingleton<TsigKeyLookupCache>();
-        instance.AddScoped<ITsigService, TsigService>();
+        instance.AddSingleton<ITsigService, TsigService>();
 
         // The query pipeline verifies signed requests and signs their replies through this.
         instance.AddSingleton<IDnsTransactionSignatureService, TsigTransactionSignatureService>();

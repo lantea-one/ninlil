@@ -20,8 +20,8 @@ public interface ITsigService
     ///     (BADTIME), then the truncation policy (BADTRUNC). A MAC size RFC 8945 §5.2.2.1 forbids
     ///     (above the hash length, or below the larger of 10 octets and half the hash length) is
     ///     FORMERR and is rejected first. A valid truncated MAC, such as HMAC-SHA1-96, is
-    ///     compared on its truncated bytes. Key lookups are cached for a few seconds
-    ///     (<see cref="TsigKeyLookupCache" />).
+    ///     compared on its truncated bytes. Keys come from an in-memory copy
+    ///     (<see cref="TsigKeyLookupCache" />) that a key change expires at once on this node.
     /// </summary>
     /// <param name="rawMessage">The complete message as received from the wire.</param>
     /// <param name="tsigRecordStartOffset">

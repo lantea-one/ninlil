@@ -7,17 +7,24 @@ namespace Ninlil.Dns.Server.Tsig.Tests;
 
 /// <summary>
 ///     This class is a minimal <see cref="ITsigKeyRepository" /> over a list of keys. It matches
-///     names exactly, like a case-sensitive database column, and counts lookups so a test can tell
-///     whether <see cref="TsigKeyLookupCache" /> went to the repository. Only
-///     <see cref="FindByNameAsync" /> works; every other member throws.
+///     names exactly, like a case-sensitive database column, and counts how many times
+///     <see cref="ListAsync" /> ran so a test can tell whether <see cref="TsigKeyLookupCache" />
+///     loaded its keys. Only <see cref="FindByNameAsync" /> and <see cref="ListAsync" /> work;
+///     every other member throws.
 /// </summary>
 /// <param name="keys">The keys the repository holds. A test may change the list.</param>
 public sealed class InMemoryTsigKeyRepository(List<TsigKeyEntity> keys) : ITsigKeyRepository
 {
     /// <summary>
-    ///     This property contains how many times <see cref="FindByNameAsync" /> ran.
+    ///     This property contains how many times <see cref="ListAsync" /> ran, which is how many
+    ///     times the cache loaded its keys.
     /// </summary>
-    public int LookupCount { get; private set; }
+    public int LoadCount { get; private set; }
+
+    /// <summary>
+    ///     This property makes <see cref="ListAsync" /> throw, as a database outage does.
+    /// </summary>
+    public bool FailLoads { get; set; }
 
     /// <inheritdoc />
     public Task<TsigKeyEntity> FindByNameAsync(
@@ -25,7 +32,6 @@ public sealed class InMemoryTsigKeyRepository(List<TsigKeyEntity> keys) : ITsigK
         CancellationToken stoppingToken = default
     )
     {
-        LookupCount++;
         return Task.FromResult(keys.FirstOrDefault(key => key.Name == name));
     }
 
@@ -37,7 +43,17 @@ public sealed class InMemoryTsigKeyRepository(List<TsigKeyEntity> keys) : ITsigK
     public Task<IReadOnlyList<TsigKeyEntity>> ListAsync(
         Expression<Func<TsigKeyEntity, bool>> predicate = null,
         CancellationToken stoppingToken = default
-    ) => throw new NotSupportedException();
+    )
+    {
+        LoadCount++;
+
+        if (FailLoads)
+            throw new InvalidOperationException("The database is down.");
+
+        return Task.FromResult<IReadOnlyList<TsigKeyEntity>>([
+            .. keys.Where((predicate ?? (_ => true)).Compile()),
+        ]);
+    }
 
     /// <inheritdoc />
     public Task AddAsync(TsigKeyEntity entity, CancellationToken stoppingToken = default) =>

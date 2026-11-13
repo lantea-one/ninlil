@@ -41,6 +41,16 @@ outside Forgejo.
   status fails to load.** Zones no longer shares the logo's icon. Without the current status the
   page shows the error and hides the switch form, so nobody schedules a switch blind.
   ([#199](https://git.lantea.one/lantea-one/ninlil/issues/199))
+- **A TSIG key that you delete, disable or change is refused or used as changed by the very next
+  signed message, and signing no longer opens a service scope.** The keys now live in one
+  in-memory copy that a key change expires at once on the node that made the change (before, the
+  old verdict lasted up to 10 seconds). A change made by another node or by a direct database edit
+  shows after at most 10 seconds. If the reload after a change fails, every TSIG key is refused
+  until a reload succeeds. For code that uses the `Ninlil.Dns.Server.Tsig` package: `TsigService`
+  and `ITsigService` are singletons, the `TsigService` constructor no longer takes a key
+  repository, and `TsigKeyLookupCache` needs an `IEntityChangeNotifier` and no longer takes a
+  repository per lookup.
+  ([#229](https://git.lantea.one/lantea-one/ninlil/issues/229))
 
 ## v2026.11.13.1
 
