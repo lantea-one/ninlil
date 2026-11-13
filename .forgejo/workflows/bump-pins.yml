@@ -5,8 +5,9 @@ name: 'Bump Pins'
 ## the newest upstream version and opens a pull request with the result (bump-pins.sh and
 ## open-bump-pr.sh in .forgejo/scripts). Runs weekly on Monday at 05:23 UTC, or by hand ("Run workflow") with
 ## the branch the pull request targets: develop by default, or main while there is no
-## develop-to-main flow yet. The pull request runs the verify build and its branch push runs the
-## full pipeline, so a bad bump is visible before anyone merges it. It needs only the CI token
+## develop-to-main flow yet. The pull request runs the verify build, so a bad bump is visible before anyone merges it;
+## the full pipeline runs on develop after the merge, or on the bump branch if someone starts the
+## Build workflow by hand. It needs only the CI token
 ## (secrets.NINLIL_CI_TOKEN) the pipeline already uses.
 ##
 ## Fork pull requests: before this repository goes public, enable the Forgejo setting that makes

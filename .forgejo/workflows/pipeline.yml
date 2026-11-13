@@ -1,7 +1,7 @@
 name: 'Ninlil Pipeline'
 ##
-## The build, test, and publish pipeline shared by every entry point: branch builds
-## (build.yml), release builds (release.yml), and pull-request verification (pull-request.yml).
+## The build, test, and publish pipeline shared by every entry point: pre-release builds
+## (build.yml: develop, main and hotfix pushes, or by hand), release builds (release.yml), and pull-request verification (pull-request.yml).
 ##
 ## Input: kind, set by the calling workflow as a literal, never computed from the event. Only
 ## 'prerelease' and 'release' open the version, draft, binary, package, image, smoke and publish
