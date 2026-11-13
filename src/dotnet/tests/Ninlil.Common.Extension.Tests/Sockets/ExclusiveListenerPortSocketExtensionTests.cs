@@ -28,11 +28,13 @@ public class ExclusiveListenerPortSocketExtensionTests
         if (OperatingSystem.IsWindows())
             return;
 
+        using Socket control = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         using Socket socket = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         socket.ClaimPortExclusivelyOnWindows();
 
-        // The call changed no option, so the socket still binds as before.
-        Assert.False(socket.ExclusiveAddressUse);
+        // The call changed no option (the control socket shows the platform's default, which
+        // differs between systems), so the socket still binds as before.
+        Assert.Equal(control.ExclusiveAddressUse, socket.ExclusiveAddressUse);
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
     }
 

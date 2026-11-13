@@ -10,10 +10,11 @@ namespace Ninlil.Dns.Server.Core.Tests.Transport;
 /// <summary>
 ///     This class checks on Windows that <see cref="ListenSocketSet" /> claims its port
 ///     exclusively, with real sockets on OS-assigned ports. Every test returns at once on other
-///     systems, where the sockets behave as before. Each test names a combination of sockets that
-///     Windows allows on one port without exclusive use (measured on a Windows host, and
+///     systems, where the sockets behave as before. The dual-stack tests name combinations of sockets
+///     that Windows allows on one port without exclusive use (measured on a Windows host, and
 ///     described in the Winsock documentation "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"), and
-///     proves the bind is refused now. These tests cover the plain, DNS-over-TLS and DNSCrypt
+///     prove the bind is refused. The explicit-address tests guard the per-address behaviour:
+///     the same address stays refused, and two different addresses on one port keep working. These tests cover the plain, DNS-over-TLS and DNSCrypt
 ///     listeners, which all bind through this class.
 /// </summary>
 public class ListenSocketSetExclusivePortTests
@@ -98,7 +99,7 @@ public class ListenSocketSetExclusivePortTests
     [Theory]
     [InlineData(ProtocolType.Udp)]
     [InlineData(ProtocolType.Tcp)]
-    public void ExplicitAddressSet_OnWindows_RefusesAWildcardSocketOnTheSamePort(
+    public void ExplicitAddressSet_OnWindows_RefusesAReusingSocketOnTheSameAddressAndPort(
         ProtocolType protocolType
     )
     {
@@ -117,10 +118,13 @@ public class ListenSocketSetExclusivePortTests
         {
             Assert.Single(set.Sockets);
 
-            using Socket wildcard = CreateSocket(AddressFamily.InterNetwork, protocolType);
-            wildcard.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            // Exclusive use is per address: a socket on the same address is refused even with
+            // SO_REUSEADDR, while a wildcard socket would not take traffic the specific address
+            // receives, so Windows allows that bind and this test does not ask for it.
+            using Socket reusing = CreateSocket(AddressFamily.InterNetwork, protocolType);
+            reusing.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             Assert.Throws<SocketException>(() =>
-                wildcard.Bind(new IPEndPoint(IPAddress.Any, set.BoundPort))
+                reusing.Bind(new IPEndPoint(IPAddress.Loopback, set.BoundPort))
             );
         }
         finally
