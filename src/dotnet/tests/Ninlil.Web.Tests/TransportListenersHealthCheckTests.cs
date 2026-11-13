@@ -103,24 +103,19 @@ public sealed class TransportListenersHealthCheckTests
     [Fact]
     public async Task CheckHealthAsync_WithAPlainListenerThatCouldNotBind_NamesTheAddressAndTheReason()
     {
-        // Another socket holds the wildcard UDP port, so the listener's bind of "::" fails. The
-        // address is listed explicitly because on Windows a listen-everywhere listener falls back
-        // to one socket per local address instead of failing. The listener must end without
-        // throwing and the check must say why it is not listening.
-        using Socket occupant = new(
-            AddressFamily.InterNetworkV6,
-            SocketType.Dgram,
-            ProtocolType.Udp
-        );
-        occupant.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
-        occupant.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
+        // Another socket holds the IPv4 wildcard UDP port, so the listener's bind of "0.0.0.0"
+        // fails. The address is listed explicitly because on Windows a listen-everywhere
+        // listener falls back to one socket per local address instead of failing. The listener
+        // must end without throwing and the check must say why it is not listening.
+        using Socket occupant = new(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        occupant.Bind(new IPEndPoint(IPAddress.Any, 0));
         int port = ((IPEndPoint)occupant.LocalEndPoint).Port;
 
         // The pipeline is never used: the bind fails before the first receive.
         UdpDnsListener udp = new(
             null,
             new MutableMonitor<PlainProtocolOptions>(
-                new PlainProtocolOptions { Port = port, ListenAddresses = "::" }
+                new PlainProtocolOptions { Port = port, ListenAddresses = "0.0.0.0" }
             ),
             NullLogger<UdpDnsListener>.Instance
         );
@@ -140,7 +135,10 @@ public sealed class TransportListenersHealthCheckTests
         HealthCheckResult result = await check.CheckHealthAsync(new HealthCheckContext());
 
         Assert.Equal(HealthStatus.Unhealthy, result.Status);
-        Assert.Contains("Plain/UDP (:: (", result.Description);
+        Assert.True(
+            result.Description.Contains("Plain/UDP (0.0.0.0 ("),
+            $"Expected the listener name and address, got: {result.Description}"
+        );
         Assert.True(
             PortTakenReason.IsIn(result.Description),
             $"Expected an OS port-taken reason ({PortTakenReason.Describe()}), got: {result.Description}"
