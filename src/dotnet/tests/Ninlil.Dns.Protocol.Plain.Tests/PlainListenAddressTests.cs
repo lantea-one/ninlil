@@ -105,6 +105,16 @@ public sealed class PlainListenAddressTests
 
         await using RunningListeners listeners = await RunningListeners.StartAsync("", port);
 
+        // On Windows the occupied wildcard makes the listeners fall back to one exclusive
+        // socket per local address, so they listen (see ListenSocketSetWindowsFallbackTests in
+        // Ninlil.Dns.Server.Core.Tests).
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.True(listeners.Udp.IsListening);
+            Assert.True(listeners.Tcp.IsListening);
+            return;
+        }
+
         Assert.False(listeners.Udp.ExecuteTask.IsFaulted);
         Assert.False(listeners.Tcp.ExecuteTask.IsFaulted);
         Assert.False(listeners.Udp.IsListening);
