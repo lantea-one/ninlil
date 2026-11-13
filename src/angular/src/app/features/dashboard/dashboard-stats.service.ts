@@ -8,6 +8,7 @@ import {
   WebhooksService as WebhooksApiService,
   ZonesService as ZonesApiService,
 } from '../../api-client';
+import { navItemIcon } from '../../layout/app-shell/nav-item.model';
 import { QuickStat } from './dashboard.model';
 
 /**
@@ -38,18 +39,21 @@ export class DashboardStatsService {
   /**
    * This method requests one `skip=0&take=1` page from each of the four list endpoints and reads
    * `totalCount`. Each request catches its error and yields `count: null`, so a user without
-   * one resource's read permission still sees the other tiles. It never rejects.
+   * one resource's read permission still sees the other tiles. It never rejects. Each tile takes
+   * its icon from the menu entry of the same page (`navItemIcon`).
    */
   async fetchQuickStats(): Promise<QuickStat[]> {
     return Promise.all([
-      this.fetchCount('Zones', 'cilLan', () => this.zonesApi.apiZonesGet({ skip: 0, take: 1 })),
-      this.fetchCount('Forwarders', 'cilShareAll', () =>
+      this.fetchCount('Zones', navItemIcon('zones'), () =>
+        this.zonesApi.apiZonesGet({ skip: 0, take: 1 }),
+      ),
+      this.fetchCount('Forwarders', navItemIcon('forwarders'), () =>
         this.forwardersApi.apiForwardersGet({ skip: 0, take: 1 }),
       ),
-      this.fetchCount('Filter Lists', 'cilBan', () =>
+      this.fetchCount('Filter Lists', navItemIcon('filter-lists'), () =>
         this.filterListsApi.apiFilterListsGet({ skip: 0, take: 1 }),
       ),
-      this.fetchCount('Webhooks', 'cilLink', () =>
+      this.fetchCount('Webhooks', navItemIcon('webhooks'), () =>
         this.webhooksApi.apiWebhooksGet({ skip: 0, take: 1 }),
       ),
     ]);
