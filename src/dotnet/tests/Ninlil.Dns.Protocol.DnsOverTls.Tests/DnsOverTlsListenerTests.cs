@@ -694,7 +694,8 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     }
 
     /// <summary>
-    ///     This method waits, for at most 10 seconds, until <paramref name="listener" /> is bound.
+    ///     This method waits, for at most 10 seconds, until <paramref name="listener" /> is bound
+    ///     or has finished without binding anything.
     ///     <c>ExecuteAsync</c> binds after <c>StartAsync</c> returns, and sets
     ///     <see cref="DnsOverTlsListener.IsListening" /> only once every address was tried and the
     ///     failed ones recorded, so it is the bind signal; a fixed sleep is not.
@@ -703,7 +704,9 @@ public sealed class DnsOverTlsListenerTests : IAsyncLifetime
     {
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
-        while (!listener.IsListening)
+        // A listener that bound nothing finishes without listening; waiting for it to listen
+        // would only run into the timeout.
+        while (!listener.IsListening && !listener.ExecuteTask.IsCompleted)
             await Task.Delay(10, timeout.Token);
     }
 
