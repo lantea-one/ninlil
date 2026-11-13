@@ -2,7 +2,7 @@ import { DnsClientDeviceIconEnum } from '../../../api-client';
 
 /**
  * One entry of the device icon catalog: the backend's `DnsClientDeviceIconEnum` key, its label,
- * and the `@coreui/icons` icon it is drawn with (which must be registered in `app.config.ts`).
+ * and the `@coreui/icons` icon it is drawn with (which must be registered in `core/icons/core-ui-icons.ts`).
  */
 export interface DeviceIconOption {
   readonly key: DnsClientDeviceIconEnum;
