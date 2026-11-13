@@ -114,25 +114,18 @@ public class Dhcpv4UdpRoundTripTests
     ///     (<c>giaddr</c>) gets its reply unicast to that relay agent even when its broadcast flag
     ///     is also set.
     ///     <para>
-    ///         The "relay agent" is a second socket bound to <c>127.0.0.7</c> on the listener's
-    ///         server port, while the listener has a wildcard bind on that port. Both set
-    ///         <c>SO_REUSEADDR</c> where the listener does (see <see cref="Dhcpv4UdpListener.StartAsync" />), so the
-    ///         specific bind can coexist with the wildcard one and receives datagrams addressed to
-    ///         <c>127.0.0.7</c>. If the reply were broadcast instead, the relay socket would get
-    ///         nothing and the test would time out.
-    ///     </para>
-    ///     <para>
-    ///         On Windows the listener claims its port exclusively, so no second socket can sit
-    ///         on that port and the arrangement cannot be built; the test returns there.
-    ///         <see cref="Dhcpv4ExclusivePortTests" /> covers that behaviour.
+    ///         The "relay agent" is a second socket bound to <c>127.0.0.7</c> on a port of its own.
+    ///         The test points the listener's <c>ServerPort</c> option at that port after the start,
+    ///         because the listener sends a relayed reply to the relay agent on that configured port
+    ///         and reads it on every send. No port is shared, so the test runs on every system,
+    ///         including Windows where the listener claims its own port exclusively. If the reply
+    ///         were broadcast instead, the relay socket would get nothing and the test would time
+    ///         out.
     ///     </para>
     /// </summary>
     [Fact]
     public async Task RelayedDiscover_RepliesAreUnicastToTheRelayAgent_NotBroadcast()
     {
-        if (OperatingSystem.IsWindows())
-            return;
-
         IPAddress relayAgentAddress = IPAddress.Parse("127.0.0.7");
 
         StubDhcpv4RequestHandler handler = new();
@@ -153,17 +146,16 @@ public class Dhcpv4UdpRoundTripTests
         await listener.StartAsync(CancellationToken.None);
         int serverPort = listener.BoundPort;
 
-        // A relayed reply goes to the relay agent on the configured server port, so the options
-        // must name the port the listener got instead of 0. The listener reads it on every send.
-        options.ServerPort = serverPort;
-
         using Socket relaySocket = new(
             AddressFamily.InterNetwork,
             SocketType.Dgram,
             ProtocolType.Udp
         );
-        relaySocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        relaySocket.Bind(new IPEndPoint(relayAgentAddress, serverPort));
+        relaySocket.Bind(new IPEndPoint(relayAgentAddress, 0));
+
+        // A relayed reply goes to the relay agent on the configured server port, so the options
+        // must name the relay socket's port. The listener reads it on every send.
+        options.ServerPort = ((IPEndPoint)relaySocket.LocalEndPoint).Port;
 
         try
         {

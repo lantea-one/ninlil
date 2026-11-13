@@ -10,12 +10,17 @@ namespace Ninlil.Dns.Server.Core.Tests.Transport;
 /// <summary>
 ///     This class checks on Windows that <see cref="ListenSocketSet" /> claims its port
 ///     exclusively, with real sockets on OS-assigned ports. Every test returns at once on other
-///     systems, where the sockets behave as before. The dual-stack tests name combinations of sockets
-///     that Windows allows on one port without exclusive use (measured on a Windows host, and
-///     described in the Winsock documentation "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"), and
-///     prove the bind is refused. The explicit-address tests guard the per-address behaviour:
-///     the same address stays refused, and two different addresses on one port keep working. These tests cover the plain, DNS-over-TLS and DNSCrypt
-///     listeners, which all bind through this class.
+///     systems, where the sockets behave as before.
+///     <para>
+///         The dual-stack tests name combinations of sockets that Windows allows on one port
+///         without exclusive use (measured on a Windows host, and described in the Winsock
+///         documentation "Using SO_REUSEADDR and SO_EXCLUSIVEADDRUSE"), and prove the bind is
+///         refused. The explicit-address tests guard behaviour Windows gives with or without the
+///         claim: the same address stays refused, and two different addresses on one port keep
+///         working.
+///     </para>
+///     These tests cover the plain, DNS-over-TLS and DNSCrypt listeners, which all bind through
+///     this class.
 /// </summary>
 public class ListenSocketSetExclusivePortTests
 {
@@ -118,6 +123,7 @@ public class ListenSocketSetExclusivePortTests
         {
             Assert.Single(set.Sockets);
 
+            // A guard, not a test of the claim: Windows refuses this bind with or without it.
             // Exclusive use is per address: a socket on the same address is refused even with
             // SO_REUSEADDR, while a wildcard socket would not take traffic the specific address
             // receives, so Windows allows that bind and this test does not ask for it.

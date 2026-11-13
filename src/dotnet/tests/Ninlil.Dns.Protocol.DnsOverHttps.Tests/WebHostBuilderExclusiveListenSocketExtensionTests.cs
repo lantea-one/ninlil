@@ -55,4 +55,32 @@ public class WebHostBuilderExclusiveListenSocketExtensionTests
         reusing.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         Assert.Throws<SocketException>(() => reusing.Bind(new IPEndPoint(IPAddress.Any, port)));
     }
+
+    [Fact]
+    public void CreateBoundListenSocket_ForAUnixDomainSocketEndpoint_LeavesItToKestrelsDefaultFactory()
+    {
+        // Kestrel can listen on a Unix domain socket path; the hook must not turn that into a
+        // TCP socket. Unix domain sockets work on Windows 10 and later as well.
+        if (!Socket.OSSupportsUnixDomainSockets)
+            return;
+
+        string directory = Path.Combine(Path.GetTempPath(), $"ninlil-uds-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "s.sock");
+
+        try
+        {
+            using Socket socket =
+                WebHostBuilderExclusiveListenSocketExtension.CreateBoundListenSocket(
+                    new UnixDomainSocketEndPoint(path)
+                );
+
+            Assert.Equal(AddressFamily.Unix, socket.AddressFamily);
+            Assert.Equal(path, ((UnixDomainSocketEndPoint)socket.LocalEndPoint).ToString());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 }
