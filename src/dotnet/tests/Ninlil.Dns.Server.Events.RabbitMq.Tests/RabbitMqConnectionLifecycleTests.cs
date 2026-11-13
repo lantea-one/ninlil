@@ -6,6 +6,7 @@ using Ninlil.Dns.Server.Core.Events;
 using Ninlil.Dns.Server.Core.Events.Broker;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
 
 // Define our namespace.
 namespace Ninlil.Dns.Server.Events.RabbitMq.Tests;
@@ -38,8 +39,22 @@ public sealed class RabbitMqConnectionLifecycleTests : IAsyncLifetime
         .WithPortBinding(AmqpPort, assignRandomHostPort: true)
         .WithEnvironment("RABBITMQ_DEFAULT_USER", User)
         .WithEnvironment("RABBITMQ_DEFAULT_PASS", Password)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(AmqpPort))
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ReadyMessage))
         .Build();
+
+    // The broker opens its AMQP listener a few milliseconds before its boot finishes ("started TCP
+    // listener" precedes "Server startup complete" in its log), so an open port does not mean the
+    // broker serves clients; a connection in that window can be reset. The startup line is the
+    // broker's own statement that boot is done. A rabbitmq-diagnostics command run through exec
+    // is not used: it runs as root and can create the Erlang cookie file before the broker does,
+    // which then stops the broker from starting.
+    private const string ReadyMessage = "Server startup complete";
+
+    // The mapped host port is served by Docker's proxy, which accepts a connection before it
+    // forwards it, so even a ready broker can reset a first connection on a loaded host. The
+    // direct connections of the tests therefore retry up to this many times, 250 ms apart
+    // (about 5 s at most; a healthy broker needs one attempt).
+    private const int ConnectAttempts = 20;
 
     /// <inheritdoc />
     public Task InitializeAsync() => _container.StartAsync();
@@ -122,7 +137,7 @@ public sealed class RabbitMqConnectionLifecycleTests : IAsyncLifetime
         // A direct exchange of the same name makes the transport's fanout declaration fail with
         // PRECONDITION_FAILED on every attempt.
         ConnectionFactory factory = NewFactory();
-        await using (IConnection admin = await factory.CreateConnectionAsync())
+        await using (IConnection admin = await ConnectWithRetryAsync(factory))
         await using (IChannel channel = await admin.CreateChannelAsync())
             await channel.ExchangeDeclareAsync(exchange, ExchangeType.Direct, durable: false);
 
@@ -153,7 +168,7 @@ public sealed class RabbitMqConnectionLifecycleTests : IAsyncLifetime
         // is the one the consumer loop sees.
         ConnectionFactory factory = NewFactory();
         factory.AutomaticRecoveryEnabled = false;
-        IConnection connection = await factory.CreateConnectionAsync();
+        IConnection connection = await ConnectWithRetryAsync(factory);
         connection.ConnectionShutdownAsync += handler;
         await connection.DisposeAsync();
 
@@ -173,6 +188,23 @@ public sealed class RabbitMqConnectionLifecycleTests : IAsyncLifetime
             UserName = User,
             Password = Password,
         };
+
+    // Opens a connection, retrying only broker-unreachable failures (a reset during the AMQP
+    // handshake) up to ConnectAttempts times; the last failure propagates.
+    private static async Task<IConnection> ConnectWithRetryAsync(ConnectionFactory factory)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await factory.CreateConnectionAsync();
+            }
+            catch (BrokerUnreachableException) when (attempt < ConnectAttempts)
+            {
+                await Task.Delay(250);
+            }
+        }
+    }
 
     private RabbitMqEventBrokerOptions NewOptions(string exchange) =>
         new()
