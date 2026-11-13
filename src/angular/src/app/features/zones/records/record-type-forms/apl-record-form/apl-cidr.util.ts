@@ -8,6 +8,7 @@
  * include trailing zero octets in the address part, and the records API refuses an item that
  * does (`RecordDataValidator`).
  */
+import { parseIpv6 } from '../../../../../shared/ip-address/ip-address.util';
 
 /** This interface is the APL item shape {@link parseCidr} produces. */
 export interface AplCidrParts {
@@ -42,55 +43,6 @@ function parseIpv4(address: string): number[] {
 /** This function formats 4 octets into a dotted-decimal IPv4 address. */
 function formatIpv4(bytes: number[]): string {
   return bytes.join('.');
-}
-
-/**
- * This function parses an IPv6 address, with optional `::` compression (RFC 4291 §2.2), into its
- * 16 octets. An embedded IPv4 tail (`::ffff:192.0.2.1`) is not supported.
- */
-function parseIpv6(address: string): number[] {
-  // A valid address contains "::" at most once.
-  const halves = address.split('::');
-
-  if (halves.length > 2) {
-    throw new Error(`"${address}" is not a valid IPv6 address.`);
-  }
-
-  // The groups before and after "::" (either side may be empty, as in "::1"); the zero groups it
-  // stands for are inserted between them below.
-  const head = halves[0].length > 0 ? halves[0].split(':') : [];
-  const tail = halves.length === 2 && halves[1].length > 0 ? halves[1].split(':') : [];
-  const missingGroupCount = 8 - head.length - tail.length;
-
-  // Without "::" all 8 groups must be written out.
-  if (halves.length === 1 && missingGroupCount !== 0) {
-    throw new Error(`"${address}" is not a valid IPv6 address.`);
-  }
-
-  // A negative count means more than 8 groups were written.
-  if (missingGroupCount < 0) {
-    throw new Error(`"${address}" is not a valid IPv6 address.`);
-  }
-
-  // Insert the zero groups where "::" was, then check the total again.
-  const groups = [...head, ...Array<string>(missingGroupCount).fill('0'), ...tail];
-
-  if (groups.length !== 8) {
-    throw new Error(`"${address}" is not a valid IPv6 address.`);
-  }
-
-  // Each 16-bit group becomes two bytes in network order (high byte first).
-  const bytes: number[] = [];
-
-  for (const group of groups) {
-    const value = Number.parseInt(group, 16);
-    if (!Number.isInteger(value) || value < 0 || value > 0xffff || group.length === 0) {
-      throw new Error(`"${address}" is not a valid IPv6 address.`);
-    }
-    bytes.push((value >> 8) & 0xff, value & 0xff);
-  }
-
-  return bytes;
 }
 
 /** This function formats 16 octets into a full-form (non-compressed) IPv6 address. */
