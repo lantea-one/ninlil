@@ -40,6 +40,10 @@ describe('isIpv6Address', () => {
     'g::1',
     '1.2.3.4',
     '1:2:3:4:5:6:7::8',
+    '1.2.3.4::',
+    '192.0.2.1::',
+    '0:1.2.3.4::',
+    '0:0:192.0.2.1::',
   ]) {
     it(`rejects "${address}"`, () => {
       expect(isIpv6Address(address)).toBeFalse();
@@ -185,6 +189,8 @@ describe('parseIpv6 and isIpv6Address', () => {
     ':::',
     '1::2::3',
     '1.2.3.4',
+    '1.2.3.4::',
+    '0:0:192.0.2.1::',
   ]) {
     it(`gives the same verdict for "${address}"`, () => {
       let parses = true;
