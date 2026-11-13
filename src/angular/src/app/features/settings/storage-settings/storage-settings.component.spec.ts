@@ -69,6 +69,22 @@ describe('StorageSettingsComponent', () => {
     return fixture;
   }
 
+  it('offers no switch form when the status fails to load', async () => {
+    const fixture = await createComponent({
+      configureApi: () =>
+        apiSpy.apiStorageGet.and.returnValue(throwError(() => new Error('status failed'))),
+    });
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelector('#storage-target-engine')).toBeNull();
+    expect(Array.from(element.querySelectorAll('button')).map((b) => b.textContent)).not.toContain(
+      'Schedule switch',
+    );
+    expect(element.querySelector('c-alert')?.textContent).toContain(
+      'Could not load storage status',
+    );
+  });
+
   it('loads the current status on init', async () => {
     const fixture = await createComponent();
 

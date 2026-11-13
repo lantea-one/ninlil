@@ -32,7 +32,7 @@ import { IconDirective } from '@coreui/icons-angular';
 import { AuthService } from '../../core/auth/auth.service';
 import { BrandingService } from '../../core/branding/branding.service';
 import { ThemeSwitcherComponent } from '../../shared/theme-switcher/theme-switcher.component';
-import { NAV_ITEMS } from './nav-item.model';
+import { BRAND_ICON, NAV_ITEMS } from './nav-item.model';
 
 /**
  * This component is the frame around every signed-in page: a CoreUI sidebar with the nav, and a
@@ -125,6 +125,9 @@ export class AppShellComponent implements AfterViewInit {
           : this.authService.hasAnyPermission(item.permission)),
     ),
   );
+
+  /** The icon shown in the sidebar header when the site has no logo. */
+  readonly brandIcon = BRAND_ICON;
 
   /** The sidebar brand text: the configured site title, or "Ninlil" when none is set. */
   readonly brandTitle = computed(() => this.brandingService.siteTitle() ?? 'Ninlil');

@@ -123,7 +123,7 @@
         </c-alert>
       }
 
-      @if (!currentReplica()) {
+      @if (switchOffered()) {
         <form cForm [formGroup]="form" class="settings-form">
           <c-row class="mb-3">
             <label cCol="sm-3" cLabel for="storage-target-engine">Target engine</label>
@@ -333,7 +333,7 @@
       }
     </c-card-body>
 
-    @if (!currentReplica()) {
+    @if (switchOffered()) {
       <c-card-footer class="d-flex justify-content-end">
         @if (!canManage()) {
           <span class="text-body-secondary me-auto align-self-center"

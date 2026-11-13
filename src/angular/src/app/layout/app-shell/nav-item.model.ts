@@ -22,13 +22,19 @@ export interface NavItem {
 }
 
 /**
+ * This constant names the icon of the sidebar brand (the site logo's fallback). No nav item may
+ * use it, so the brand and a menu entry are never told apart by their label alone.
+ */
+export const BRAND_ICON = 'cilLan';
+
+/**
  * This constant lists the sidebar's nav items, in display order. Each permission is the read
  * permission of the controller behind the page. Icon names are `@coreui/icons` names and must be
  * registered in `core/icons/core-ui-icons.ts`.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { label: 'Dashboard', path: 'dashboard', icon: 'cilSpeedometer', permission: null },
-  { label: 'Zones', path: 'zones', icon: 'cilLan', permission: 'zones:read' },
+  { label: 'Zones', path: 'zones', icon: 'cilGlobeAlt', permission: 'zones:read' },
   {
     label: 'DNS Rewrites',
     path: 'dns-rewrites',

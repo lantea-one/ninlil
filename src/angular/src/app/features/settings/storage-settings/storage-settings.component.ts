@@ -153,6 +153,13 @@ export class StorageSettingsComponent implements OnInit {
   /** The read-replica status, or null without a split; the server refuses a switch while it is set. */
   readonly currentReplica = computed(() => this.status()?.readReplica ?? null);
 
+  /**
+   * Whether the switch form and its button are shown: the status loaded and no read replica is
+   * set. Without a loaded status the page cannot show the current engine or a pending switch, so
+   * it offers no switch either.
+   */
+  readonly switchOffered = computed(() => this.status() !== null && !this.currentReplica());
+
   /** The valid `encryptionMode` values per engine (see {@link ENCRYPTION_MODE_OPTIONS_BY_ENGINE}). */
   readonly encryptionModeOptions = ENCRYPTION_MODE_OPTIONS_BY_ENGINE;
 
