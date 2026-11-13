@@ -11,6 +11,8 @@ outside Forgejo.
 
 ## Unreleased
 
+## v2026.11.13.1
+
 ### Behaviour worth knowing
 
 - **A QUIC zone transfer completes when the primary closes its stream early.** A secondary that
