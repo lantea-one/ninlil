@@ -281,6 +281,15 @@ public sealed class ListenSocketSet
             protocolType
         );
 
+        // Windows lets a second socket bind the same port when one of the two is a wildcard and
+        // the other a specific address (a dual-stack [::] socket and 127.0.0.1, say), and routes
+        // each connection or datagram to the more specific socket. Another process or listener
+        // could then take clients away from this one without any error. Exclusive use refuses
+        // that bind in either order, so the address is reported as failed instead. Elsewhere the
+        // kernel already refuses it, and the option there would only turn off address reuse.
+        if (OperatingSystem.IsWindows())
+            socket.ExclusiveAddressUse = true;
+
         // A listening UDP socket receives from many clients. On Windows a client that closes its
         // port before the reply would otherwise fail the next receive with WSAECONNRESET, a
         // warning in the log that an off-path sender can provoke at will.
