@@ -68,7 +68,8 @@ visible release is complete. The installation guides say how to install each fil
 ### Verify a download
 
 1. Download the file and the checksum list into one folder. Replace `<tag>` with the release's tag
-   and the file name with yours:
+   ([Find the release tag](../getting-started/installation/index.md#find-the-release-tag)) and the
+   file name with yours:
 
     ```bash
     curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-linux-amd64
@@ -87,7 +88,7 @@ visible release is complete. The installation guides say how to install each fil
 
     `OK` for your file means it is the one the pipeline built. A `FAILED` line means the download is
     damaged or changed: delete it and download again. On Windows, run `Get-FileHash <file> -Algorithm SHA256`
-    and compare the hash with the line in `SHA256SUMS` (not run here; from the README).
+    and compare the hash with the line in `SHA256SUMS`.
 
 The packages and the Windows executable are not signed. The checksums are your check. The macOS
 binaries are ad-hoc signed, not notarized
@@ -104,8 +105,9 @@ dotnet add package Ninlil.Dns.Common --version 2026.9.24.1
 ```
 
 `<user>` and `<access-token>` are your Forgejo account and an access token that may read packages.
-Packages from one build depend on exactly that build's other packages. Every library is published
-except the `Ninlil.Web` host. This step is not run here; it is from the README.
+`--store-password-in-clear-text` writes the access token unencrypted into your NuGet configuration
+file, so use a token that can only read packages. Packages from one build depend on exactly that
+build's other packages. Every library is published except the `Ninlil.Web` host.
 
 ## Check that it worked
 

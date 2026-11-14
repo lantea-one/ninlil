@@ -35,6 +35,9 @@ and no snapshots.
 5. Free disk space of about the size of the database. A snapshot copies every table, including the
    query log, so it roughly doubles the database until Ninlil prunes it.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](getting-started/quick-start.md#self-signed-certificate).
+
 ## Upgrade each kind of installation
 
 Use the step that matches how you installed Ninlil. Every kind keeps the data directory.
@@ -58,10 +61,11 @@ Use the step that matches how you installed Ninlil. Every kind keeps the data di
 
 3. **Docker.** Pull the newer tag, remove the container and start it again with the same volume.
    Keep the `-v ninlil-data:/app/data` mount and your other options
-   ([Docker](docker.md)). `<version>` is the release tag:
+   ([Docker](docker.md)). `<image-tag>` is the container tag of the release, such as `2026.09.24.1`
+   (the tags are listed on the [Docker](docker.md) page):
 
     ```bash
-    docker pull git.lantea.one/lantea-one/ninlil:<version>
+    docker pull git.lantea.one/lantea-one/ninlil:<image-tag>
     docker rm -f ninlil
     ```
 
@@ -96,7 +100,8 @@ Use the step that matches how you installed Ninlil. Every kind keeps the data di
 If the snapshot cannot be taken (no disk space, no permission), Ninlil leaves the database unchanged
 and refuses to start with a message that says why. Fix the cause, or set
 `NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT=false` to migrate without a snapshot (Ninlil logs a
-warning).
+warning). With the snapshot off, the upgrade has no rollback point: if the migration fails or the
+new version misbehaves, you can go back only to a backup you made yourself.
 
 ## Check that it worked
 
@@ -182,7 +187,7 @@ and what restarts a refused start. The common causes:
 | The database was upgraded by a newer Ninlil version | Start the newer version, or restore a snapshot or backup from before that upgrade. |
 | Applying migrations failed and was rolled back | PostgreSQL, SQL Server and SQLite undo a failed migration, so the database is unchanged. Fix the cause the message names and start again, or start the previous version. |
 | Applying migrations failed and was not rolled back, or An earlier attempt failed | MySQL cannot undo schema changes. Restore the snapshot the message names. Set `NINLIL_STORAGE_MIGRATION_SAFETY_RETRY_FAILED_MIGRATION=true` only when you know the half-migrated state is safe. |
-| The snapshot before the migration could not be taken | Free disk space or fix permissions, or set `NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT=false`. |
+| The snapshot before the migration could not be taken | Free disk space or fix permissions. Setting `NINLIL_STORAGE_MIGRATION_SAFETY_TAKE_SNAPSHOT=false` migrates without a snapshot and leaves this upgrade without a rollback point. |
 | There is no snapshot ... to restore | Correct or remove the restore setting. The message lists the ids that exist. |
 | The MySQL server has read_only set | Point the connection string at the writable primary. |
 | A setting under `Storage:` is wrong | Fix the setting the message names. |

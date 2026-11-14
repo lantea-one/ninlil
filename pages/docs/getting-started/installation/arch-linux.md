@@ -10,8 +10,8 @@ a `ninlil` systemd service that runs as an unprivileged user, with its state in 
 
 ## Steps
 
-1. Install the package and start the service. Replace `<tag>` and `<pkgver>` with the release's tag
-   and version:
+1. Install the package and start the service. Replace `<tag>` with the release's tag and `<pkgver>`
+   with its date version ([Find the release tag](index.md#find-the-release-tag)):
 
     ```bash
     sudo pacman -U https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst

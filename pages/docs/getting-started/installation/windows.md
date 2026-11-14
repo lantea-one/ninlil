@@ -11,7 +11,8 @@ unavailable.
 2. Free ports. The defaults use 53 (UDP and TCP), 80 and 443. To use others, see
    [Ports](../../reference/ports.md).
 3. Download `ninlil-windows-amd64.zip` and `SHA256SUMS` from the
-   [releases page](https://git.lantea.one/lantea-one/ninlil/releases). The zip holds the executable
+   [releases page](https://git.lantea.one/lantea-one/ninlil/releases) (the addresses are built as in
+   [Find the release tag](index.md#find-the-release-tag)). The zip holds the executable
    and `msquic.dll`, the library DNS-over-QUIC needs. Both must stay in one folder.
 4. Verify the zip before you accept the SmartScreen warning. In PowerShell,
    `(Get-FileHash .\ninlil-windows-amd64.zip).Hash` must equal the `ninlil-windows-amd64.zip` line

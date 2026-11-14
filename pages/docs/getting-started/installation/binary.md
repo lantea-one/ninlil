@@ -19,11 +19,12 @@ needed: the runtime, every native library and the admin console are inside the o
 
 ## Steps
 
-1. Download the executable and the checksum list. Replace `<version>` with the release's version:
+1. Download the executable and the checksum list. Replace `<tag>` with the release's tag
+   ([Find the release tag](index.md#find-the-release-tag)):
 
     ```bash
-    curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<version>/ninlil-linux-amd64
-    curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<version>/SHA256SUMS
+    curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-linux-amd64
+    curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/SHA256SUMS
     ```
 
 2. Check the download. The command must print `OK` for your file:

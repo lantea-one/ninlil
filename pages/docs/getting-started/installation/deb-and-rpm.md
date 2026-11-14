@@ -22,9 +22,10 @@ a `ninlil` systemd service that runs as an unprivileged `ninlil` user, all state
     | Fedora, RHEL, Rocky Linux, AlmaLinux | x86-64 | `ninlil-<version>-1.x86_64.rpm` |
     | Fedora, RHEL, Rocky Linux, AlmaLinux | ARM64 | `ninlil-<version>-1.aarch64.rpm` |
 
-    `<version>` is the date version, such as `2026.10.09.1`.
+    `<version>` is the date version, such as `2026.10.09.1`
+    ([Find the release tag](index.md#find-the-release-tag)).
 2. Download the package and the checksum list, then check the download. Replace `<tag>` with the
-   release's tag and the file name with yours:
+   release's tag, `<version>` with its date version and the file name with yours:
 
     ```bash
     curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-<version>-amd64.deb

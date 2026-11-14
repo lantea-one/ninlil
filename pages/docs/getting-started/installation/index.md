@@ -12,6 +12,21 @@ Every release, and every pre-release build, is published from the project's Forg
 | A container | [Docker](../../docker.md) |
 | To change the code | [Build and run from source](from-source.md) |
 
+## Find the release tag
+
+Every download address contains the release's tag, written `<tag>` on these pages. Open the
+[releases page](https://git.lantea.one/lantea-one/ninlil/releases): each release is named by its
+tag. A release tag has the form `v<yyyy>.<mm>.<dd>.<increment>R<short-sha>`. The tag includes the
+leading `v` and the `R<short-sha>` part, and a release address without them answers 404. A complete
+address for the tag `v2026.09.24.1Rab12cd3` is:
+
+```text
+https://git.lantea.one/lantea-one/ninlil/releases/download/v2026.09.24.1Rab12cd3/ninlil-linux-amd64
+```
+
+A package file name holds the plain date version instead, written `<version>`: the tag without the
+`v` and without `R<short-sha>`, such as `2026.09.24.1`.
+
 ## Before every installation
 
 1. Check that port 53 is free. On Linux, this prints only a header line when it is:
