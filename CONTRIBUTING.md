@@ -645,8 +645,7 @@ All four commands exit with code 0, and the smoke harness reports `failed: 0`.
 
 The wiki lives in `pages/` (`pages/mkdocs.yml` and the Markdown under `pages/docs/`). It is
 documentation: change it together with the [README](./README.md) when behaviour a user sees
-changes. A page that is not written yet is a skeleton: its title, one
-`<!-- TODO(435): fill -->` line and one sentence that says what it will cover.
+changes.
 
 #### Before you start
 

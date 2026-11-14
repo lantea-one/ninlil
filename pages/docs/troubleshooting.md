@@ -14,12 +14,15 @@ fix. The message texts are the ones Ninlil prints.
     | Linux package (Deb, RPM, Arch) | `sudo journalctl -u ninlil -e` |
     | Docker | `docker logs ninlil` |
     | Downloaded binary or `dotnet run` | the terminal where you started it |
-    | Windows service | `Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Ninlil.Web'} -MaxEvents 5 \| Format-List TimeCreated, Message` (not run here; from the README) |
+    | Windows service | `Get-WinEvent -FilterHashtable @{LogName='Application'; ProviderName='Ninlil.Web'} -MaxEvents 5 \| Format-List TimeCreated, Message` |
 
 2. Know the web port. The checks below use the plain-HTTP port of the [Quick start](getting-started/quick-start.md),
    `18080`. Replace it with yours.
 3. For the health detail, an access token of an account with the `status:read` permission
    ([REST API](rest-api.md#sign-in)).
+
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](getting-started/quick-start.md#self-signed-certificate).
 
 ## Steps
 
@@ -50,7 +53,7 @@ fix. The message texts are the ones Ninlil prints.
 
 ```text
 Hosting failed to start
-System.IO.IOException: Failed to bind to address http://[::]:47180: address already in use.
+System.IO.IOException: Failed to bind to address http://[::]:18080: address already in use.
 ```
 
 - Cause: another program (often another Ninlil) holds that web port.
@@ -63,7 +66,7 @@ System.IO.IOException: Failed to bind to address http://[::]:47180: address alre
 TCP and one for UDP:
 
 ```text
-Plain DNS (UDP) could not listen on :: port 47300: Address already in use. This transport is not running; the rest of the server is unaffected. Fix the port or the listen addresses and restart Ninlil.
+Plain DNS (UDP) could not listen on :: port 15300: Address already in use. This transport is not running; the rest of the server is unaffected. Fix the port or the listen addresses and restart Ninlil.
 ```
 
 `/status` answers `{"status":"Unhealthy","components":null}`, and with a token the `transports`
@@ -105,7 +108,7 @@ Unhandled exception. System.Security.Cryptography.CryptographicException: Error 
 ```
 
 ```text
-Unhandled exception. Npgsql.NpgsqlException (0x80004005): Failed to connect to 127.0.0.1:47999
+Unhandled exception. Npgsql.NpgsqlException (0x80004005): Failed to connect to 127.0.0.1:5432
  ---> System.Net.Sockets.SocketException (111): Connection refused
 ```
 
@@ -130,25 +133,13 @@ The status of the sign-in answer tells the cause:
 **`429` after a few sign-ins.** One address may make 5 password or second-factor sign-in attempts in
 each 5-minute window
 ([`NINLIL_DNS_SERVER_ADMIN_LOGIN_RATE_LIMIT_PERMIT_LIMIT`](https://git.lantea.one/lantea-one/ninlil/src/branch/main/ENVIRONMENT.md#identity-authentication--sso)
-and `..._WINDOW`). Every attempt counts, successful ones too. A live run of seven wrong passwords
-gave:
-
-```text
-attempt 1: HTTP 401
-attempt 2: HTTP 401
-attempt 3: HTTP 401
-attempt 4: HTTP 401
-attempt 5: HTTP 429
-attempt 6: HTTP 429
-attempt 7: HTTP 429
-```
-
-(Another sign-in in the same window had used one attempt, so the fifth was already refused.) The
-header names the wait:
+and `..._WINDOW`). Every attempt counts, successful ones too. Wrong passwords answer `401` until the limit is used up.
+Every further attempt answers `429`, and the response header names the wait in seconds (your value
+differs):
 
 ```text
 HTTP/2 429
-retry-after: 299
+retry-after: 167
 ```
 
 - Check: `curl -k -s -D - -o /dev/null https://127.0.0.1:18443/api/auth/login -H 'Content-Type: application/json' -d '{"userName":"x","password":"x"}' | grep -i -E '^(HTTP|retry-after)'`.
@@ -169,17 +160,17 @@ directory.
 ### A call answers 403 or the console says Access Denied
 
 - Cause: the account lacks the permission the route needs. An account with no role holds none.
-  A live call as such an account answered `403` with an empty body for `GET /api/users` and
-  `GET /api/zones`.
+  The answer is `403` with an empty body.
 - Check: Swagger UI names the permission in the call's description.
 - Fix: add a role that holds the permission ([Using the admin console](admin-console.md#what-a-permission-hides)).
 
 ### Queries get REFUSED or no answer
 
-**`status: REFUSED`.** A live query for a name Ninlil does not host, with recursion off:
+**`status: REFUSED`.** A query for a name Ninlil does not host, with recursion off, gets this (the
+id differs):
 
 ```bash
-dig @127.0.0.1 -p 47300 example.com A +noall +comments
+dig @127.0.0.1 -p 15300 example.com A +noall +comments
 ```
 
 ```text
@@ -195,9 +186,9 @@ dig @127.0.0.1 -p 47300 example.com A +noall +comments
 **No answer at all.** `dig` prints `;; no servers could be reached`. Two causes answer by silence on
 purpose, so a sender cannot tell them from packet loss:
 
-- Rate limiting is on and the client used its budget. A live run with
-  `NINLIL_DNS_SERVER_RATE_LIMITING_QUERIES_PER_SECOND=1` and `..._BURST_SIZE=2` answered some
-  queries and dropped the rest. Fix: raise the limits, or give the client's network an access
+- Rate limiting is on and the client used its budget. With
+  `NINLIL_DNS_SERVER_RATE_LIMITING_QUERIES_PER_SECOND=1` and `..._BURST_SIZE=2`, Ninlil answers the
+  first queries and drops the rest. Fix: raise the limits, or give the client's network an access
   control rule with the `RateLimitBypass` capability.
 - The client-source check denies the client. The log at the Debug level records the drop reason
   ("Dropping every query from <address>: <reason>.").
@@ -217,8 +208,7 @@ Also check that the transport listens (`/status`, `transports`).
 ### The database is unreachable or a replica is not used
 
 - *`storage` is `Unhealthy`.* The description is `<engine> storage could not be reached.` or
-  `Failed to reach <engine> storage.`. Check the database server and the connection string. These
-  texts come from the code; this page did not stop a database to see them.
+  `Failed to reach <engine> storage.`. Check the database server and the connection string.
 - *`storage` is `Degraded` with a read replica.* The description ends with `The read replica
   serves no reads and the primary is used instead (<lag>): <reason>`. Everything still works; reads
   use the primary. Fix the replica or its lag

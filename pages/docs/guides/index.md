@@ -1,7 +1,6 @@
 # Guides
 
-One page for each task area. A page that is not written yet holds one line that says what it will
-cover. The README holds the complete step-by-step text of every guide until the page is written:
+One page for each task area. The README holds the complete text of every guide:
 [Guides](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#guides).
 
 ## DNS

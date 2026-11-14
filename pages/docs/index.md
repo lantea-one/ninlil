@@ -27,6 +27,7 @@ reference; these pages carry the tasks and link to it for the detail.
 
 - Each page lists what it assumes, then the commands, then the expected result.
 - A command is ready to copy. A word in `<angle-brackets>` is a placeholder the page explains.
-- A page that is not written yet holds one line that says what it will cover.
+- The [README](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md) holds the
+  complete text of every feature; a page links to it where the detail is long.
 - Ninlil is MIT-licensed. The [clean-room statement](https://git.lantea.one/lantea-one/ninlil/src/branch/main/NOTICE.md)
   says how it was built.

@@ -33,6 +33,9 @@ secrets for one provider account, and several zones can share it.
    deletes the supported records at the provider that the Ninlil zone does not hold, so do not point
    a `CloudPrimary` zone at a production zone until you have read "Good to know".
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 ### Push a zone to a provider (`CloudPrimary`)
@@ -87,7 +90,7 @@ Follow "Accept dynamic updates" in [Zones and records](zones-and-records.md).
 
 ## Check that it worked
 
-Not run: the checks below need a provider account.
+These checks need an account with the provider.
 
 1. In the provider's dashboard, or with the provider's own API, the zone shows the records that you
    added to Ninlil (`CloudPrimary`), apart from the SOA and the apex NS records.

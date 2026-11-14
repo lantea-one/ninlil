@@ -101,7 +101,7 @@ Or in `appsettings.json`:
 
 Check it: with the default port, `ss -ltn 'sport = :853'` lists a listener. The
 [ports table](reference/ports.md) lists the default port of every transport, and the
-[Encrypted transports guide](guides/dns/encrypted-transports.md) will cover each one.
+[Encrypted transports guide](guides/dns/encrypted-transports.md) covers each transport.
 
 ## Next
 

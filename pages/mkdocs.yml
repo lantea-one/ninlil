@@ -76,8 +76,7 @@ markdown_extensions:
 extra:
   ## No analytics and no "made with" footer.
   generator: false
-## A page that is a skeleton holds one TODO(435) comment and a one-sentence statement of what it will
-## cover. The other pages are written.
+## The navigation: every page under pages/docs/ appears here, grouped as the reader looks for it.
 nav:
   - 'Home': 'index.md'
   - 'Getting started':
@@ -89,7 +88,7 @@ nav:
           - 'Windows': 'getting-started/installation/windows.md'
           - 'Arch Linux': 'getting-started/installation/arch-linux.md'
           - 'Debian, Ubuntu, Fedora, RHEL and Rocky Linux': 'getting-started/installation/deb-and-rpm.md'
-          - 'Build from source': 'getting-started/installation/from-source.md'
+          - 'Build and run from source': 'getting-started/installation/from-source.md'
       - 'First run': 'getting-started/first-run.md'
   - 'Configuration': 'configuration.md'
   - 'Guides':
@@ -101,7 +100,7 @@ nav:
           - 'Cloud DNS sync': 'guides/dns/cloud-dns-sync.md'
           - 'Certificates (ACME)': 'guides/dns/certificates-acme.md'
           - 'Forwarding and recursion': 'guides/dns/forwarding-and-recursion.md'
-          - 'Filtering and parental controls': 'guides/dns/filtering.md'
+          - 'Filtering, rewrites and parental controls': 'guides/dns/filtering.md'
           - 'Encrypted transports and DNS64': 'guides/dns/encrypted-transports.md'
       - 'DHCP':
           - 'DHCPv4 scopes, reservations and leases': 'guides/dhcp/dhcp.md'
