@@ -29,6 +29,13 @@ outside Forgejo.
 - **The dashboard's Zones tile shows the Zones menu icon.** It showed the product's brand icon. The
   four At a Glance tiles now take their icons from the menu entries of the same pages.
   ([#431](https://git.lantea.one/lantea-one/ninlil/issues/431))
+- **An idle MongoDB replica is no longer refused for one check when it is only a moment late with
+  the primary's periodic no-op write.** A lag of more than 2 seconds is read again after 2 seconds
+  and the second reading decides, so a replica that catches up in between stays eligible and a
+  stuck one is still refused. A refused replica sends its reads to the primary until the next
+  check, so this removes a short performance dip, not a correctness problem. See
+  [read replicas](./README.md#read-replicas-and-database-clusters)
+  ([#432](https://git.lantea.one/lantea-one/ninlil/issues/432)).
 - **IPv6 addresses with an IPv4 tail are sent with the right bytes, and malformed IPv6 text is
   refused.** In APL records and DHCP option values, the console turned the IPv4 part of
   `::ffff:192.0.2.1` into wrong bytes and sent them without an error; such an address is now sent

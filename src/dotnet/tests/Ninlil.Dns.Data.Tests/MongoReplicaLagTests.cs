@@ -187,4 +187,110 @@ public sealed class MongoReplicaLagTests
         Assert.Null(noSecondary);
         Assert.Contains("no healthy secondary", noSecondaryDetail);
     }
+
+    /// <summary>
+    ///     A reading taken in the few milliseconds after an idle no-op write shows the secondary
+    ///     behind by the time since its previous operation. The second reading, taken after the
+    ///     settle delay, finds it current, and that one is the result.
+    /// </summary>
+    [Fact]
+    public async Task MeasureSettledAsync_WhenTheSecondaryCatchesUpDuringTheDelay_IsZero()
+    {
+        BsonDocument primary = Member("p", "PRIMARY", 120, 20.1);
+        Queue<BsonDocument> replies = new([
+            Status(20.2, primary, Member("s", "SECONDARY", 100, 0.1)),
+            Status(21.3, primary, Member("s", "SECONDARY", 120, 20.1)),
+        ]);
+
+        (double? seconds, _) = await MongoReplicaLag.MeasureSettledAsync(
+            _ => Task.FromResult(replies.Dequeue()),
+            TimeSpan.Zero,
+            CancellationToken.None
+        );
+
+        Assert.Equal(0, seconds);
+        Assert.Empty(replies);
+    }
+
+    /// <summary>
+    ///     A secondary that is still behind at the second reading is reported with the lag of
+    ///     that reading, so a stuck replica is never made eligible by the second look.
+    /// </summary>
+    [Fact]
+    public async Task MeasureSettledAsync_WhenTheSecondaryStaysBehind_ReportsTheSecondReading()
+    {
+        BsonDocument primary = Member("p", "PRIMARY", 120, 20.1);
+        BsonDocument secondary = Member("s", "SECONDARY", 100, 0.1);
+        Queue<BsonDocument> replies = new([
+            Status(20.2, primary, secondary),
+            Status(21.2, primary, secondary),
+        ]);
+
+        (double? seconds, _) = await MongoReplicaLag.MeasureSettledAsync(
+            _ => Task.FromResult(replies.Dequeue()),
+            TimeSpan.Zero,
+            CancellationToken.None
+        );
+
+        Assert.Equal(21.1, seconds.Value, 2);
+    }
+
+    /// <summary>
+    ///     A reading that is current, or behind by less than a second, is final: a healthy
+    ///     replica under steady writes costs no second read and no wait.
+    /// </summary>
+    [Fact]
+    public async Task MeasureSettledAsync_WhenTheFirstReadingIsCurrentOrWithinASecond_ReadsOnce()
+    {
+        int reads = 0;
+        BsonDocument Reply(CancellationToken _)
+        {
+            reads++;
+            return Status(
+                110.5,
+                Member("p", "PRIMARY", 111, 110.0),
+                Member("s", "SECONDARY", 110, 110.0 - 0.2)
+            );
+        }
+
+        (double? seconds, _) = await MongoReplicaLag.MeasureSettledAsync(
+            token => Task.FromResult(Reply(token)),
+            TimeSpan.FromSeconds(30),
+            CancellationToken.None
+        );
+
+        Assert.Equal(1, reads);
+        Assert.Equal(0.7, seconds.Value, 2);
+    }
+
+    /// <summary>
+    ///     A token cancelled during the settle delay ends the call with
+    ///     <see cref="OperationCanceledException" /> and no second read.
+    /// </summary>
+    [Fact]
+    public async Task MeasureSettledAsync_WhenCancelledDuringTheDelay_ThrowsWithoutASecondRead()
+    {
+        BsonDocument primary = Member("p", "PRIMARY", 120, 20.1);
+        BsonDocument secondary = Member("s", "SECONDARY", 100, 0.1);
+        using CancellationTokenSource source = new();
+        int reads = 0;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await MongoReplicaLag.MeasureSettledAsync(
+                _ =>
+                {
+                    reads++;
+                    // Cancels once the first reading is taken, so the delay that follows
+                    // ends at once.
+                    source.Cancel();
+                    return Task.FromResult(Status(20.2, primary, secondary));
+                },
+                // Below the 20 s lag of the first reading, so the call waits for the delay.
+                TimeSpan.FromSeconds(10),
+                source.Token
+            )
+        );
+
+        Assert.Equal(1, reads);
+    }
 }
