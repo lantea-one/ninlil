@@ -104,7 +104,7 @@ public static class ServiceCollectionAuthoritativeExtension
             ZoneChangedEventSubscriber
         >();
 
-        // Scoped, because ITsigService is scoped (through ITsigKeyRepository).
+        // Scoped, because it uses repositories.
         instance.AddScoped<IZoneTransferService, ZoneTransferService>();
 
         // One IZoneTransferClient per ZoneTransferTransportEnum value; SecondaryZoneRefreshService
