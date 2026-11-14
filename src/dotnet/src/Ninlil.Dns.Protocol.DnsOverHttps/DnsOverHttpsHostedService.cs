@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Ninlil.Dns.Protocol.DnsOverHttps.Extension;
 using Ninlil.Dns.Server.Core.Certificates;
 using Ninlil.Dns.Server.Core.Pipeline;
 
@@ -74,6 +75,9 @@ public sealed class DnsOverHttpsHostedService(
         );
 
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
+
+        // Claim the port exclusively on Windows (see the extension).
+        builder.WebHost.UseExclusiveListenSockets();
 
         builder.WebHost.ConfigureKestrel(kestrel =>
         {

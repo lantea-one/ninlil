@@ -29,9 +29,7 @@ import {
 } from '../../../shared/coreui-pagination/coreui-pagination.component';
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { extractErrorMessage } from '../../../shared/http-error/http-error.util';
-
-/** The page size the history starts with, as on the other list pages. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../shared/pagination/default-page-size';
 
 /**
  * This component is a webhook's delivery history page (`/webhooks/:id/deliveries`,

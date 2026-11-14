@@ -245,15 +245,44 @@ public class TsigServiceTests(TsigServiceTestFixture fixture)
             await unitOfWork.SaveChangesAsync();
         }
 
-        // The key lookup cache keeps the enabled verdict for 10 seconds; let it expire.
-        fixture.Clock.Advance(TsigKeyLookupCache.Lifetime + TimeSpan.FromSeconds(1));
-
-        // Verify in a new scope: signScope's DbContext still tracks the old, enabled copy of the
-        // key and would return it instead of re-reading the database.
+        // No clock moves: the save expired the key copy, so the very next message sees the change.
         await using AsyncServiceScope verifyScope = fixture.Services.CreateAsyncScope();
         ITsigService verifyingService =
             verifyScope.ServiceProvider.GetRequiredService<ITsigService>();
         TsigVerificationResult result = await verifyingService.VerifyAsync(
+            rawMessage,
+            tsigOffset,
+            reparsed
+        );
+
+        Assert.False(result.IsValid);
+        Assert.Equal(DnsResponseCodeEnum.BadKey, result.Error);
+    }
+
+    [Fact]
+    public async Task VerifyFailsWithBadKeyForAKeyDeletedAfterItWasUsed()
+    {
+        TsigKeyEntity key = await CreateKeyAsync();
+
+        await using AsyncServiceScope scope = fixture.Services.CreateAsyncScope();
+        ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
+        DnsMessage signed = await tsigService.SignAsync(BuildMessage(6), key.Name, 6);
+        (byte[] rawMessage, int tsigOffset, DnsMessage reparsed) = Reparse(signed);
+
+        // The first verification loads the keys into the in-memory copy.
+        Assert.True((await tsigService.VerifyAsync(rawMessage, tsigOffset, reparsed)).IsValid);
+
+        // Delete the key through the repository and the unit of work, as the key API does. No
+        // clock moves afterwards, so only the change signal can make the copy refuse the key.
+        await using (AsyncServiceScope deleteScope = fixture.Services.CreateAsyncScope())
+        {
+            ITsigKeyRepository keyRepository =
+                deleteScope.ServiceProvider.GetRequiredService<ITsigKeyRepository>();
+            keyRepository.Remove(await keyRepository.GetByIdAsync(key.Id));
+            await deleteScope.ServiceProvider.GetRequiredService<IUnitOfWork>().SaveChangesAsync();
+        }
+
+        TsigVerificationResult result = await tsigService.VerifyAsync(
             rawMessage,
             tsigOffset,
             reparsed

@@ -294,7 +294,7 @@ To go on from here, read [Installation](#installation) for a permanent setup and
 
 ## Installation
 
-Every release, and every build of every branch, is published from the project's Forgejo pipeline
+Every release, and every pre-release build, is published from the project's Forgejo pipeline
 (see [Releases and versioning](#releases-and-versioning)). Pick whichever fits:
 
 | You want | Use |
@@ -574,7 +574,7 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
    | Fedora, RHEL, Rocky Linux, AlmaLinux | x86-64 | `ninlil-<version>-1.x86_64.rpm` |
    | Fedora, RHEL, Rocky Linux, AlmaLinux | ARM64 | `ninlil-<version>-1.aarch64.rpm` |
 
-   `<version>` is the date version, such as `2026.10.09.1`. A branch build is a pre-release and its
+   `<version>` is the date version, such as `2026.10.09.1`. A pre-release build's
    version carries the branch and commit (`2026.10.09.3~develop.a1b2c3d` for a Deb,
    `2026.10.09.3-0.develop.a1b2c3d` for an RPM); it sorts below the release it precedes.
 
@@ -764,6 +764,47 @@ The browser warns about the self-signed certificate on the HTTPS port. Accept it
 
 The web and DNS listeners bind every address unless their `ListenAddresses` setting (for example
 `DnsServer:Protocol:Plain:ListenAddresses`) names specific ones; see ENVIRONMENT.md.
+
+**On Windows, Ninlil claims each port exclusively.** The DNS (UDP and TCP, DNS-over-TLS,
+DNSCrypt), DHCPv4, DHCPv6 and TFTP sockets and the web listener (which also serves DNS-over-HTTPS)
+set `SO_EXCLUSIVEADDRUSE`, so no other program can bind a port Ninlil serves. A second program that
+tries fails to bind, whichever of the two started second. That includes a DHCP relay agent or
+another DHCP or TFTP program on the same host: it cannot share Ninlil's server port (67, 547 or 69).
+The rule Windows applies, as measured: an exclusive bind of the dual-stack wildcard (Ninlil's
+default) or of `0.0.0.0` fails when another socket already holds the port on any address it
+overlaps, including a socket that is not exclusive itself. An exclusive bind of one specific
+address fails only against a socket that is itself exclusive or holds that same address, so it
+works beside another program's wildcard socket. An explicit `::` listen address behaves like a
+specific address: it binds beside another program's wildcard socket on the same port.
+
+What Ninlil does when a bind fails depends on the listener:
+
+- **DNS over UDP and TCP, DNS-over-TLS and DNSCrypt, with no listen addresses set.** When the
+  wildcard bind fails because another program holds the port on some address, Ninlil falls back to
+  one exclusive socket per local address, logs one warning that names the transport, protocol and
+  port, and lists the addresses it serves. These are the addresses (IPv4 and IPv6, loopback
+  included) of the interfaces that are up, except ones still tentative, duplicate or invalid. An
+  address added to the machine later is not served until the transport restarts. An address that
+  cannot be bound is logged as a Warning and shows in `GET /status`. When every address bound, the
+  transport shows as healthy in `GET /status`, so the Warning in the log is the only sign of the
+  fallback. You can also set the transport's listen addresses yourself, so Ninlil binds only those.
+  If no address can be bound, the transport is not running and the log has an Error.
+- **The same transports with listen addresses set.** Only an address that cannot be bound fails;
+  the others keep serving.
+- **DHCPv4, DHCPv6 and TFTP.** They need their one wildcard socket (DHCP clients broadcast), so
+  there is no fallback: the service does not start, the log has an Error with the reason and the
+  `netstat` hint, `GET /status` shows it as not running, and the rest of Ninlil keeps running.
+- **The web listener** (the REST API, the admin console and DNS-over-HTTPS). A bind failure stops
+  Ninlil, because nothing could fix it from inside. Choose another port, or free the port.
+- **DNS-over-QUIC** is not covered: its QUIC library binds the UDP port itself and Microsoft
+  documents no exclusive setting for it, so another program can still share that port.
+
+To find the program that holds a port, run `netstat -ano | findstr :53` in PowerShell and look the
+PID up with `Get-Process -Id <pid>`. Likely holders of UDP port 53 on Windows are the services behind connection sharing
+(Internet Connection Sharing, `SharedAccess`) and the Host Network Service (`hns`) that Hyper-V and
+WSL use. On a machine with both running, `svchost` was seen holding UDP port 53. Stop those
+services, or give them another port, if you want Ninlil on the wildcard address of port 53. Linux
+and macOS are unchanged: they refuse a second bind of an address and port without any option.
 
 Ports 53/67/69/80/443 are privileged on Linux/macOS. Either run with elevated privileges (or grant
 the process `CAP_NET_BIND_SERVICE` on Linux), or override the ports in configuration to something
@@ -3198,6 +3239,14 @@ A records (RFC 6147 §5.1.2), and an answer that failed DNSSEC validation never 
      it.
   3. Restart Ninlil. A transport that failed to bind is not retried while Ninlil runs.
   4. Check that it worked: `GET /status` reports `transports` as `Healthy`.
+
+  On Windows Ninlil claims its ports exclusively, so `Only one usage of each socket address` or
+  `forbidden by its access permissions` means another program holds the port on an address that
+  overlaps. `netstat -ano | findstr :<port>` in PowerShell shows the PID, and
+  `Get-Process -Id <pid>` the program. For UDP 53 it is usually connection sharing or the Hyper-V
+  and WSL network service; the DNS transports then fall back to the machine's local addresses one
+  by one. The log has a Warning for the fallback and a Warning for each address that failed; an
+  Error means no address could be bound (see [Ports](#ports)).
 - *DoQ clients are cut off.* A query with a message ID other than 0 closes the connection.
   Check the client.
 - *A DNSCrypt client cannot find the server.* Check that the stamp's provider name has the
@@ -5315,8 +5364,9 @@ NINLIL_STORAGE_MONGODB_READ_PREFERENCE=SecondaryPreferred
   primary's newest operation has a lag of 0, however old that operation is, so an idle replica set
   (which writes only a no-op about every 10 to 20 seconds) is not reported as behind. A secondary
   that lacks it is behind by the time since its own last applied operation, by the primary's
-  clock. A secondary that misses a no-op write by a few milliseconds can read as behind for one
-  check.
+  clock. A secondary that is a few milliseconds late with a no-op write would read as behind by
+  the time since its previous operation, so a lag of more than 2 seconds is read again after 2
+  seconds and the second reading counts. A secondary that is really stuck is still behind then.
 
 **When a replica gets reads**
 
@@ -6035,7 +6085,7 @@ built for a small attack surface:
 |---|---|
 | `latest` | The newest release |
 | `<yyyy>.<mm>.<dd>.<increment>` | A specific release, e.g. `2026.09.24.1` |
-| `<yyyy>.<mm>.<dd>.<increment>-<branch>-<short-sha>` | A branch build; removed after 24 hours |
+| `<yyyy>.<mm>.<dd>.<increment>-<branch>-<short-sha>` | A pre-release build; removed after 24 hours |
 
 ### Run it
 
@@ -6142,8 +6192,11 @@ Versions are generated by the pipeline at build time, never edited by hand, and 
 
 | Build | Version | Published as |
 |---|---|---|
-| Any push to a branch | `v<yyyy>.<mm>.<dd>.<increment>R<branch>+<short-sha>` | A pre-release, a container tag, and NuGet packages — the pre-release, its tag, its container tag, and its NuGet versions are all removed after 24 hours |
+| A push to `develop`, `main` or `hotfix/**`, or a hand-started Build of any branch | `v<yyyy>.<mm>.<dd>.<increment>R<branch>+<short-sha>` | A pre-release, a container tag, and NuGet packages — the pre-release, its tag, its container tag, and its NuGet versions are all removed after 24 hours |
 | A push to a release branch `v<yyyy>.<mm>.<dd>.<increment>` | `v<yyyy>.<mm>.<dd>.<increment>R<short-sha>` | A permanent release, container tags for the version and `latest`, and NuGet packages |
+
+A feature branch has no push build. To get a pre-release of one, open the Actions page, pick the
+Build workflow, choose "Run workflow" and select the branch (or call the workflow dispatch API).
 
 For a branch build, the date is the build's UTC date and the increment is the next free one for
 that branch on that day; for a release, both come from the release branch's own name. The same
@@ -6176,7 +6229,7 @@ dotnet nuget add source https://git.lantea.one/api/packages/lantea-one/nuget/ind
 dotnet add package Ninlil.Dns.Common --version 2026.9.24.1
 ```
 
-Packages from one build depend on exactly that build's other packages. Branch builds publish
+Packages from one build depend on exactly that build's other packages. Pre-release builds publish
 pre-release versions (`2026.9.24.3-develop`) that are removed after 24 hours; depend on a release.
 
 ### The pipeline
@@ -6202,7 +6255,7 @@ containers and at every boot: `qemu-user-static-binfmt`, or
 
 | Workflow | Runs on | Does |
 |---|---|---|
-| `build.yml` | Every push to a non-release branch, or by hand | Tests, then builds and publishes a pre-release |
+| `build.yml` | Every push to `develop`, `main` or a `hotfix/**` branch, or by hand on any branch | Tests, then builds and publishes a pre-release |
 | `pull-request.yml` | Pull requests into `develop`/`main` | Tests and lint only (`verify`): no version, binaries, packages, image or publish. Also named `Build`, so the status reads `Build / Pipeline (pull_request)` |
 | `release.yml` | Every push to a `v<yyyy>.<mm>.<dd>.<increment>` branch | Tests, then builds and publishes a release |
 | `pipeline.yml` | Called by the three above | The shared jobs: version; lint with the script self-tests; .NET and admin console tests; then, in parallel, one job per binary and one per NuGet package family; the Arch Linux packages, the install-tested Deb and RPM packages and the multi-architecture image from the Linux binaries; the Windows smoke test; the whole .NET test suite natively on Windows (builds of `develop` and `main` only; Docker tests excluded; the image, the NuGet packages and publish wait for it); and finally publish |
@@ -6248,14 +6301,17 @@ pushing again; see [A run stays waiting](./CONTRIBUTING.md#a-run-stays-waiting).
 to the pipeline: the lint job, `test-dotnet` and `test-admin-console` run, and the version, draft,
 binary, package, image, smoke-test and publish jobs show as skipped. The `Build / Pipeline
 (pull_request)` status therefore covers lint and the Linux tests only; the Windows tests, the
-builds and the packages run in the push build of the branch and, after the merge, of `develop`.
+builds and the packages run in the push build of `develop` after the merge. The builds and the
+packages also run on a branch when the Build workflow is started by hand; the Windows tests run
+only for `develop` and `main`.
 Only the kinds `prerelease` and `release` open those jobs, so an unknown kind publishes nothing and
 gets no Docker socket. No secrets are passed to a pull-request run.
 
 **Pull requests and the Docker socket.** A pull-request build (`verify`) runs code nobody has
 reviewed yet, so its test job gets no Docker socket (it is root-equivalent on the runner host) and
 runs with `--filter "Category!=RequiresDocker"`, which skips the PostgreSQL query-log tests. A
-same-repo branch is pushed before its pull request, and that push build runs them with the socket.
+same-repo branch has no push build, so those tests run in the `develop` build after the merge, or
+on the branch when the Build workflow is started by hand.
 Mark any new test that starts a container with `[Trait("Category", "RequiresDocker")]`.
 
 **Fork pull requests.** The runners (`asgard` and `lofnheim`) run steps on the host as a user in the

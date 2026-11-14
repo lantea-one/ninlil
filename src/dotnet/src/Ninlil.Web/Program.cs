@@ -331,6 +331,10 @@ IReadOnlyList<IPAddress> webListenAddresses =
         LoggerFactory.Create(logging => logging.AddConsole()).CreateLogger("Ninlil.Web.Kestrel")
     ) ?? [IPAddress.IPv6Any];
 
+// On Windows Kestrel's sockets claim their ports exclusively, so no other program can share the
+// web port (see WebHostBuilderExclusiveListenSocketExtension).
+builder.WebHost.UseExclusiveListenSockets();
+
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
     foreach (IPAddress address in webListenAddresses)

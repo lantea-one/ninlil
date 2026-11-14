@@ -97,6 +97,31 @@ export function assertDhcpv6OptionValueLength(valueHex: string): void {
 }
 
 /**
+ * This function returns the message for a custom option tag or code that the protocol refuses,
+ * from the errors the validators above set on its control, or `null` when there are none. The
+ * scope and tag rule forms show it while the operator types. It repeats the server's check, so
+ * an empty tag gives no message: `required` is reported on save.
+ */
+export function optionTagErrorMessage(
+  errors: ValidationErrors | null,
+  isDhcpv6: boolean,
+): string | null {
+  if (!errors) return null;
+  if (errors['min'] || errors['max']) {
+    return isDhcpv6
+      ? 'A DHCPv6 option code is between 1 and 255.'
+      : 'A DHCPv4 option tag is between 1 and 254 (0 is Pad and 255 is End).';
+  }
+  const reserved = errors['reservedTag'] as { tag: number; name?: string } | undefined;
+  if (reserved) {
+    return isDhcpv6
+      ? `Code ${reserved.tag} (${reserved.name}) is written by the server and cannot be set here.`
+      : `Tag ${reserved.tag} is set by the server or the relay agent and cannot be set here.`;
+  }
+  return null;
+}
+
+/**
  * This function returns a hint for a DHCPv4 option tag whose value has a quirk the catalog type
  * does not show, or `null`. Tag 66 (TFTP Server Name) is text, so "use this server's own
  * address" sends the address as dotted-quad text. Tag 150 (TFTP Server Address, RFC 5859) is an

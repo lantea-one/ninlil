@@ -37,7 +37,7 @@ public sealed class TsigServiceHotReloadTests
         public Task<IReadOnlyList<TsigKeyEntity>> ListAsync(
             System.Linq.Expressions.Expression<Func<TsigKeyEntity, bool>> predicate = null,
             CancellationToken stoppingToken = default
-        ) => throw new NotSupportedException();
+        ) => Task.FromResult<IReadOnlyList<TsigKeyEntity>>([key]);
 
         public Task AddAsync(TsigKeyEntity entity, CancellationToken stoppingToken = default) =>
             throw new NotSupportedException();
@@ -101,13 +101,11 @@ public sealed class TsigServiceHotReloadTests
                 IsDisabled = false,
             };
 
-            TsigService service = new(
+            using TsigKeyCacheHost keys = new(
                 new SingleKeyTsigKeyRepository(key),
-                protector,
-                monitor,
-                new TsigKeyLookupCache(TimeProvider.System),
                 TimeProvider.System
             );
+            TsigService service = new(protector, monitor, keys.Cache, TimeProvider.System);
 
             DnsMessage before = await service.SignAsync(
                 new DnsMessage { Id = 1, IsResponse = true },

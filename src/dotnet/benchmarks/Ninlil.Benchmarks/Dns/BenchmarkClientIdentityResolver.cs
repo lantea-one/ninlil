@@ -52,10 +52,10 @@ public sealed class BenchmarkClientIdentityResolver : IClientIdentityResolver
     };
 
     /// <inheritdoc />
-    public Task<ClientIdentityResolution> ResolveAsync(
+    public ValueTask<ClientIdentityResolution> ResolveAsync(
         IPAddress remoteAddress,
         CancellationToken stoppingToken = default
-    ) => Task.FromResult(Map.GetValueOrDefault(remoteAddress));
+    ) => ValueTask.FromResult(Map.GetValueOrDefault(remoteAddress));
 
     private static ClientIdentityResolution Resolution(int rank) =>
         new(BenchmarkDataSet.ClientIdentifier(rank), InternetProtocolVersionEnum.IPv4);

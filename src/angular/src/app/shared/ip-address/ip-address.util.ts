@@ -33,7 +33,8 @@ export function isIpv6Address(text: string): boolean {
 
     if (group.includes('.')) {
       // The dotted quad takes the place of the two lowest groups, so it can only end the address.
-      if (!isLast || !isDottedQuad(group)) {
+      // A "::" after it leaves it in the last group split out, so the text must end with it too.
+      if (!isLast || !text.endsWith(group) || !isDottedQuad(group)) {
         return false;
       }
       groupCount += 2;
@@ -46,6 +47,70 @@ export function isIpv6Address(text: string): boolean {
 
   // Without "::" all eight groups are written; with it at least one zero group is left to stand for.
   return halves.length === 1 ? groupCount === 8 : groupCount <= 7;
+}
+
+/**
+ * This function parses an IPv6 address into its 16 octets, high byte first. It takes the same text
+ * forms as {@link isIpv6Address} (RFC 4291 §2.2) and throws an `Error` for any other text. A
+ * dotted-quad IPv4 tail is allowed only as the last 32 bits (`::ffff:192.0.2.1`), where its four
+ * decimal parts become the last four octets. The APL CIDR and DHCP option value encoders call it,
+ * so both accept the same addresses.
+ */
+export function parseIpv6(address: string): number[] {
+  const invalid = (): Error => new Error(`"${address}" is not a valid IPv6 address.`);
+  let text = address;
+
+  // The dotted quad becomes two hex groups before the "::" expansion, so it counts as two groups.
+  if (text.includes('.')) {
+    const lastColon = text.lastIndexOf(':');
+    const octetText = text.slice(lastColon + 1);
+    const octets = octetText.split('.');
+
+    if (lastColon < 0 || !octets.every((octet) => /^\d{1,3}$/.test(octet) && +octet <= 255)) {
+      throw invalid();
+    }
+
+    if (octets.length !== 4) {
+      throw invalid();
+    }
+
+    const [high, low] = [(+octets[0] << 8) | +octets[1], (+octets[2] << 8) | +octets[3]];
+    text = `${text.slice(0, lastColon + 1)}${high.toString(16)}:${low.toString(16)}`;
+  }
+
+  // Any dot left here sits outside the tail, which is not allowed.
+  if (text.includes('.')) {
+    throw invalid();
+  }
+
+  // "::" stands for one or more zero groups and may appear once.
+  const halves = text.split('::');
+
+  if (halves.length > 2) {
+    throw invalid();
+  }
+
+  const head = halves[0].length > 0 ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1].length > 0 ? halves[1].split(':') : [];
+  const missingGroupCount = 8 - head.length - tail.length;
+
+  // Without "::" all eight groups are written; with it at least one zero group must stand for.
+  if (halves.length === 1 ? missingGroupCount !== 0 : missingGroupCount < 1) {
+    throw invalid();
+  }
+
+  const groups = [...head, ...Array<string>(missingGroupCount).fill('0'), ...tail];
+  const bytes: number[] = [];
+
+  for (const group of groups) {
+    if (!/^[0-9a-fA-F]{1,4}$/.test(group)) {
+      throw invalid();
+    }
+    const value = Number.parseInt(group, 16);
+    bytes.push((value >> 8) & 0xff, value & 0xff);
+  }
+
+  return bytes;
 }
 
 /**

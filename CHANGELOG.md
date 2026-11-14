@@ -11,6 +11,71 @@ outside Forgejo.
 
 ## Unreleased
 
+### Removed
+
+- **Library API (NuGet).** `IClientIdentityResolver.ResolveAsync` returns
+  `ValueTask<ClientIdentityResolution>` instead of `Task<ClientIdentityResolution>`, so an answer
+  from memory allocates no task. Code that implements the interface changes its return type
+  (`ValueTask.FromResult(...)` replaces `Task.FromResult(...)`); code that awaits the call needs
+  no change, and code that stores the result or awaits it twice must call `AsTask()` first
+  ([#228](https://git.lantea.one/lantea-one/ninlil/issues/228)).
+
+### Behaviour worth knowing
+
+- **The AAAA record form refuses an IPv4 tail that is followed by `::`.** Text such as `1.2.3.4::`
+  or `0:0:192.0.2.1::` passed the form's check and was refused only by the server. The form now
+  shows "Enter a valid IPv6 address." before it saves.
+  ([#420](https://git.lantea.one/lantea-one/ninlil/issues/420))
+- **The dashboard's Zones tile shows the Zones menu icon.** It showed the product's brand icon. The
+  four At a Glance tiles now take their icons from the menu entries of the same pages.
+  ([#431](https://git.lantea.one/lantea-one/ninlil/issues/431))
+- **An idle MongoDB replica is no longer refused for one check when it is only a moment late with
+  the primary's periodic no-op write.** A lag of more than 2 seconds is read again after 2 seconds
+  and the second reading decides, so a replica that catches up in between stays eligible and a
+  stuck one is still refused. A refused replica sends its reads to the primary until the next
+  check, so this removes a short performance dip, not a correctness problem. See
+  [read replicas](./README.md#read-replicas-and-database-clusters)
+  ([#432](https://git.lantea.one/lantea-one/ninlil/issues/432)).
+- **IPv6 addresses with an IPv4 tail are sent with the right bytes, and malformed IPv6 text is
+  refused.** In APL records and DHCP option values, the console turned the IPv4 part of
+  `::ffff:192.0.2.1` into wrong bytes and sent them without an error; such an address is now sent
+  as its 16 octets. The console also sent malformed text such as `12g::1` or `1:2:3:4:5:6:7:8::`.
+  For that text the APL record form now shows "Enter a valid CIDR prefix, e.g. 192.0.2.0/24 or
+  2001:db8::/32." and the DHCP scope and tag rule forms show
+  `Option row N (tag T): "<text>" is not a valid IPv6 address.`
+  ([#198](https://git.lantea.one/lantea-one/ninlil/issues/198))
+- **Every table in the admin console scrolls sideways inside its card on a narrow screen.** A long
+  value no longer widens the page. ([#195](https://git.lantea.one/lantea-one/ninlil/issues/195))
+- **The dashboard's Live Activity title and the zone form's key headings match the text around
+  them.** Live Activity has the size of the Getting Started header, and "Keys allowed to send
+  dynamic updates" and "Keys allowed to transfer this zone" have the size of the other field
+  labels. ([#196](https://git.lantea.one/lantea-one/ninlil/issues/196))
+- **On Windows, a port Ninlil serves can no longer be shared with another program.** The DNS,
+  DNS-over-TLS, DNSCrypt, DHCPv4, DHCPv6, TFTP and web sockets claim their ports exclusively, so
+  a second program that binds the same port, on a specific address or with address reuse, fails
+  instead of taking some clients' traffic. When another program holds a DNS port on some address
+  (typically UDP 53 held by connection sharing, Hyper-V or WSL), the DNS transports with no listen
+  addresses set fall back to binding each local address on its own and log one warning; addresses
+  added to the machine later are served after the transport restarts. DHCPv4, DHCPv6 and TFTP do
+  not start beside another program on their port (a DHCP relay agent on the same host, for
+  example), and a failed web bind stops Ninlil as before. DNS-over-QUIC is not covered. See
+  [Ports](./README.md#ports). ([#403](https://git.lantea.one/lantea-one/ninlil/issues/403))
+- **The Zones menu entry has its own icon, and the Storage page offers no engine switch when its
+  status fails to load.** Zones no longer shares the logo's icon. Without the current status the
+  page shows the error and hides the switch form, so nobody schedules a switch blind.
+  ([#199](https://git.lantea.one/lantea-one/ninlil/issues/199))
+- **A TSIG key that you delete, disable or change is refused or used as changed by the very next
+  signed message, and signing no longer opens a service scope.** The keys now live in one
+  in-memory copy that a key change expires at once on the node that made the change (before, the
+  old verdict lasted up to 10 seconds). A change made by another node or by a direct database edit
+  shows after about 10 seconds while the database answers; a refresh for age alone that fails
+  keeps the last good copy. If the reload after a change fails or runs past its 30-second limit,
+  every TSIG key is refused until a reload succeeds. For code that uses the
+  `Ninlil.Dns.Server.Tsig` package: `TsigService` and `ITsigService` are singletons, the
+  `TsigService` constructor no longer takes a repository, and `TsigKeyLookupCache` needs an
+  `IEntityChangeNotifier` and no longer takes a repository per lookup.
+  ([#229](https://git.lantea.one/lantea-one/ninlil/issues/229))
+
 ## v2026.11.13.1
 
 ### Behaviour worth knowing

@@ -29,9 +29,7 @@ import {
 } from '../reset-password-dialog/reset-password-dialog.component';
 import { IfPermissionDirective } from '../../../shared/if-permission/if-permission.directive';
 import { HasPermissionPipe } from '../../../shared/if-permission/has-permission.pipe';
-
-/** The page size the list starts with, as on the other list pages. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../shared/pagination/default-page-size';
 
 /**
  * This component is the Users page (`/users`, `users:read`). It lists accounts a page at a time

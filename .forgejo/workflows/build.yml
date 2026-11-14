@@ -1,19 +1,25 @@
 name: 'Build'
 ##
-## Every push to any branch other than a release branch builds, tests, and publishes a
-## pre-release -- binaries, a container image, and (from the same version) NuGet packages --
-## versioned v<yyyy>.<mm>.<dd>.<increment>R<branch>+<short-sha>. Pre-releases expire after
-## 24 hours (cleanup.yml). A branch build can also be started by hand ("Run workflow" on the
-## Actions page, or the dispatch API), for example to rebuild after a runner problem without
-## pushing a commit. Pull requests do not run here: pull-request.yml runs their tests only.
+## A push to develop, main or a hotfix/* branch builds, tests, and publishes a pre-release --
+## binaries, a container image, and (from the same version) NuGet packages -- versioned
+## v<yyyy>.<mm>.<dd>.<increment>R<branch>+<short-sha>. Pre-releases expire after 24 hours
+## (cleanup.yml). A feature branch gets no push build: its pull request runs the tests only
+## (pull-request.yml), and the full build runs on develop after the merge. Any branch, a
+## feature branch included, can still be built by hand ("Run workflow" on the Actions page,
+## or the dispatch API), for example to get a pre-release of it or to rebuild after a runner
+## problem without pushing a commit. A release branch v<yyyy>.<mm>.<dd>.<increment> does not
+## match the filter below; release.yml builds it.
 ##
-## Input: a push or a hand-started run of a branch. Output: a pre-release (pipeline.yml).
+## Input: a push to develop, main or hotfix/*, or a hand-started run of any branch.
+## Output: a pre-release (pipeline.yml).
 ##
 on:
   workflow_dispatch:
   push:
-    branches-ignore:
-      - 'v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9].[0-9]+'
+    branches:
+      - 'develop'
+      - 'main'
+      - 'hotfix/**'
 ##
 ## Builds of one branch queue behind each other rather than overlapping, because each takes the
 ## next free increment for that branch and day.

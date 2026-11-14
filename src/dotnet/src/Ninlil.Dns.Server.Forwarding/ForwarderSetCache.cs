@@ -154,7 +154,7 @@ public sealed class ForwarderSetCache : IDisposable
             .GetRequiredService<IDnsForwarderRepository>()
             .ListEnabledOrderedAsync(stoppingToken);
 
-        Dictionary<DnsName, ForwarderSet> byName = [];
+        Dictionary<DnsName, ForwarderSet> byName = new(DnsNameComparer.Instance);
 
         // The earliest-created zone wins when two names differ only in case or trailing dot.
         foreach (ZoneEntity zone in zones.OrderBy(zone => zone.CreatedAtUtc))
@@ -247,6 +247,28 @@ public sealed record ForwarderSetSnapshot(
     {
         if (Zones.Count == 0)
             return Global;
+
+        // A dictionary built with DnsNameComparer is probed with a label offset of the queried
+        // name, which builds no DnsName per suffix. Any other dictionary (a snapshot built by
+        // hand) takes the slower path, which gives the same answers.
+        if (
+            Zones is Dictionary<DnsName, ForwarderSet> dictionary
+            && dictionary.TryGetAlternateLookup(
+                out Dictionary<DnsName, ForwarderSet>.AlternateLookup<DnsNameSuffix> suffixes
+            )
+        )
+        {
+            for (int start = 0; start <= queriedName.Labels.Count; start++)
+                if (
+                    suffixes.TryGetValue(
+                        new DnsNameSuffix(queriedName, start),
+                        out ForwarderSet set
+                    )
+                )
+                    return set;
+
+            return Global;
+        }
 
         for (int start = 0; start <= queriedName.Labels.Count; start++)
         {

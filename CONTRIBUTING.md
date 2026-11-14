@@ -18,6 +18,7 @@ time; later, jump to the part you need.
   - [Add a migration](#add-a-migration)
   - [Add a setting](#add-a-setting)
   - [Add a console page](#add-a-console-page)
+  - [Change the wiki](#change-the-wiki)
 - [Build the binaries and packages](#build-the-binaries-and-packages)
 - [Report a bug or propose a change](#report-a-bug-or-propose-a-change)
 - [Commit, branch and pull request](#commit-branch-and-pull-request)
@@ -280,6 +281,14 @@ Chromium, signs in through the login form and visits the pages at several widths
 dark theme. Every visit checks that there is no script error, that every same-origin response is
 below 400, that a heading is visible, that nothing overflows horizontally and that the network goes
 idle. The harness is not part of the pipeline: run it by hand after a change to the console.
+
+Chromium aborts its open sockets when the machine's IP addresses change, for example when a
+container that stays up on the same host gets an address. That shows up as `net::ERR_NETWORK_CHANGED`
+or a SignalR close with code 1006. The harness watches the addresses itself and, when a visit fails
+while they changed, signs the user in again and runs that visit once more, keeping only the second
+attempt. The sign-in matters because an aborted token refresh can end the session. The report counts
+such visits and lists each one in its notes, so a run beside container starts on the same machine
+can show them; with a stable address set the same errors still fail.
 
 #### Before you start
 
@@ -620,7 +629,7 @@ component, each in its own subfolder. Feature pages follow that "list + form" sh
    permission (the `client-static-address-mappings` entry shows list, `new` and `:id/edit`).
 5. Add the sidebar entry to `NAV_ITEMS` in
    `src/angular/src/app/layout/app-shell/nav-item.model.ts`. Its `permission` is the read
-   permission of the controller behind the page, and its icon must be registered in `app.config.ts`.
+   permission of the controller behind the page, and its icon must be registered in `src/app/core/icons/core-ui-icons.ts`.
 6. Write TSDoc (`/** */`) on every exported component, service, guard, function, constant and
    interface: what it is, why it exists and what uses it.
 7. Write a Jasmine spec next to each component, following an existing spec (TestBed setup, a mocked
@@ -639,6 +648,51 @@ component, each in its own subfolder. Feature pages follow that "list + form" sh
 #### Check that it worked
 
 All four commands exit with code 0, and the smoke harness reports `failed: 0`.
+
+### Change the wiki
+
+The wiki lives in `pages/` (`pages/mkdocs.yml` and the Markdown under `pages/docs/`). It is
+documentation: change it together with the [README](./README.md) when behaviour a user sees
+changes.
+
+#### Before you start
+
+Docker is installed (`docker --version`). The build runs in the pinned `docs` toolchain container,
+so MkDocs needs no installation on your machine.
+
+#### Steps
+
+1. Build the wiki in strict mode. Any warning, such as a broken link, fails the build:
+
+   ```bash
+   ./.forgejo/scripts/in-container.sh docs ./.forgejo/scripts/build-wiki.sh
+   ```
+
+2. To add a page, create `pages/docs/<area>/<name>.md` with one `#` heading, then add it to `nav:` in
+   `pages/mkdocs.yml`. A page outside `nav:` builds but nobody finds it.
+3. Link to another page by relative path (`../reference/ports.md`). MkDocs cannot link to a file
+   outside `pages/docs/`, so link to the README, `ENVIRONMENT.md` and other repository files by
+   their web address, for example
+   `https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#ports`. The lint job checks
+   such a link against the working tree.
+4. Preview the result in a browser:
+
+   ```bash
+   python3 -m http.server 8000 --bind 127.0.0.1 --directory pages/site
+   ```
+
+   Open `http://127.0.0.1:8000/`. Press Ctrl+C to stop it.
+5. Run the link check, which covers `pages/docs/` like every tracked Markdown file:
+
+   ```bash
+   python3 -I .forgejo/scripts/check-markdown-links.py
+   ```
+
+#### Check that it worked
+
+The build ends with `Documentation built in <n> seconds` and no `WARNING` line, and the link check
+ends with `0 problems.`. A push to `main` that changes `pages/**` publishes the site
+(`.forgejo/workflows/pages.yml`).
 
 ## Build the binaries and packages
 
@@ -832,10 +886,16 @@ The workflows are in [`.forgejo/workflows/`](./.forgejo/workflows/). The README'
   marked `RequiresDocker`. Every other job (version, draft, binaries, packages, image, smoke test,
   publish, Windows tests) shows as skipped, so a pull request leaves no pre-release behind.
   If a pull-request run shows a running build job, the run is wrong: stop it and report it.
-- **A push** to any branch other than a release branch runs the same checks with the Docker
-  socket, so the `RequiresDocker` tests run, and then publishes a pre-release build that expires
-  after 24 hours. A same-repository branch is pushed before its pull request, so its push build
-  covers the Docker tests.
+- **A push** to `develop`, `main` or a `hotfix/*` branch ([`build.yml`](./.forgejo/workflows/build.yml))
+  runs the same checks with the Docker socket, so the `RequiresDocker` tests run, and then the
+  packaging, the image and the smoke test, and publishes a pre-release build that expires after
+  24 hours. The whole .NET suite on Windows runs only in a build of `develop` or `main`, so a
+  hotfix push or a hand-started build of another branch skips it.
+- **A feature branch** has no push build: it gets its pull-request run only. The Docker-backed
+  tests, the Windows tests, the packages, the image and the smoke test run on `develop` after the
+  merge. To run all of them but the Windows tests on your branch earlier, open the Actions page,
+  pick the Build workflow, choose "Run workflow" and select your branch; the pre-release it
+  publishes expires after 24 hours.
 - **A pull request from a fork** waits for a maintainer's approval before its workflows run. The
   maintainer reads the diff of `.forgejo/` and of every script it runs first.
 

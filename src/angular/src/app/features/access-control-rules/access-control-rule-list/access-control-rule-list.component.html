@@ -42,7 +42,7 @@
   </p>
 
   <div class="table-card">
-    <table cdk-table cTable hover responsive [dataSource]="rules()" class="rule-table">
+    <table cdk-table cTable hover [responsive]="true" [dataSource]="rules()" class="rule-table">
       <ng-container cdkColumnDef="name">
         <th cdk-header-cell *cdkHeaderCellDef>Name</th>
         <td cdk-cell *cdkCellDef="let rule">{{ rule.name }}</td>

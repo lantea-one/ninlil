@@ -32,9 +32,7 @@ import { IfPermissionDirective } from '../../../../shared/if-permission/if-permi
 import { HasPermissionPipe } from '../../../../shared/if-permission/has-permission.pipe';
 import { DnssecKeyRecordsDialogComponent } from '../dnssec-key-records-dialog/dnssec-key-records-dialog.component';
 import { DnssecKeyRolloverDialogComponent } from '../dnssec-key-rollover-dialog/dnssec-key-rollover-dialog.component';
-
-/** How many keys one page of this list shows. The backend's `PaginationQuery` default is 50. */
-const DEFAULT_PAGE_SIZE = 25;
+import { DEFAULT_PAGE_SIZE } from '../../../../shared/pagination/default-page-size';
 
 /**
  * This component is a zone's DNSSEC Keys page (`/zones/:zoneId/dnssec-keys`). It lists the keys a

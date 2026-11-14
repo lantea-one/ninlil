@@ -18,7 +18,7 @@ public sealed class CompositeClientIdentityResolver(
 ) : IClientIdentityResolver
 {
     /// <inheritdoc />
-    public async Task<ClientIdentityResolution> ResolveAsync(
+    public async ValueTask<ClientIdentityResolution> ResolveAsync(
         IPAddress remoteAddress,
         CancellationToken stoppingToken = default
     )

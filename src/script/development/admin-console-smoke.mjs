@@ -12,6 +12,13 @@
 //     - a visible heading (h1, h2 or a card header);
 //     - no horizontal overflow (document scrollWidth <= innerWidth + 1);
 //     - the network goes idle (no request for 500 ms, bounded by 15 s).
+//   A visit that fails while the machine's IP addresses changed (for example a container that
+//   stays up on the same host gets an address) is run once more and only the second attempt
+//   counts, because Chromium aborts open sockets then (net::ERR_NETWORK_CHANGED, WebSocket
+//   code 1006). Every repeat signs the user in again first, because such a change can abort a
+//   token refresh and kill the session; a 401 on the refresh call after an address change since
+//   the last sign-in counts as that effect. The report lists each repeat; failures with a stable
+//   address set are never excused.
 //   It then saves a full-page screenshot. It also records facts a later change may need, such as
 //   whether the browser's time zone list holds UTC.
 //
@@ -48,13 +55,15 @@
 //
 // Outputs and exit code
 //   <out>/report.json and <out>/report.md with every check (failures first), counts and the
-//   screenshot index. Exit code 0 when every check passed and at least one page was visited; 1
-//   when a check failed or the sweep visited nothing; 2 when the host or browser could not start.
+//   screenshot index, plus a note and a summary count for every repeated visit. Exit code 0 when
+//   every check passed and at least one page was visited; 1 when a check failed or the sweep
+//   visited nothing; 2 when the host or browser could not start.
 
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -67,6 +76,19 @@ const webProject = path.join(repoRoot, 'src', 'dotnet', 'src', 'Ninlil.Web');
 const ADMIN_USER = 'smokeadmin';
 const ADMIN_PASSWORD = 'Smoke-Password-1234!';
 const LIMITED_PASSWORD = 'Smoke-Limited-1234!';
+
+/** How often the machine's IP addresses are read, in milliseconds. */
+const ADDRESS_POLL_MS = 150;
+
+/**
+ * How far before a visit began an address change still counts as disturbing it, in milliseconds.
+ * A page that is being left logs the abort of its sockets after the navigation has reset the
+ * observations, so that error lands on the next visit, and the change itself happened during the
+ * previous visit's screenshot and teardown (a second or so under load). The poll adds up to
+ * {@link ADDRESS_POLL_MS} to the time a change is noticed. A margin that is too wide only repeats a
+ * visit that did not need it.
+ */
+const ADDRESS_CHANGE_MARGIN_MS = 3000;
 
 /** Viewport heights by width: desktop, tablet and phone. Unknown widths use 900. */
 const HEIGHTS = { 1400: 900, 900: 1000, 390: 844 };
@@ -153,6 +175,67 @@ function startProcess(name, command, args, spawnOptions) {
   return entry;
 }
 
+/**
+ * Watches the machine's IP addresses for the whole sweep. Chromium aborts every open socket when
+ * the set of addresses changes, which the page reports as a failed request or a SignalR close
+ * with code 1006; a visit that fails in such a window is repeated (see {@link visit}).
+ */
+class AddressWatcher {
+  constructor() {
+    this.current = AddressWatcher.read();
+    this.changes = [];
+    this.timer = null;
+  }
+
+  /** Returns the current set of `interface/address` strings. */
+  static read() {
+    const result = new Set();
+    for (const [name, list] of Object.entries(os.networkInterfaces())) {
+      for (const entry of list ?? []) result.add(`${name}/${entry.address}`);
+    }
+    return result;
+  }
+
+  /** Starts polling. The timer is unref'd so it never keeps the process alive. */
+  start() {
+    this.timer = setInterval(() => this.poll(), ADDRESS_POLL_MS);
+    this.timer.unref();
+  }
+
+  /** Stops polling; safe to call more than once. */
+  stop() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  /**
+   * Reads the addresses and records a change, with what was added and removed. A read that fails
+   * is skipped: an exception thrown from the timer would end the process without stopping the
+   * host and the browser, and one missed poll only delays noticing a change.
+   */
+  poll() {
+    let next;
+    try { next = AddressWatcher.read(); } catch { return; }
+    const added = [...next].filter((address) => !this.current.has(address));
+    const removed = [...this.current].filter((address) => !next.has(address));
+    if (added.length || removed.length) this.changes.push({ at: Date.now(), added, removed });
+    this.current = next;
+  }
+
+  /** Returns a text for the changes noticed since `since` (epoch ms), or null when none. */
+  describeSince(since) {
+    this.poll();
+    const recent = this.changes.filter((change) => change.at >= since);
+    if (recent.length === 0) return null;
+    const added = recent.flatMap((change) => change.added.map((address) => `+${address}`));
+    const removed = recent.flatMap((change) => change.removed.map((address) => `-${address}`));
+    return [...added, ...removed].slice(0, 6).join(' ');
+  }
+}
+
+/** The watcher of the running sweep; stopped by {@link stopAll} on every exit path. */
+const addressWatcher = new AddressWatcher();
+
 /** Sends a signal to a started process group; a group that is already gone is not an error. */
 function signalGroup(entry, signal) {
   try { process.kill(-entry.child.pid, signal); } catch { /* already gone */ }
@@ -162,6 +245,7 @@ function signalGroup(entry, signal) {
  * Stops every process this script started: SIGTERM, up to 10 s of grace, then SIGKILL.
  */
 async function stopAll() {
+  addressWatcher.stop();
   for (const entry of started) signalGroup(entry, 'SIGTERM');
   const deadline = Date.now() + 10_000;
   while (started.some((entry) => !entry.exited) && Date.now() < deadline) await sleep(100);
@@ -1004,6 +1088,23 @@ async function signInThroughForm(page, userName, password) {
 }
 
 /**
+ * Signs the sweep's user in on the shared page through the login form and records when, so a lost
+ * session can be told from a stable one (see {@link visit}). The sweep and every repeat use it.
+ */
+async function signInUser(page, user) {
+  const began = Date.now();
+  try {
+    await signInThroughForm(page, user.userName, user.password);
+  } catch (error) {
+    // A sign-in that fails while the addresses changed is tried once more; any other failure
+    // stands.
+    if (!addressWatcher.describeSince(began - ADDRESS_CHANGE_MARGIN_MS)) throw error;
+    await signInThroughForm(page, user.userName, user.password);
+  }
+  user.signedInAt = Date.now();
+}
+
+/**
  * Runs the sweep for one user: for each theme and width, visits every page, records the checks
  * and the screenshot. Returns nothing; results go into `report`.
  */
@@ -1012,7 +1113,7 @@ async function sweepUser(context) {
   const page = await BrowserPage.create(browser, baseUrl);
   try {
     await page.setViewport(1400);
-    await signInThroughForm(page, user.userName, user.password);
+    await signInUser(page, user);
     for (const theme of options.themes) {
       await api.ok('PATCH', '/api/appearance-settings/me', { mode: theme === 'dark' ? 'Dark' : 'Light' }, user.token);
       for (const width of options.widths) {
@@ -1033,10 +1134,73 @@ async function sweepUser(context) {
   }
 }
 
-/** Visits one page variant and records its checks. A thrown error becomes a failed check. */
+/**
+ * Visits one page variant and records its checks. When a check failed and the machine's addresses
+ * changed from {@link ADDRESS_CHANGE_MARGIN_MS} before the visit to its end, the visit is run again
+ * once from the navigation on and only the second attempt's results are kept. The second attempt
+ * looks for changes since its own start only, so the change that caused the repeat is not counted
+ * again. A second disturbed attempt is not repeated; its failures stand and the note says so.
+ * Nothing is excused when the address set stayed the same.
+ */
 async function visit(context, entry, variant, slug, width, theme) {
+  const { report, user } = context;
+  const identity = { page: slug, user: user.label, width, theme };
+  let outcome = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const began = Date.now();
+    outcome = await attemptVisit(context, entry, variant, slug, width, theme);
+    const failed = outcome.checks.filter((check) => !check.ok);
+    let changed = failed.length ? addressWatcher.describeSince(attempt === 1 ? began - ADDRESS_CHANGE_MARGIN_MS : began) : null;
+    let sessionLost = false;
+    if (!changed && failed.some((check) => /\b401 \/api\/auth\/refresh(?= |$)/.test(check.message ?? ''))) {
+      // An address change aborts a refresh call after the server has rotated the refresh cookie,
+      // so the browser never gets the new one and the session is dead from then on. The abort can
+      // land between two visits, where the page being left discards it, so the visit that first
+      // shows the 401 may lie outside the change's window. A 401 on the refresh call counts as
+      // that effect only when an address change was noticed after the user's last sign-in; with a
+      // stable address set it still fails.
+      changed = user.signedInAt ? addressWatcher.describeSince(user.signedInAt) : null;
+      sessionLost = changed !== null;
+    }
+    if (!changed) break;
+    if (attempt === 1) {
+      // The page that was aborted may still log its close. Leaving it for a blank page first lets
+      // that message arrive now, before the repeat's navigation clears the observations.
+      try { await context.page.send('Page.navigate', { url: 'about:blank' }); } catch { /* the repeat reports its own failure */ }
+      // The wait has no exact bound to meet: four poll intervals are enough in runs beside
+      // container starts, and the cost is paid once per repeat.
+      await sleep(ADDRESS_POLL_MS * 4);
+      // Every repeat signs in again through the sweep's own sign-in, so a session lost to an
+      // aborted refresh cannot fail the repeat. The sign-in changes neither the viewport nor the
+      // theme (the theme is a server-side setting of the user) and a visit on a fresh page does
+      // not use this page's session.
+      let signedInAgain = true;
+      try {
+        await signInUser(context.page, user);
+      } catch (error) {
+        signedInAgain = false;
+        report.checks.push({ ...identity, check: 'sign in again before the repeat', ok: false, message: String(error.message ?? error).slice(0, 400) });
+      }
+      report.repeatedVisits += 1;
+      const reason = sessionLost
+        ? `the session was lost when a refresh was aborted by an address change (${changed})`
+        : `the host's network addresses changed during the visit (${changed})`;
+      report.notes.push({ ...identity, note: `repeated once, ${reason}${signedInAgain ? '; signed in again first' : ''}` });
+      if (!signedInAgain) break;
+    } else {
+      report.notes.push({ ...identity, note: `the repeat was disturbed by an address change as well (${changed}); its failures stand` });
+    }
+  }
+  report.checks.push(...outcome.checks);
+  report.notes.push(...outcome.notes);
+  report.screenshots.push(...outcome.screenshots);
+}
+
+/** Runs one attempt of a visit and returns its checks, notes and screenshot entries. */
+async function attemptVisit(context, entry, variant, slug, width, theme) {
   const { page, options, api, user, report } = context;
   const identity = { page: slug, user: user.label, width, theme };
+  const outcome = { checks: [], notes: [], screenshots: [] };
   const shotFile = path.join(options.out, 'shots', `${slug}-${width}-${theme}.png`);
   let freshPage = null;
   try {
@@ -1055,7 +1219,7 @@ async function visit(context, entry, variant, slug, width, theme) {
     const idle = await target.navigate(entry.route);
     if (entry.prepare) {
       const worked = await entry.prepare(target, variant);
-      if (worked === false) report.notes.push({ ...identity, note: 'prepare step found nothing to act on' });
+      if (worked === false) outcome.notes.push({ ...identity, note: 'prepare step found nothing to act on' });
       await target.waitForIdle(300, 5000);
     }
     await sleep(150);
@@ -1064,19 +1228,20 @@ async function visit(context, entry, variant, slug, width, theme) {
       report.facts.timeZoneCount = await target.evaluate(`Intl.supportedValuesOf('timeZone').length`);
     }
     const checks = await runChecks(target, idle, entry.expect ?? user.expect?.(entry) ?? []);
-    for (const check of checks) report.checks.push({ ...identity, ...check });
+    for (const check of checks) outcome.checks.push({ ...identity, ...check });
     await target.screenshot(shotFile);
-    report.screenshots.push({ ...identity, file: shotFile, synthetic: entry.synthetic === true });
+    outcome.screenshots.push({ ...identity, file: shotFile, synthetic: entry.synthetic === true });
     if (entry.slug === 'dashboard' && user.collectNav && !user.navLinks) {
       user.navLinks = await target.evaluate(`[...document.querySelectorAll('.sidebar-nav a.nav-link')].map((a) => new URL(a.href).pathname)`);
     }
   } catch (error) {
-    report.checks.push({ ...identity, check: 'visit completed', ok: false, message: String(error.message ?? error).slice(0, 400) });
+    outcome.checks.push({ ...identity, check: 'visit completed', ok: false, message: String(error.message ?? error).slice(0, 400) });
   } finally {
     if (entry.stub) { try { await (freshPage ?? page).stubStorageStatus(null); } catch { /* ignore */ } }
     if (entry.after) { try { await entry.after(); } catch { /* ignore */ } }
     if (freshPage) await freshPage.dispose();
   }
+  return outcome;
 }
 
 /**
@@ -1113,6 +1278,7 @@ function writeReport(options, report) {
   lines.push(`- Page visits: ${report.screenshots.length}, distinct pages: ${new Set(report.screenshots.map((shot) => shot.page)).size}`);
   lines.push(`- Users: ${[...new Set(report.checks.map((check) => check.user))].join(', ')}`);
   lines.push(`- Widths: ${options.widths.join(', ')}; themes: ${options.themes.join(', ')}`);
+  lines.push(`- Visits repeated because the host's network addresses changed: ${report.repeatedVisits}`);
   lines.push(`- Time zone list holds UTC: ${report.facts.timeZoneHasUtc} (${report.facts.timeZoneCount} names)`);
   lines.push(`- Seed steps failed: ${report.seed.filter((item) => !item.ok).length} of ${report.seed.length}`, '');
   lines.push('## Failed checks', '');
@@ -1156,9 +1322,10 @@ async function main() {
   }
   fs.mkdirSync(path.join(options.out, 'shots'), { recursive: true });
 
-  const report = { startedAt: new Date().toISOString(), checks: [], screenshots: [], seed: [], notes: [], facts: {} };
+  const report = { startedAt: new Date().toISOString(), checks: [], screenshots: [], seed: [], notes: [], repeatedVisits: 0, facts: {} };
   let browser = null;
   let exitCode = 0;
+  addressWatcher.start();
   try {
     const baseUrl = await startHost(options);
     const api = createApi(baseUrl);
@@ -1204,7 +1371,7 @@ async function discoverNavLinks(browser, baseUrl, user) {
   const page = await BrowserPage.create(browser, baseUrl);
   try {
     await page.setViewport(1400);
-    await signInThroughForm(page, user.userName, user.password);
+    await signInUser(page, user);
     await page.navigate('/dashboard');
     return await page.evaluate(`[...document.querySelectorAll('.sidebar-nav a.nav-link')].map((a) => new URL(a.href).pathname)`);
   } finally {

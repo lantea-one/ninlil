@@ -463,11 +463,11 @@ public partial class DnsFilterEngineTests
     private sealed class StaticClientIdentityResolver(string identifier)
         : Ninlil.Dns.Server.Core.ClientIdentity.IClientIdentityResolver
     {
-        public Task<Ninlil.Dns.Server.Core.ClientIdentity.ClientIdentityResolution> ResolveAsync(
+        public ValueTask<Ninlil.Dns.Server.Core.ClientIdentity.ClientIdentityResolution> ResolveAsync(
             IPAddress remoteAddress,
             CancellationToken stoppingToken = default
         ) =>
-            Task.FromResult(
+            ValueTask.FromResult(
                 new Ninlil.Dns.Server.Core.ClientIdentity.ClientIdentityResolution(
                     identifier,
                     InternetProtocolVersionEnum.IPv4

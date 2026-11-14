@@ -1,7 +1,8 @@
 name: 'Ninlil Pipeline'
 ##
-## The build, test, and publish pipeline shared by every entry point: branch builds
-## (build.yml), release builds (release.yml), and pull-request verification (pull-request.yml).
+## The build, test, and publish pipeline shared by every entry point: pre-release builds
+## (build.yml: develop, main and hotfix pushes, or by hand), release builds (release.yml), and
+## pull-request verification (pull-request.yml).
 ##
 ## Input: kind, set by the calling workflow as a literal, never computed from the event. Only
 ## 'prerelease' and 'release' open the version, draft, binary, package, image, smoke and publish
@@ -177,8 +178,8 @@ jobs:
           # yet, so they get no Docker socket (it is root-equivalent on the runner host) and skip
           # that category. Only the two kinds that run for pushed code, prerelease and release,
           # hand the container the socket and run everything; any other value, a typo included,
-          # gets no socket. A same-repo branch is pushed before its pull request, so its push
-          # build covers the Docker tests.
+          # gets no socket. A feature branch has no push build, so the RequiresDocker tests run in
+          # the develop or main push build, or on a branch built by hand.
           docker_flag=()
           category_filter=' & Category!=RequiresDocker'
           if [[ "${BUILD_KIND}" == 'prerelease' || "${BUILD_KIND}" == 'release' ]]; then

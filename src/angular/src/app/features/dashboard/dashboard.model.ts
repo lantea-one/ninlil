@@ -8,7 +8,7 @@ export interface QuickStat {
   /** The tile label, e.g. `Zones`. */
   label: string;
 
-  /** The `@coreui/icons` icon shown with the count; it must be registered in `app.config.ts`. */
+  /** The `@coreui/icons` icon shown with the count; it must be registered in `core/icons/core-ui-icons.ts`. */
   icon: string;
 
   /** The total count, or `null` if it could not be fetched. */
