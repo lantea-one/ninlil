@@ -43,7 +43,13 @@ public class OpenApiSecuritySchemeTests(NinlilDnsWebApplicationFactory factory)
 
         // Swagger UI sends the typed value as written, so the description has to tell the user
         // to include the prefix the handler requires.
-        Assert.Contains("ApiToken <token>", scheme["description"].GetValue<string>());
+        string description = scheme["description"].GetValue<string>();
+        Assert.Contains("ApiToken", description);
+
+        // Swagger UI renders descriptions as Markdown and sanitises HTML, so a placeholder in
+        // angle brackets disappears from the Authorize dialog.
+        Assert.DoesNotContain("<", description);
+        Assert.DoesNotContain(">", description);
     }
 
     [Fact]

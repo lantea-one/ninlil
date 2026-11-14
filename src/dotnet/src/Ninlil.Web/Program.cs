@@ -847,7 +847,8 @@ builder.Services.AddSwaggerGen(options =>
     // An API token travels in the same Authorization header as the JWT, behind the prefix
     // "ApiToken " (ApiTokenAuthenticationHandler). OpenAPI has no HTTP scheme with a custom
     // prefix that Swagger UI sends as written, so the scheme is an apiKey in that header and the
-    // user types the prefix as part of the value. Swagger UI then sends the value unchanged.
+    // user types the prefix as part of the value. Swagger UI then sends the value unchanged. The
+    // description holds no angle brackets: Swagger UI renders it as Markdown and drops them.
     options.AddSecurityDefinition(
         "ApiToken",
         new OpenApiSecurityScheme
@@ -856,8 +857,9 @@ builder.Services.AddSwaggerGen(options =>
             Type = SecuritySchemeType.ApiKey,
             In = ParameterLocation.Header,
             Description =
-                "An API token created by POST /api/api-tokens. Enter the value with the prefix "
-                + "and a space: ApiToken <token>.",
+                "An API token created by POST /api/api-tokens. Type the word ApiToken, a space, "
+                + "then the token. Example: ApiToken 0123456789abcdef (not a real token). Fill "
+                + "only one of the two fields, Bearer or ApiToken.",
         }
     );
 
