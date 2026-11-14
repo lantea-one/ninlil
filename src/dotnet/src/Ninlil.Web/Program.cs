@@ -843,9 +843,34 @@ builder.Services.AddSwaggerGen(options =>
             Description = "A JSON Web Token access token issued by POST /api/auth/login.",
         }
     );
+
+    // An API token travels in the same Authorization header as the JWT, behind the prefix
+    // "ApiToken " (ApiTokenAuthenticationHandler). OpenAPI has no HTTP scheme with a custom
+    // prefix that Swagger UI sends as written, so the scheme is an apiKey in that header and the
+    // user types the prefix as part of the value. Swagger UI then sends the value unchanged.
+    options.AddSecurityDefinition(
+        "ApiToken",
+        new OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = SecuritySchemeType.ApiKey,
+            In = ParameterLocation.Header,
+            Description =
+                "An API token created by POST /api/api-tokens. Enter the value with the prefix "
+                + "and a space: ApiToken <token>.",
+        }
+    );
+
+    // Two separate requirements are alternatives: a request needs either credential. The default
+    // authentication scheme picks the handler from the header prefix, so every endpoint that
+    // requires authentication accepts both.
     options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
         { new OpenApiSecuritySchemeReference("Bearer", document), [] },
+    });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        { new OpenApiSecuritySchemeReference("ApiToken", document), [] },
     });
 });
 
