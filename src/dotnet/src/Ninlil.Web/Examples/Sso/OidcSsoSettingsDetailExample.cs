@@ -11,13 +11,13 @@ namespace Ninlil.Web.Examples.Sso;
 public class OidcSsoSettingsDetailExample : IExamplesProvider<OidcSsoSettingsDetail>
 {
     /// <summary>
-    ///     This method returns a configured Authelia setup rather than the empty, disabled
+    ///     This method returns a configured setup rather than the empty, disabled
     ///     defaults, which would say little about the shape.
     /// </summary>
     public OidcSsoSettingsDetail GetExamples() =>
         new(
             true,
-            "Sign in with Authelia",
+            "Single Sign-On",
             "https://auth.example.com",
             "ninlil-dns",
             true,

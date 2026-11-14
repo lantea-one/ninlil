@@ -36,7 +36,7 @@ public sealed class OidcSsoOptions
 
     /// <summary>
     ///     This property contains the label of the SSO button on the admin console's sign-in page,
-    ///     so an operator can name their provider (for example "Sign in with Authelia"). Defaults to
+    ///     so an operator can name their provider (for example "Sign in with your company account"). Defaults to
     ///     <c>"Single Sign-On"</c>.
     /// </summary>
     public string DisplayName { get; set; } = "Single Sign-On";

@@ -14,5 +14,5 @@ public class SsoStatusResultExample : IExamplesProvider<SsoStatusResult>
     ///     This method returns single sign-on enabled, with the button label from
     ///     <see cref="OidcSsoSettingsDetailExample" />, rather than the disabled default.
     /// </summary>
-    public SsoStatusResult GetExamples() => new(true, "Sign in with Authelia");
+    public SsoStatusResult GetExamples() => new(true, "Single Sign-On");
 }
