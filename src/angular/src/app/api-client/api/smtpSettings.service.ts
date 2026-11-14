@@ -55,6 +55,9 @@ export class SmtpSettingsService extends BaseService implements SmtpSettingsServ
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -111,6 +114,9 @@ export class SmtpSettingsService extends BaseService implements SmtpSettingsServ
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');

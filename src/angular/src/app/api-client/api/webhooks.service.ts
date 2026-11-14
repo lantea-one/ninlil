@@ -92,6 +92,9 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -152,6 +155,9 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
         }
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -234,6 +240,9 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -295,6 +304,9 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -355,6 +367,9 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -426,6 +441,9 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -491,6 +509,9 @@ export class WebhooksService extends BaseService implements WebhooksServiceInter
         const webhookSubscriptionCreateRequest = requestParameters?.webhookSubscriptionCreateRequest;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');

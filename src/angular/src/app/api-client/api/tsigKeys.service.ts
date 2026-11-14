@@ -89,6 +89,9 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -150,6 +153,9 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -208,6 +214,9 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
         }
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -269,6 +278,9 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -340,6 +352,9 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -405,6 +420,9 @@ export class TsigKeysService extends BaseService implements TsigKeysServiceInter
         const tsigKeyCreateRequest = requestParameters?.tsigKeyCreateRequest;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');

@@ -85,6 +85,9 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -146,6 +149,9 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -204,6 +210,9 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
         }
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -265,6 +274,9 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
         const body = requestParameters?.body;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -336,6 +348,9 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -401,6 +416,9 @@ export class ForwardersService extends BaseService implements ForwardersServiceI
         const forwarderWriteRequest = requestParameters?.forwarderWriteRequest;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');

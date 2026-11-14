@@ -69,6 +69,9 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -142,6 +145,9 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -197,6 +203,9 @@ export class DnsCacheService extends BaseService implements DnsCacheServiceInter
     public apiDnsCacheGet(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');

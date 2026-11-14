@@ -22,6 +22,11 @@ outside Forgejo.
 
 ### Behaviour worth knowing
 
+- **The OpenAPI document declares the API token scheme.** `/swagger/v1/swagger.json` lists
+  `ApiToken` beside `Bearer` as an `apiKey` in the `Authorization` header, so Swagger UI's
+  **Authorize** dialog can send an API token typed as the word `ApiToken`, a space and the token.
+  Fill only one of the dialog's two fields. See [REST API](./README.md#rest-api)
+  ([#447](https://git.lantea.one/lantea-one/ninlil/issues/447)).
 - **A cluster join names a renamed account or role after the node that created it.** When two
   nodes hold a user or role with the same name, the one that loses the newest-write comparison is
   renamed to `<name>-conflict-<node-id>`. The bootstrap `admin` account and `Administrators` role

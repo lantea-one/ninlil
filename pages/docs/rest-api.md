@@ -304,9 +304,17 @@ curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/zones
 401
 ```
 
-Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize**, paste the access token
-without the word `Bearer`, and try a call. The Authorize button supports the access token only. To
-test an API token, use `curl`.
+Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize** and try a call. The dialog
+offers two schemes:
+
+- **Bearer**: paste the access token without the word `Bearer`.
+- **ApiToken**: type the whole header value, the word `ApiToken`, a space and the raw token (for
+  example `ApiToken 7f2e...`). Swagger UI sends this field as typed, so the prefix has to be part
+  of it. A raw token without the prefix answers `401`.
+
+The two fields are alternatives: fill only one. Swagger UI sends one `Authorization` header, and
+with both filled the value of the **ApiToken** field is the one sent. A mistyped token there makes
+every call answer `401`, even though the access token is valid.
 
 ## Common mistakes
 

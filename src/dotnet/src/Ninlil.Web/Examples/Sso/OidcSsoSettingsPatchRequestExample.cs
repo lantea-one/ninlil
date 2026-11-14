@@ -22,7 +22,7 @@ public class OidcSsoSettingsPatchRequestExample : IExamplesProvider<JsonElement>
                 """
                 {
                   "enable": true,
-                  "displayName": "Sign in with Authelia",
+                  "displayName": "Single Sign-On",
                   "authority": "https://auth.example.com",
                   "clientId": "ninlil-dns",
                   "clientSecret": "correct-horse-battery-staple",
