@@ -5,7 +5,10 @@
 # (GitHub slugs the second one with "-1"), one broken file link, one broken anchor, a reference
 # definition, links whose paths hold a space (<angle brackets>) or parentheses, a heading with
 # __bold__ emphasis, and broken-looking links inside a code fence, an inline code span and
-# HTML comments (one line and several lines) that the checker must ignore.
+# HTML comments (one line and several lines) that the checker must ignore. A second phase adds
+# links in the Forgejo web form (https://git.lantea.one/lantea-one/ninlil/src/branch/main/<path>),
+# which the checker resolves against the working tree: one good file and anchor, one missing
+# file and one missing anchor.
 #
 # Usage: .forgejo/scripts/tests/check-markdown-links.test.sh
 # Needs: bash, git, python3. Writes only to a temporary directory it removes on exit.
@@ -95,5 +98,26 @@ output="$(cd "${repo}" && python3 -I "${script}" 2>&1)"
 status=$?
 assert_eq "good links: exit code" 0 "${status}"
 assert_contains "good links: summary" "${output}" "0 problems"
+
+# A link in the Forgejo web form is checked against the working tree.
+cat >> "${repo}/README.md" <<'MARKDOWN'
+
+Forge file and anchor: [guide](https://git.lantea.one/lantea-one/ninlil/src/branch/main/docs/guide.md#the-section).
+Forge directory: [docs](https://git.lantea.one/lantea-one/ninlil/src/branch/develop/docs).
+MARKDOWN
+output="$(cd "${repo}" && python3 -I "${script}" 2>&1)"
+status=$?
+assert_eq "good forge links: exit code" 0 "${status}"
+
+cat >> "${repo}/README.md" <<'MARKDOWN'
+Forge missing file: [gone](https://git.lantea.one/lantea-one/ninlil/src/branch/main/docs/missing.md).
+Forge missing anchor: [bad](https://git.lantea.one/lantea-one/ninlil/src/branch/main/docs/guide.md#nowhere).
+MARKDOWN
+output="$(cd "${repo}" && python3 -I "${script}" 2>&1)"
+status=$?
+assert_eq "broken forge links: exit code" 1 "${status}"
+assert_contains "broken forge file is reported" "${output}" "file not found: /docs/missing.md"
+assert_contains "broken forge anchor is reported" "${output}" "anchor not found in docs/guide.md: #nowhere"
+assert_contains "summary counts two forge problems" "${output}" "2 problems"
 
 finish

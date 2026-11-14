@@ -34,6 +34,7 @@ step-by-step commands a person follows, see [`CONTRIBUTING.md`](./CONTRIBUTING.m
 | `src/agents/` | Agent roles for any assistant. Edit a role here, run `python3 src/script/development/sync-agent-definitions.py` and commit the generated `.claude/agents/`, `.gemini/agents/`, `.agents/agents/` and `.codex/agents/` with it; never edit those by hand (lint runs `--check`) |
 | `Dockerfile`, `docker/`, `docker-compose.yml` | Container image, CI toolchain images, example deployment |
 | `.forgejo/workflows/`, `.forgejo/scripts/` | CI/CD pipeline and the scripts it runs ([README](./README.md#the-pipeline)) |
+| `pages/` | The wiki: MkDocs configuration and Markdown under `pages/docs/`. Documentation, like `README.md` ([build and add a page](./CONTRIBUTING.md#change-the-wiki)) |
 | `ENVIRONMENT.md` | Registry of every `NINLIL_*` environment variable |
 
 ### .NET project families (`src/dotnet/src/`)
@@ -361,6 +362,7 @@ Every comment is for a reader opening the file cold, today.
 - [ ] Schema changed: one migration per relational provider, MongoDB repository updated.
 - [ ] Option added or changed: `OptionsEnvironmentVariableRegistry` (new class) and
       `ENVIRONMENT.md` updated.
-- [ ] Behaviour visible to users changed: `README.md` updated.
+- [ ] Behaviour visible to users changed: `README.md` and the matching page under `pages/` updated
+      together (`pages/` is documentation).
 - [ ] Comments follow the comment standard and every reference in them is still true.
 - [ ] Small, logical commits with one-sentence messages.

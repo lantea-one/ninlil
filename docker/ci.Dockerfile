@@ -19,9 +19,11 @@
 #   packages  nFPM (copied from its own pinned image), plus dpkg and bash, for the Deb and RPM
 #           packages (.forgejo/scripts/linux-packages.sh). The packages only copy files, so one
 #           amd64 run builds both architectures.
+#   docs    MkDocs with the Material theme, which builds the wiki under pages/
+#           (.forgejo/scripts/build-wiki.sh). The base image already holds both at fixed versions.
 #
 # The base images are build arguments (SDK_IMAGE, NODE_IMAGE, ARCH_IMAGE, LINT_IMAGE,
-# NFPM_IMAGE), pinned by multi-architecture index digest. The tag is for readers; the digest
+# NFPM_IMAGE, DOCS_IMAGE), pinned by multi-architecture index digest. The tag is for readers; the digest
 # decides what is pulled.
 # .forgejo/workflows/bump-pins.yml refreshes the digests weekly.
 
@@ -30,6 +32,7 @@ ARG NODE_IMAGE=node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf
 ARG ARCH_IMAGE=archlinux:base-devel@sha256:624bdc7fc6615155d67bc34cf7146c0c9fd0e3c92943977da63a630e4ca49c30
 ARG LINT_IMAGE=debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3
 ARG NFPM_IMAGE=ghcr.io/goreleaser/nfpm:v2.47.0@sha256:a662cb167d7b6d3a83920c83d76b12d02b8ac5dd2c13e5c62c15270b23f6df0c
+ARG DOCS_IMAGE=squidfunk/mkdocs-material:9.8.1@sha256:f797da217ff01b20b298d2185eb9d88fb81f5a322c439eba854f2e4de8a48e65
 
 # ---------------------------------------------------------------------------------------------
 # dotnet
@@ -124,3 +127,20 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends bash \
     && rm -rf /var/lib/apt/lists/* \
     && nfpm --version
+
+# ---------------------------------------------------------------------------------------------
+# docs
+# ---------------------------------------------------------------------------------------------
+# The base image starts `mkdocs` through tini and serves the site by default. in-container.sh runs
+# an arbitrary command, so both are cleared: the command is the whole entry point.
+FROM ${DOCS_IMAGE} AS docs
+
+# The base image is Alpine and has no bash, which the build script needs. The package is not
+# pinned by version, as the other targets do not pin their distribution packages either (their
+# `apt-get install bash` takes the current Debian package). The base image's digest fixes the Alpine
+# release, so apk can only choose among that release's bash builds, and the version of MkDocs and
+# its theme, which decide the output, stay pinned by DOCS_IMAGE.
+RUN apk add --no-cache bash
+
+ENTRYPOINT []
+CMD []
