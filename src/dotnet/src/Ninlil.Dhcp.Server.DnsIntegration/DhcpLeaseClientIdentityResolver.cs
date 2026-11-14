@@ -97,7 +97,7 @@ public sealed class DhcpLeaseClientIdentityResolver(
     public Task WhenIdleAsync() => _snapshot.WhenIdleAsync();
 
     /// <inheritdoc />
-    public async Task<ClientIdentityResolution> ResolveAsync(
+    public async ValueTask<ClientIdentityResolution> ResolveAsync(
         IPAddress remoteAddress,
         CancellationToken stoppingToken = default
     )

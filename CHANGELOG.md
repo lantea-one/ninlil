@@ -11,6 +11,15 @@ outside Forgejo.
 
 ## Unreleased
 
+### Removed
+
+- **Library API (NuGet).** `IClientIdentityResolver.ResolveAsync` returns
+  `ValueTask<ClientIdentityResolution>` instead of `Task<ClientIdentityResolution>`, so an answer
+  from memory allocates no task. Code that implements the interface changes its return type
+  (`ValueTask.FromResult(...)` replaces `Task.FromResult(...)`); code that awaits the call needs
+  no change, and code that stores the result or awaits it twice must call `AsTask()` first
+  ([#228](https://git.lantea.one/lantea-one/ninlil/issues/228)).
+
 ### Behaviour worth knowing
 
 - **The AAAA record form refuses an IPv4 tail that is followed by `::`.** Text such as `1.2.3.4::`

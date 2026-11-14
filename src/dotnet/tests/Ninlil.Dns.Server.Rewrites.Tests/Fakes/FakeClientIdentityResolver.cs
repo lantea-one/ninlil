@@ -27,11 +27,11 @@ public sealed class FakeClientIdentityResolver : IClientIdentityResolver
     }
 
     /// <inheritdoc />
-    public Task<ClientIdentityResolution> ResolveAsync(
+    public ValueTask<ClientIdentityResolution> ResolveAsync(
         IPAddress remoteAddress,
         CancellationToken stoppingToken = default
     ) =>
-        Task.FromResult(
+        ValueTask.FromResult(
             remoteAddress is not null && _resolutions.TryGetValue(remoteAddress, out var resolution)
                 ? resolution
                 : null

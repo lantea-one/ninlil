@@ -62,7 +62,7 @@ public sealed class ArpNeighborTableClientIdentityResolver(
     private bool _hasLoggedUnavailable;
 
     /// <inheritdoc />
-    public Task<ClientIdentityResolution> ResolveAsync(
+    public ValueTask<ClientIdentityResolution> ResolveAsync(
         IPAddress remoteAddress,
         CancellationToken stoppingToken = default
     )
@@ -79,12 +79,12 @@ public sealed class ArpNeighborTableClientIdentityResolver(
             && _table.TryGetValue(normalizedAddress, out string hardwareAddress)
         )
         {
-            return Task.FromResult(
+            return ValueTask.FromResult(
                 new ClientIdentityResolution(hardwareAddress, InternetProtocolVersionEnum.IPv4)
             );
         }
 
-        return Task.FromResult<ClientIdentityResolution>(null);
+        return ValueTask.FromResult<ClientIdentityResolution>(null);
     }
 
     /// <inheritdoc />
