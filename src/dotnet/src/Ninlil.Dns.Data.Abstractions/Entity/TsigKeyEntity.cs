@@ -41,7 +41,8 @@ public class TsigKeyEntity : AuditableEntityBase
     ///     memory (<c>TsigKeyLookupCache</c>). A change made on this node applies to the next
     ///     message. A change made on another node, or directly in the database, applies within the
     ///     cache lifetime, <c>TsigKeyLookupCache.Lifetime</c> (10 seconds), plus the time one reload
-    ///     takes.
+    ///     takes, while the database answers; a reload for age alone that fails keeps the last good
+    ///     copy.
     /// </summary>
     public bool IsDisabled { get; set; }
 

@@ -22,7 +22,9 @@ namespace Ninlil.Dns.Server.Tsig;
 ///         lookup waits for a reload that starts after the change, so a key that is deleted,
 ///         disabled or changed through the API is refused or used as changed by the very next
 ///         message in this process. A change made elsewhere (another cluster node, a direct
-///         database edit) shows after <see cref="Lifetime" />, plus the time one reload takes.
+///         database edit) shows after <see cref="Lifetime" />, plus the time one reload takes,
+///         while the database answers. A reload for age alone that fails keeps the last good
+///         copy, so such a change shows only once a reload succeeds.
 ///     </para>
 ///     <para>
 ///         <strong>Failure and storage.</strong> Every load reads the primary database, never a

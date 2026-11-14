@@ -68,11 +68,12 @@ outside Forgejo.
   signed message, and signing no longer opens a service scope.** The keys now live in one
   in-memory copy that a key change expires at once on the node that made the change (before, the
   old verdict lasted up to 10 seconds). A change made by another node or by a direct database edit
-  shows after at most 10 seconds. If the reload after a change fails or runs past its 30-second
-  limit, every TSIG key is refused until a reload succeeds. For code that uses the
-  `Ninlil.Dns.Server.Tsig` package: `TsigService` and `ITsigService` are singletons, the `TsigService` constructor no longer takes a key
-  repository, and `TsigKeyLookupCache` needs an `IEntityChangeNotifier` and no longer takes a
-  repository per lookup.
+  shows after about 10 seconds while the database answers; a refresh for age alone that fails
+  keeps the last good copy. If the reload after a change fails or runs past its 30-second limit,
+  every TSIG key is refused until a reload succeeds. For code that uses the
+  `Ninlil.Dns.Server.Tsig` package: `TsigService` and `ITsigService` are singletons, the
+  `TsigService` constructor no longer takes a repository, and `TsigKeyLookupCache` needs an
+  `IEntityChangeNotifier` and no longer takes a repository per lookup.
   ([#229](https://git.lantea.one/lantea-one/ninlil/issues/229))
 
 ## v2026.11.13.1
