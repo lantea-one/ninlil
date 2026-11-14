@@ -135,7 +135,11 @@ RUN apt-get update \
 # an arbitrary command, so both are cleared: the command is the whole entry point.
 FROM ${DOCS_IMAGE} AS docs
 
-# The base image is Alpine and has no bash, which the build script needs.
+# The base image is Alpine and has no bash, which the build script needs. The package is not
+# pinned by version, as the other targets do not pin their distribution packages either (their
+# `apt-get install bash` takes the current Debian package). The base image's digest fixes the Alpine
+# release, so apk can only choose among that release's bash builds, and the version of MkDocs and
+# its theme, which decide the output, stay pinned by DOCS_IMAGE.
 RUN apk add --no-cache bash
 
 ENTRYPOINT []
