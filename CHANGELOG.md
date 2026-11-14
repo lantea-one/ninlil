@@ -24,11 +24,14 @@ outside Forgejo.
 
 - **Saved SSO scopes and self-signed certificate names are read back as saved.** After a restart,
   a saved SSO scope list was appended to the three defaults (`openid`, `profile`, `email`), so
-  `GET /api/sso-settings` showed the list twice and the identity provider received repeated
-  scopes. A saved list now replaces the defaults, so a list without `profile` or `email` works,
-  and the defaults apply only when nothing is saved. The same fix applies to the self-signed
-  certificate names (`SelfSignedSubjectAlternativeNames`), whose saved list was appended to
-  `localhost`. ([#448](https://git.lantea.one/lantea-one/ninlil/issues/448))
+  `GET /api/sso-settings` showed the list twice, and a list that left out `profile` or `email`
+  still requested it. A saved list now replaces the defaults, and the defaults apply only when
+  nothing is saved. The same fix applies to the self-signed certificate names
+  (`SelfSignedSubjectAlternativeNames`), whose saved list was appended to `localhost`. For code
+  that uses the NuGet packages: `OidcSsoOptions.Scopes` and
+  `TlsCertificateOptions.SelfSignedSubjectAlternativeNames` are empty unless a list is saved;
+  read `EffectiveScopes` and `EffectiveSelfSignedSubjectAlternativeNames` for what applies.
+  ([#448](https://git.lantea.one/lantea-one/ninlil/issues/448))
 - **The AAAA record form refuses an IPv4 tail that is followed by `::`.** Text such as `1.2.3.4::`
   or `0:0:192.0.2.1::` passed the form's check and was refused only by the server. The form now
   shows "Enter a valid IPv6 address." before it saves.
