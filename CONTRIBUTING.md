@@ -284,7 +284,8 @@ idle. The harness is not part of the pipeline: run it by hand after a change to 
 Chromium aborts its open sockets when the machine's IP addresses change, for example when a
 container that stays up on the same host gets an address. That shows up as `net::ERR_NETWORK_CHANGED`
 or a SignalR close with code 1006. The harness watches the addresses itself and, when a visit fails
-while they changed, runs that visit once more and keeps only the second attempt. The report counts
+while they changed, signs the user in again and runs that visit once more, keeping only the second
+attempt. The sign-in matters because an aborted token refresh can end the session. The report counts
 such visits and lists each one in its notes, so a run beside container starts on the same machine
 can show them; with a stable address set the same errors still fail.
 

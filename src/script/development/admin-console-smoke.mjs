@@ -15,8 +15,10 @@
 //   A visit that fails while the machine's IP addresses changed (for example a container that
 //   stays up on the same host gets an address) is run once more and only the second attempt
 //   counts, because Chromium aborts open sockets then (net::ERR_NETWORK_CHANGED, WebSocket
-//   code 1006). The report lists each repeat; failures with a stable address set are never
-//   excused.
+//   code 1006). Every repeat signs the user in again first, because such a change can abort a
+//   token refresh and kill the session; a 401 on the refresh call after an address change since
+//   the last sign-in counts as that effect. The report lists each repeat; failures with a stable
+//   address set are never excused.
 //   It then saves a full-page screenshot. It also records facts a later change may need, such as
 //   whether the browser's time zone list holds UTC.
 //
@@ -1086,6 +1088,23 @@ async function signInThroughForm(page, userName, password) {
 }
 
 /**
+ * Signs the sweep's user in on the shared page through the login form and records when, so a lost
+ * session can be told from a stable one (see {@link visit}). The sweep and every repeat use it.
+ */
+async function signInUser(page, user) {
+  const began = Date.now();
+  try {
+    await signInThroughForm(page, user.userName, user.password);
+  } catch (error) {
+    // A sign-in that fails while the addresses changed is tried once more; any other failure
+    // stands.
+    if (!addressWatcher.describeSince(began - ADDRESS_CHANGE_MARGIN_MS)) throw error;
+    await signInThroughForm(page, user.userName, user.password);
+  }
+  user.signedInAt = Date.now();
+}
+
+/**
  * Runs the sweep for one user: for each theme and width, visits every page, records the checks
  * and the screenshot. Returns nothing; results go into `report`.
  */
@@ -1094,7 +1113,7 @@ async function sweepUser(context) {
   const page = await BrowserPage.create(browser, baseUrl);
   try {
     await page.setViewport(1400);
-    await signInThroughForm(page, user.userName, user.password);
+    await signInUser(page, user);
     for (const theme of options.themes) {
       await api.ok('PATCH', '/api/appearance-settings/me', { mode: theme === 'dark' ? 'Dark' : 'Light' }, user.token);
       for (const width of options.widths) {
@@ -1130,7 +1149,19 @@ async function visit(context, entry, variant, slug, width, theme) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     const began = Date.now();
     outcome = await attemptVisit(context, entry, variant, slug, width, theme);
-    const changed = outcome.checks.some((check) => !check.ok) ? addressWatcher.describeSince(attempt === 1 ? began - ADDRESS_CHANGE_MARGIN_MS : began) : null;
+    const failed = outcome.checks.filter((check) => !check.ok);
+    let changed = failed.length ? addressWatcher.describeSince(attempt === 1 ? began - ADDRESS_CHANGE_MARGIN_MS : began) : null;
+    let sessionLost = false;
+    if (!changed && failed.some((check) => /\b401 \/api\/auth\/refresh/.test(check.message ?? ''))) {
+      // An address change aborts a refresh call after the server has rotated the refresh cookie,
+      // so the browser never gets the new one and the session is dead from then on. The abort can
+      // land between two visits, where the page being left discards it, so the visit that first
+      // shows the 401 may lie outside the change's window. A 401 on the refresh call counts as
+      // that effect only when an address change was noticed after the user's last sign-in; with a
+      // stable address set it still fails.
+      changed = user.signedInAt ? addressWatcher.describeSince(user.signedInAt) : null;
+      sessionLost = changed !== null;
+    }
     if (!changed) break;
     if (attempt === 1) {
       // The page that was aborted may still log its close. Leaving it for a blank page first lets
@@ -1139,8 +1170,23 @@ async function visit(context, entry, variant, slug, width, theme) {
       // The wait has no exact bound to meet: four poll intervals are enough in runs beside
       // container starts, and the cost is paid once per repeat.
       await sleep(ADDRESS_POLL_MS * 4);
+      // Every repeat signs in again through the sweep's own sign-in, so a session lost to an
+      // aborted refresh cannot fail the repeat. The sign-in changes neither the viewport nor the
+      // theme (the theme is a server-side setting of the user) and a visit on a fresh page does
+      // not use this page's session.
+      let signedInAgain = true;
+      try {
+        await signInUser(context.page, user);
+      } catch (error) {
+        signedInAgain = false;
+        report.checks.push({ ...identity, check: 'sign in again before the repeat', ok: false, message: String(error.message ?? error).slice(0, 400) });
+      }
       report.repeatedVisits += 1;
-      report.notes.push({ ...identity, note: `repeated once, the host's network addresses changed during the visit (${changed})` });
+      const reason = sessionLost
+        ? `the session was lost when a refresh was aborted by an address change (${changed})`
+        : `the host's network addresses changed during the visit (${changed})`;
+      report.notes.push({ ...identity, note: `repeated once, ${reason}${signedInAgain ? '; signed in again first' : ''}` });
+      if (!signedInAgain) break;
     } else {
       report.notes.push({ ...identity, note: `the repeat was disturbed by an address change as well (${changed}); its failures stand` });
     }
@@ -1325,7 +1371,7 @@ async function discoverNavLinks(browser, baseUrl, user) {
   const page = await BrowserPage.create(browser, baseUrl);
   try {
     await page.setViewport(1400);
-    await signInThroughForm(page, user.userName, user.password);
+    await signInUser(page, user);
     await page.navigate('/dashboard');
     return await page.evaluate(`[...document.querySelectorAll('.sidebar-nav a.nav-link')].map((a) => new URL(a.href).pathname)`);
   } finally {
