@@ -26,6 +26,26 @@ public sealed class InMemoryTsigKeyRepository(List<TsigKeyEntity> keys) : ITsigK
     /// </summary>
     public bool FailLoads { get; set; }
 
+    /// <summary>
+    ///     This property makes <see cref="ListAsync" /> wait until its token is cancelled and then
+    ///     throw <see cref="OperationCanceledException" />, as a database call that hangs until the
+    ///     cache's refresh timeout does.
+    /// </summary>
+    public bool HangLoads { get; set; }
+
+    /// <summary>
+    ///     This property completes when a <see cref="ListAsync" /> call has started to hang, so a
+    ///     test advances the clock only once the cache is waiting.
+    /// </summary>
+    public TaskCompletionSource HangStarted { get; private set; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    ///     This method makes the next hang report through a fresh <see cref="HangStarted" />.
+    /// </summary>
+    public void ResetHangSignal() =>
+        HangStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     /// <inheritdoc />
     public Task<TsigKeyEntity> FindByNameAsync(
         string name,
@@ -40,19 +60,23 @@ public sealed class InMemoryTsigKeyRepository(List<TsigKeyEntity> keys) : ITsigK
         throw new NotSupportedException();
 
     /// <inheritdoc />
-    public Task<IReadOnlyList<TsigKeyEntity>> ListAsync(
+    public async Task<IReadOnlyList<TsigKeyEntity>> ListAsync(
         Expression<Func<TsigKeyEntity, bool>> predicate = null,
         CancellationToken stoppingToken = default
     )
     {
         LoadCount++;
 
+        if (HangLoads)
+        {
+            HangStarted.TrySetResult();
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+
         if (FailLoads)
             throw new InvalidOperationException("The database is down.");
 
-        return Task.FromResult<IReadOnlyList<TsigKeyEntity>>([
-            .. keys.Where((predicate ?? (_ => true)).Compile()),
-        ]);
+        return [.. keys.Where((predicate ?? (_ => true)).Compile())];
     }
 
     /// <inheritdoc />

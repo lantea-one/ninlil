@@ -29,8 +29,9 @@ namespace Ninlil.Dns.Server.Tsig;
 ///         replica: a replica that lags behind a deletion would bring the deleted key back. If the
 ///         first load fails, the copy is empty and every key is refused until a load succeeds. If
 ///         a reload that follows a change fails, the copy also becomes empty instead of keeping
-///         the old keys, because the old copy may hold the key that was just deleted. A refresh
-///         that only follows the age of the copy keeps the last good copy when it fails.
+///         the old keys, because the old copy may hold the key that was just deleted. A reload that
+///         runs past the refresh timeout counts as failed. A refresh that only follows the age of
+///         the copy keeps the last good copy when it fails or times out.
 ///     </para>
 /// </summary>
 public sealed class TsigKeyLookupCache : IDisposable
@@ -98,9 +99,9 @@ public sealed class TsigKeyLookupCache : IDisposable
 
     /// <summary>
     ///     This method reads every key from the primary database in a short-lived scope and builds
-    ///     the snapshot. A failed load that follows a change returns the empty snapshot (see the
-    ///     class summary); a failed load that only follows the age of the copy throws, so the last
-    ///     good copy stays.
+    ///     the snapshot. A load that follows a change and fails, by an exception or by the refresh
+    ///     timeout, returns the empty snapshot (see the class summary). A load that only follows the
+    ///     age of the copy throws in both cases, so the last good copy stays.
     /// </summary>
     private static async Task<TsigKeySnapshot> LoadAsync(
         IServiceScopeFactory scopeFactory,
@@ -109,6 +110,8 @@ public sealed class TsigKeyLookupCache : IDisposable
         CancellationToken stoppingToken
     )
     {
+        // stoppingToken is the snapshot's refresh timeout (see RefreshingSnapshot<T>), not the
+        // host's stopping token.
         try
         {
             // A plain scope reads the primary on purpose; see the class summary.
@@ -119,10 +122,13 @@ public sealed class TsigKeyLookupCache : IDisposable
 
             return new TsigKeySnapshot(keys);
         }
-        catch (Exception exception)
-            when (reason == SnapshotLoadReasonEnum.Expired && !stoppingToken.IsCancellationRequested
-            )
+        catch (Exception exception) when (reason == SnapshotLoadReasonEnum.Expired)
         {
+            // This includes the refresh timeout: a load that follows a change and runs out of
+            // time has not shown that the deleted key is gone, so it is a failed reload too.
+            // The token is only that timeout. The snapshot never hands the loader the host's
+            // stopping token, so an exception here cannot be a shutdown being treated as a
+            // failure.
             logger.LogError(
                 exception,
                 "Reloading the TSIG keys after a change failed; every TSIG key is refused until a reload succeeds."

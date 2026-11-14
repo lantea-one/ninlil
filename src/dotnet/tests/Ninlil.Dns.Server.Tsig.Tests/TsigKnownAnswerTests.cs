@@ -874,6 +874,57 @@ public class TsigKnownAnswerTests
     }
 
     [Fact]
+    public async Task KeyLookup_AReloadAfterAChangeThatTimesOut_RefusesEveryKeyUntilALoadSucceeds()
+    {
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
+
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+
+        // The key is deleted and the reload that follows the change hangs. The refresh timeout is
+        // a timer on the manual clock, so moving the clock past it ends the load.
+        TsigKeyEntity key = harness.Keys[0];
+        harness.Keys.Clear();
+        harness.Repository.HangLoads = true;
+        NotifyKeysChanged(harness);
+
+        Task<TsigVerificationResult> waiting = VerifyAsync(harness, vector);
+        await harness.Repository.HangStarted.Task;
+        harness.Clock.Advance(TimeSpan.FromSeconds(31));
+
+        Assert.Equal(DnsResponseCodeEnum.BadKey, (await waiting).Error);
+
+        // The failure is not served as a good copy: the next message is refused as well.
+        Assert.Equal(DnsResponseCodeEnum.BadKey, (await VerifyAsync(harness, vector)).Error);
+
+        // A later successful load serves the current keys again.
+        harness.Repository.HangLoads = false;
+        harness.Keys.Add(key);
+        NotifyKeysChanged(harness);
+
+        Assert.Equal(DnsResponseCodeEnum.NoError, (await VerifyAsync(harness, vector)).Error);
+    }
+
+    [Fact]
+    public async Task KeyLookup_ARefreshOnlyForAgeThatTimesOut_KeepsTheLastGoodKeys()
+    {
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
+
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+
+        harness.Repository.HangLoads = true;
+        harness.Clock.Advance(TsigKeyLookupCache.Lifetime + TimeSpan.FromSeconds(1));
+
+        // The read that starts the refresh still sees the old copy while the load hangs.
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+        await harness.Repository.HangStarted.Task;
+        harness.Clock.Advance(TimeSpan.FromSeconds(31));
+
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+    }
+
+    [Fact]
     public async Task KeyLookup_AFailedRefreshOnlyForAge_KeepsTheLastGoodKeys()
     {
         Vector vector = Vectors["V1"];
