@@ -38,7 +38,7 @@ cover. The README holds the complete step-by-step text of every guide until the 
 | [Clustering, events and webhooks](operations/clustering.md) | Join servers and send events out |
 | [Storage](operations/storage.md) | Choose or switch the database |
 | [Backup and restore](operations/backup-and-restore.md) | Keep and recover the whole system |
-| [Self-update](operations/self-update.md) | Learn about new releases |
+| [Self-update](operations/self-update.md) | Learn about newer releases |
 
 ## More
 

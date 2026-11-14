@@ -85,8 +85,8 @@ Invoke-WebRequest http://localhost/status
 - Ninlil writes warnings and errors to the Application event log under the source `Ninlil.Web`.
   When a start is refused, the newest entry whose message contains `Startup refused:` names the
   setting. See [Exit codes](../../reference/exit-codes.md).
-- Updating means stopping the service, replacing the `.exe` and `msquic.dll` with the files from the
-  new zip, and starting it again.
+- Updating means stopping the service, replacing the `.exe` and `msquic.dll` with the files from the zip of
+  the version you update to, and starting it again.
 
 The README holds the rest: removing the service, the service account's key storage and how Ninlil
 claims its ports. See
