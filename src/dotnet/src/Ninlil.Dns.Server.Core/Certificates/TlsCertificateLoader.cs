@@ -64,7 +64,9 @@ public static class TlsCertificateLoader
         // store on every platform, the way the next start loads it from the state file.
         byte[] pfxBytes;
         using (
-            X509Certificate2 created = GenerateSelfSigned(options.SelfSignedSubjectAlternativeNames)
+            X509Certificate2 created = GenerateSelfSigned(
+                options.EffectiveSelfSignedSubjectAlternativeNames
+            )
         )
             pfxBytes = created.Export(X509ContentType.Pfx);
 
@@ -78,7 +80,7 @@ public static class TlsCertificateLoader
 
         logger.LogInformation(
             "Generated a new self-signed TLS certificate (subject alternative names: {Names}), persisted to '{Path}'.",
-            string.Join(", ", options.SelfSignedSubjectAlternativeNames),
+            string.Join(", ", options.EffectiveSelfSignedSubjectAlternativeNames),
             statePath
         );
 

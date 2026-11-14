@@ -77,11 +77,23 @@ public sealed class OidcSsoOptions
     public string ClientSecretEncrypted { get; set; } = string.Empty;
 
     /// <summary>
-    ///     This property contains the scopes requested in the authorization code flow. The default
-    ///     is the standard three: <c>openid</c> (required; without it the flow is plain OAuth 2.0),
-    ///     <c>profile</c> (name claims, including <c>preferred_username</c>) and <c>email</c> (the
-    ///     <c>email</c> claim <c>Sso.OidcUserProvisioningService</c> reads when creating an
-    ///     account).
+    ///     This property contains the scopes saved for the authorization code flow. It is empty
+    ///     unless a list is saved: the configuration binder appends saved items to a list that
+    ///     already holds items, so a non-empty initialiser would double a saved list. Read
+    ///     <see cref="EffectiveScopes" /> to get the scopes that apply.
     /// </summary>
-    public List<string> Scopes { get; set; } = ["openid", "profile", "email"];
+    public List<string> Scopes { get; set; } = [];
+
+    /// <summary>
+    ///     This property contains the scopes requested in the authorization code flow: the saved
+    ///     <see cref="Scopes" /> when there are any, otherwise the standard three:
+    ///     <c>openid</c> (required; without it the flow is plain OAuth 2.0), <c>profile</c> (name
+    ///     claims, including <c>preferred_username</c>) and <c>email</c> (the <c>email</c> claim
+    ///     <c>Sso.OidcUserProvisioningService</c> reads when creating an account). It is read-only,
+    ///     so the configuration binder and the environment-variable map ignore it.
+    /// </summary>
+    public IReadOnlyList<string> EffectiveScopes =>
+        Scopes is { Count: > 0 } ? Scopes : DefaultScopes;
+
+    private static readonly string[] DefaultScopes = ["openid", "profile", "email"];
 }

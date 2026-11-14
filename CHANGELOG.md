@@ -22,6 +22,16 @@ outside Forgejo.
 
 ### Behaviour worth knowing
 
+- **Saved SSO scopes and self-signed certificate names are read back as saved.** After a restart,
+  a saved SSO scope list was appended to the three defaults (`openid`, `profile`, `email`), so
+  `GET /api/sso-settings` showed the list twice, and a list that left out `profile` or `email`
+  still requested it. A saved list now replaces the defaults, and the defaults apply only when
+  nothing is saved. The same fix applies to the self-signed certificate names
+  (`SelfSignedSubjectAlternativeNames`), whose saved list was appended to `localhost`. For code
+  that uses the NuGet packages: `OidcSsoOptions.Scopes` and
+  `TlsCertificateOptions.SelfSignedSubjectAlternativeNames` are empty unless a list is saved;
+  read `EffectiveScopes` and `EffectiveSelfSignedSubjectAlternativeNames` for what applies.
+  ([#448](https://git.lantea.one/lantea-one/ninlil/issues/448))
 - **A pending storage switch names the administrator who requested it.** `pendingSwitch.requestedBy`
   in `GET /api/storage` showed `unknown` for every signed-in user; it now holds the user name.
   ([#449](https://git.lantea.one/lantea-one/ninlil/issues/449))

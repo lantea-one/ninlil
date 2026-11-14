@@ -35,11 +35,27 @@ public sealed class TlsCertificateOptions
 
     /// <summary>
     ///     This property contains the subject alternative names (DNS names and/or IP addresses)
-    ///     a self-signed certificate is generated for. Defaults to <c>localhost</c>; set it to the
-    ///     hostname clients connect to. Changing it does not regenerate a certificate that is
-    ///     already saved.
+    ///     saved for a self-signed certificate. It is empty unless a list is saved: the
+    ///     configuration binder appends saved items to a list that already holds items, so a
+    ///     non-empty initialiser would add a saved list to the default. Read
+    ///     <see cref="EffectiveSelfSignedSubjectAlternativeNames" /> to get the names that apply.
     /// </summary>
-    public List<string> SelfSignedSubjectAlternativeNames { get; set; } = ["localhost"];
+    public List<string> SelfSignedSubjectAlternativeNames { get; set; } = [];
+
+    /// <summary>
+    ///     This property contains the subject alternative names a self-signed certificate (used
+    ///     only when <see cref="PfxPath" /> is empty) is generated for: the saved
+    ///     <see cref="SelfSignedSubjectAlternativeNames" /> when there are any, otherwise
+    ///     <c>localhost</c>. Set the saved list to the hostname clients connect to. Changing it
+    ///     does not regenerate a certificate that is already saved. It is read-only, so the
+    ///     configuration binder and the environment-variable map ignore it.
+    /// </summary>
+    public IReadOnlyList<string> EffectiveSelfSignedSubjectAlternativeNames =>
+        SelfSignedSubjectAlternativeNames is { Count: > 0 }
+            ? SelfSignedSubjectAlternativeNames
+            : DefaultSubjectAlternativeNames;
+
+    private static readonly string[] DefaultSubjectAlternativeNames = ["localhost"];
 
     /// <summary>
     ///     This property contains how often <see cref="ReloadableTlsCertificateProvider" /> checks

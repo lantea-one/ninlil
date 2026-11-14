@@ -167,7 +167,7 @@ public class WebListenSettingsController(
         new(
             options.PfxPath,
             !string.IsNullOrEmpty(options.PfxPassword),
-            options.SelfSignedSubjectAlternativeNames,
+            [.. options.EffectiveSelfSignedSubjectAlternativeNames],
             options.CertificateReloadPollInterval,
             options.AllowedProtocols == SslProtocols.None
                 ? []

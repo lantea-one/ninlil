@@ -245,7 +245,7 @@ public class OidcSsoSettingsController(
             options.Authority,
             options.ClientId,
             fromEnvironment || !string.IsNullOrEmpty(options.ClientSecretEncrypted),
-            options.Scopes,
+            options.EffectiveScopes,
             fromEnvironment,
             unreadable
         );
