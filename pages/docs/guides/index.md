@@ -21,7 +21,10 @@ cover. The README holds the complete step-by-step text of every guide until the 
 
 | Guide | Use it to |
 |---|---|
-| [DHCP, DHCPv6 and Router Advertisement](dhcp/dhcp.md) | Hand out addresses and advertise the network |
+| [DHCPv4 scopes, reservations and leases](dhcp/dhcp.md) | Hand out IPv4 addresses, reserve one for a device, send options, read leases, name leased devices in DNS |
+| [DHCPv6 and prefix delegation](dhcp/dhcpv6.md) | Hand out IPv6 addresses and prefixes |
+| [Router Advertisement](dhcp/router-advertisement.md) | Let IPv6 devices find the prefix, router and DNS server |
+| [Relay agent](dhcp/relay.md) | Forward the requests of one network to a DHCP server on another |
 | [TFTP and PXE](dhcp/tftp-and-pxe.md) | Serve boot files |
 
 ## Security

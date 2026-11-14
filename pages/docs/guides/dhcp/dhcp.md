@@ -1,11 +1,12 @@
-# DHCP, DHCPv6 and Router Advertisement
+# DHCPv4 scopes, reservations and leases
 
-This page lets you hand out IP addresses, routers and DNS servers on a network with Ninlil. You
+This page lets you hand out IPv4 addresses, routers and DNS servers on a network with Ninlil. You
 turn on DHCPv4 and create a scope, reserve an address for one device, send extra options, read the
-leases, and register the names of leased devices in DNS. Further tasks cover DHCPv6, Router
-Advertisement and running Ninlil as a relay agent. The
+leases, and register the names of leased devices in DNS. DHCPv6, Router Advertisement and the relay
+agent have their own pages: [DHCPv6 and prefix delegation](dhcpv6.md),
+[Router Advertisement](router-advertisement.md) and [Relay agent](relay.md). The
 [README section](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#dhcp-dhcpv6-and-router-advertisement)
-is the complete reference; this page carries each task from start to finish.
+is the complete reference; these pages carry each task from start to finish.
 
 Words this page uses:
 
@@ -270,120 +271,6 @@ Ninlil writes no record and logs a Warning on every renewal: `DHCP->DNS registra
 client <identifier> with host name <name>: owner name <fqdn> is unavailable because ...`. The
 device keeps its lease.
 
-## Turn on DHCPv6
-
-1. Start the service, then save the switch with the `dhcpv6-protocol` section (the variable is
-   `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV6_ENABLE`):
-
-    ```bash
-    curl -k -X POST https://127.0.0.1:18443/api/dhcp-services/Dhcpv6/start -H 'Authorization: Bearer <token>'
-    curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/dhcpv6-protocol -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
-    ```
-
-2. Create a scope for the addresses. A DHCPv6 scope has no gateway, because IPv6 routers announce
-   themselves (see Router Advertisement below):
-
-    ```bash
-    curl -k https://127.0.0.1:18443/api/dhcp-scopes -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"lan6","protocolVersion":"IPv6","rangeStartAddress":"fd00:50::1000","rangeEndAddress":"fd00:50::10ff","subnetPrefixLength":64,"defaultLeaseDuration":"08:00:00","maxLeaseDuration":"1.00:00:00","dnsServerAddresses":["fd00:50::2"]}'
-    ```
-
-3. Optional: delegate blocks of addresses to routers (prefix delegation). Create a scope of kind
-   `PrefixDelegation`. The range is the pool of prefixes, `subnetPrefixLength` is the size of the
-   whole pool and `delegatedPrefixLength` is the size of each block. This pool is
-   `2001:db8:100::/48` and delegates `/56` blocks, 256 of them:
-
-    ```bash
-    curl -k https://127.0.0.1:18443/api/dhcp-scopes -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"name":"delegation","protocolVersion":"IPv6","kind":"PrefixDelegation","rangeStartAddress":"2001:db8:100::","rangeEndAddress":"2001:db8:100:ff00::","subnetPrefixLength":48,"delegatedPrefixLength":56,"defaultLeaseDuration":"08:00:00","maxLeaseDuration":"1.00:00:00"}'
-    ```
-
-A DHCPv6 reservation uses the device's DUID as `clientIdentifier`, for example
-`00:03:00:01:aa:bb:cc:00:06:01`. A `PrefixDelegation` scope takes no reservations. DHCPv6 ignores
-the lease times a device suggests: the lifetime is `defaultLeaseDuration` capped at
-`maxLeaseDuration`. DHCPv6 Rapid Commit is off; read the README before you turn it on.
-
-## Advertise the network with Router Advertisement
-
-Router Advertisement (RA) lets a device build its own IPv6 address and find its router. Ninlil
-advertises nothing while the content is empty.
-
-1. Set the content. This turns on the "O" flag (devices ask DHCPv6 for the rest), makes this host a
-   default router for 30 minutes, sets the link MTU and announces the DNS server and search domain
-   (RFC 8106):
-
-    ```bash
-    curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/ra -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"managedAddressConfiguration":false,"otherConfiguration":true,"routerLifetime":"00:30:00","linkMtu":1500,"recursiveDnsServers":["fd00:50::2"],"dnsSearchListDomains":["example.test"]}'
-    ```
-
-    ```text
-    {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
-    ```
-
-    In the console: **Presets & Settings**, **DHCP**, the **Router Advertisement Content** card.
-2. Add the prefix that devices build their addresses from. The API and the console cannot set
-   prefixes: add them to `appsettings.json` ([Configuration](../../configuration.md)), next to any
-   `Ra` settings step 1 saved. Ninlil reads the change at once:
-
-    ```json
-    {
-      "DhcpServer": {
-        "Ra": {
-          "Prefixes": [ { "Prefix": "fd00:50::", "PrefixLength": 64 } ]
-        }
-      }
-    }
-    ```
-
-3. Start the service and save the switch (the variable is `NINLIL_DHCP_SERVER_PROTOCOL_RA_ENABLE`):
-
-    ```bash
-    curl -k -X POST https://127.0.0.1:18443/api/dhcp-services/RouterAdvertisement/start -H 'Authorization: Bearer <token>'
-    curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/ra-protocol -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"enable":true}'
-    ```
-
-4. Read the content back. Wait a second after step 1 if the answer still shows the old values:
-
-    ```bash
-    curl -k https://127.0.0.1:18443/api/dhcp-settings/ra -H 'Authorization: Bearer <token>'
-    ```
-
-    ```text
-    {"managedAddressConfiguration":false,"otherConfiguration":true,"routerLifetime":"00:30:00","currentHopLimit":64,"reachableTime":"00:00:00","retransTimer":"00:00:00","linkMtu":1500,"recursiveDnsServers":["fd00:50::2"], ...
-    ```
-
-On a Linux device in the network, `ip -6 address show dev <interface>` then lists an address in the
-advertised prefix, and `ip -6 route show default` lists this host as the router when the router
-lifetime is above zero. The README covers the advertisement interval, the size limits and the
-per-interface overrides.
-
-## Use Ninlil as a relay agent
-
-A relay agent forwards the requests of its network to a DHCP server somewhere else. Each protocol
-runs either as Ninlil's server or as a relay, chosen at start, never both.
-
-1. On the host that acts as the relay, start Ninlil with `NINLIL_DHCP_SERVER_PROTOCOL_DHCPV4_ENABLE=true`
-   and `NINLIL_DHCP_SERVER_RELAY_DHCPV4_ENABLE=true`.
-2. Save the relay settings: the upstream servers, the relay's address on the clients' network
-   (`giaddr`), and an optional circuit ID that the server can match:
-
-    ```bash
-    curl -k -X PATCH https://127.0.0.1:18443/api/dhcp-settings/relay -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"upstreamServerAddresses":["192.168.50.2"],"relayAgentAddress":"192.168.50.3","relayAgentCircuitId":"port-7"}'
-    ```
-
-    ```text
-    {"note":"Written to the configuration file. This setting is read once, at startup, so a restart is required before this change takes effect."}
-    ```
-
-3. Restart Ninlil. On the upstream server, an enabled scope must cover the relay address
-   (`192.168.50.3` falls in the `lan` scope above).
-
-The DHCPv6 relay works the same way with the `dhcpv6-relay` section
-(`NINLIL_DHCP_SERVER_RELAY_DHCPV6_ENABLE`, the upstream addresses and `relayLinkAddress`). The relay
-relays a reply only when its source address is one of the listed upstream addresses. With no
-upstream address, it drops every request.
-
-The script `src/script/development/dhcp-relay-two-link-test.sh` checks a relay with two real links.
-It needs root, `tcpdump` and DHCP clients, and CI does not run it. See the README for its use.
-
 ## Check that it worked
 
 1. Check the services:
@@ -399,7 +286,7 @@ It needs root, `tcpdump` and DHCP clients, and CI does not run it. See the READM
     A service that is off shows `"isRunning":false`.
 2. On a device on the network, renew the lease the way the operating system does it, for example
    `sudo dhclient -v <interface>` on Linux or `ipconfig /renew` on Windows, then list the leases
-   (see the lease task above): the device is `Active`.
+   (see "See the leases" above): the device is `Active`.
 
 ## When something goes wrong
 
@@ -425,11 +312,8 @@ It needs root, `tcpdump` and DHCP clients, and CI does not run it. See the READM
   list, and look for the `01:` prefix of option `61`.
 - *No DNS record for a device.* The scope needs a zone of type `Primary` or `CloudPrimary`, and the
   device must send a host name.
-- *The relay drops everything.* The log has `Dropping a DHCPv4 request this relay would otherwise
-  forward: no upstream server addresses are configured`. Save `upstreamServerAddresses` and restart.
-- *No Router Advertisement arrives.* `GET /api/dhcp-settings/ra` must show content (a prefix, a
-  router lifetime, a flag, an MTU, a DNS server or a route), the service must run and the process
-  needs `CAP_NET_RAW` or root.
+- *The relay or Router Advertisement does not answer.* See [Relay agent](relay.md) and
+  [Router Advertisement](router-advertisement.md).
 
 Which settings need a restart: the switches, ports and relay settings are read once at start. The
 Router Advertisement content and the lease sweep interval apply without one. Every `NINLIL_DHCP_*`
@@ -437,7 +321,10 @@ variable is in [ENVIRONMENT.md](https://git.lantea.one/lantea-one/ninlil/src/bra
 
 ## Next steps
 
+- [DHCPv6 and prefix delegation](dhcpv6.md): addresses and prefixes for IPv6 devices.
+- [Router Advertisement](router-advertisement.md): let IPv6 devices find the router.
+- [Relay agent](relay.md): serve a network that Ninlil does not sit on.
 - [TFTP and PXE](tftp-and-pxe.md): serve boot files and point a scope at them.
 - [Zones and records](../dns/zones-and-records.md): the zone that holds the names of leased devices.
 - [README: DHCP, DHCPv6 and Router Advertisement](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#dhcp-dhcpv6-and-router-advertisement):
-  which scope serves a device, tag rule criteria, Rapid Commit and the full limits.
+  which scope serves a device, tag rule criteria and the full limits.
