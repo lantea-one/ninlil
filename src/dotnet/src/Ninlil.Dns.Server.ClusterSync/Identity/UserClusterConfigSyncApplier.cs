@@ -1,12 +1,14 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity;
 using Ninlil.Dns.Identity.Authentication;
 using Ninlil.Dns.Identity.Store;
 using Ninlil.Dns.Identity.Token;
+using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.ClusterSync.Shared;
 using Ninlil.Dns.Server.Core.ClusterSync;
 
@@ -36,7 +38,10 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 ///         <see cref="ClusterSyncConflictResolver.IncomingWins" /> rule decides which account
 ///         keeps the name; the other is renamed and given a note by
 ///         <see cref="ClusterCollisionRenamer" /> (see <see cref="UserEntity.ClusterConflictNote" />),
-///         never dropped or merged. Every node applies the same rule to the same timestamps and
+///         never dropped or merged. The renamed account is named after the node that created it
+///         (the node that holds it, when it has no recorded origin, as the bootstrap administrator
+///         has none), so every node computes the same name and the losers of one name never share
+///         one. Every node applies the same rule to the same timestamps and
 ///         node ids, so all pick the same winner; a test checks this. An update that renames an
 ///         account onto a name another local account holds is resolved the same way.
 ///     </para>
@@ -67,6 +72,10 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 ///     Revokes the account's refresh tokens on this node when an update carries a new security
 ///     stamp (see the class summary).
 /// </param>
+/// <param name="clusterOptions">
+///     The cluster settings, read for this node's id, which names a renamed account that has no
+///     recorded origin (see <see cref="ClusterCollisionRenamer" />).
+/// </param>
 public class UserClusterConfigSyncApplier(
     IUserRepository userRepository,
     IRoleRepository roleRepository,
@@ -75,7 +84,8 @@ public class UserClusterConfigSyncApplier(
     IDataProtectionProvider dataProtectionProvider,
     ILogger<UserClusterConfigSyncApplier> logger,
     IAccessTokenRevalidator accessTokenRevalidator,
-    IJwtTokenService jwtTokenService
+    IJwtTokenService jwtTokenService,
+    IOptionsMonitor<ClusterOptions> clusterOptions
 ) : IClusterConfigSyncApplier
 {
     /// <summary>
@@ -270,6 +280,13 @@ public class UserClusterConfigSyncApplier(
         string effectiveNormalizedUserName = payload.NormalizedUserName;
         string conflictNote = null;
 
+        // The renamed account or role is named after the node that created it, so the loser's name
+        // is the same on every node and two losers of one name differ. A row with no recorded
+        // origin (the bootstrap account, or one written before clustering was switched on) was
+        // written on the node that holds it: the sender stamps its own id on such a row, and this
+        // node does the same for its own.
+        Guid ownNodeId = clusterOptions.CurrentValue.NodeId;
+
         // A collision is a different local id holding the same normalized username.
         UserEntity conflicting = await userRepository.FindByNormalizedUserNameAsync(
             payload.NormalizedUserName,
@@ -291,7 +308,7 @@ public class UserClusterConfigSyncApplier(
                 // account created below.
                 string renamedUserName = ClusterCollisionRenamer.BuildRenamedValue(
                     conflicting.UserName,
-                    envelope.OriginatingNodeId
+                    conflicting.OriginatingNodeId ?? ownNodeId
                 );
 
                 logger.LogWarning(
@@ -321,12 +338,12 @@ public class UserClusterConfigSyncApplier(
                 // account keeps its name.
                 effectiveUserName = ClusterCollisionRenamer.BuildRenamedValue(
                     payload.UserName,
-                    conflicting.OriginatingNodeId ?? Guid.Empty
+                    envelope.OriginatingNodeId
                 );
                 effectiveNormalizedUserName = effectiveUserName.ToUpperInvariant();
                 conflictNote = ClusterCollisionRenamer.BuildConflictNote(
                     payload.UserName,
-                    conflicting.OriginatingNodeId ?? Guid.Empty,
+                    conflicting.OriginatingNodeId ?? ownNodeId,
                     conflicting.GetLastModifiedUtc()
                 );
 

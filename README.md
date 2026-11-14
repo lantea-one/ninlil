@@ -4149,8 +4149,10 @@ not copy them either.
       account you delete.
    2. List the accounts and roles on node B. Node A's `admin` account and `Administrators` role
       exist there next to node B's own. The pair that lost the newest-write comparison is
-      renamed to `<name>-conflict-<node-id>` (the node id has 32 hex digits and no dashes) and
-      has a `clusterConflictNote`. The renamed pair is node B's own or node A's, depending on which was written later.
+      renamed to `<name>-conflict-<node-id>` and has a `clusterConflictNote`. The id is the id
+      of the node that created the renamed account or role, with 32 hex digits and no dashes:
+      node A's id for node A's pair, node B's id for node B's own. The renamed pair is node B's
+      own or node A's, depending on which was written later.
    3. Delete node B's own account and role by the ids you noted:
 
       ```bash
@@ -4352,10 +4354,13 @@ Each command below runs on node A unless it says otherwise.
   item's last-change time and, on a tie, the id of the node that made the change. Data the joining
   node already holds merges under the same rule. A user or role with the same name but another id
   is not merged: the one that loses the newest-write comparison (only an exact tie uses the node
-  id) is renamed to `<name>-conflict-<node-id>`, with the id as 32 hex digits and no dashes, and
-  carries a `clusterConflictNote`. The renamed name stays. A fresh node holds its bootstrap `admin` account and `Administrators`
-  role, so every join renames one pair. Delete node B's own pair after the join, as in step 6 of
-  "Form a cluster".
+  id) is renamed to `<name>-conflict-<node-id>` and carries a `clusterConflictNote`. The id is
+  the id of the node that created the renamed account or role, as 32 hex digits and no dashes. The
+  bootstrap `admin` account and `Administrators` role have no recorded origin, so they are named
+  after the node that holds them. An installation whose earlier join produced an all-zero id keeps
+  that name as it is; a new rename never reuses it. The renamed name stays. A fresh node holds its
+  bootstrap `admin` account and `Administrators` role, so every join renames one pair. Delete
+  node B's own pair after the join, as in step 6 of "Form a cluster".
 - **Settings come from the inviter's runtime configuration file.** A section is sent when it was
   saved on that node at least once, and only the keys the file holds. A value an environment
   variable pins on node A is not sent unless the file holds it, and a value pinned on node B stays

@@ -122,8 +122,11 @@ Node A invites, node B joins.
 
     Each answers `204`. Before the delete, node B lists both pairs: the pair that lost the
     newest-write comparison is renamed to `admin-conflict-<node-id>` (and `Administrators-conflict-<node-id>`)
-    and carries a `clusterConflictNote`. If node A's pair was the one renamed, it keeps that name on node
-    B. A user name cannot be edited, so sign in as the renamed account with node A's password, or create
+    and carries a `clusterConflictNote`. The id is the id of the node that created the renamed account
+    or role, as 32 hex digits and no dashes: node A's id for node A's pair, node B's id for node B's own.
+    The bootstrap pair has no recorded origin, so each is named after the node that holds it. A name an
+    earlier join gave an all-zero id stays as it is and is not renamed again. If node A's pair was the
+    one renamed, it keeps that name on node B. A user name cannot be edited, so sign in as the renamed account with node A's password, or create
     an account with the plain name and move the roles to it.
 
 ### Check that it worked
