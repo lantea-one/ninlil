@@ -11,6 +11,14 @@ outside Forgejo.
 
 ## Unreleased
 
+### Added
+
+- **The OpenAPI document declares the API token scheme.** `/swagger/v1/swagger.json` lists
+  `ApiToken` beside `Bearer` as an `apiKey` in the `Authorization` header, so Swagger UI's
+  **Authorize** dialog can send a token typed as `ApiToken <token>`. See
+  [REST API](./README.md#rest-api)
+  ([#447](https://git.lantea.one/lantea-one/ninlil/issues/447)).
+
 ### Removed
 
 - **Library API (NuGet).** `IClientIdentityResolver.ResolveAsync` returns

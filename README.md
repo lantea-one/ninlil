@@ -6028,8 +6028,10 @@ curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18443/api/zones
 401
 ```
 
-Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize**, paste the access token
-(without the word `Bearer`) and try a call.
+Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize** and try a call. For
+**Bearer**, paste the access token (without the word `Bearer`). For **ApiToken**, type the whole
+header value: the word `ApiToken`, a space and the raw token. Swagger UI sends that field as typed,
+so a raw token without the prefix answers `401`.
 
 #### Behaviour worth knowing
 
