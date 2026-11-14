@@ -80,7 +80,7 @@ export interface AuthServiceInterface {
     apiAuthForgotPasswordPost(requestParameters: ApiAuthForgotPasswordPostRequestParams, extraHttpRequestParams?: any): Observable<ForgotPasswordResult>;
 
     /**
-     * This action checks a username and password. It returns the tokens of a completed sign-in or, for an account with two-factor authentication, a challenge token to submit to &#x60;POST /api/auth/login/two-factor&#x60;. Returns 401 for a wrong password or a disabled or unknown account and 423 for an account whose stored lockout end date lies in the future. Wrong passwords do not lock an account, because that would let anyone who knows a username lock it out; the per-address rate limit slows guessing instead. Nothing in the API sets a lockout end date, so 423 appears only for a date written to the user store directly or by cluster synchronization. Allows anonymous callers and is rate limited.
+     * This action checks a username and password. It returns the tokens of a completed sign-in or, for an account with two-factor authentication, a challenge token to submit to &#x60;POST /api/auth/login/two-factor&#x60;. Returns 401 for a wrong password or a disabled or unknown account and 423 for an account with lockout enabled and a stored lockout end date in the future. Wrong passwords do not lock an account, because that would let anyone who knows a username lock it out; the per-address rate limit slows guessing instead. Nothing in the API sets a lockout end date, so 423 appears only for a date written to the user store directly or by cluster synchronization. Allows anonymous callers and is rate limited.
      * 
      * @endpoint post /api/auth/login
 * @param requestParameters

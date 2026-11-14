@@ -740,7 +740,7 @@
         "tags": [
           "Auth"
         ],
-        "summary": "This action checks a username and password. It returns the tokens of a completed sign-in\nor, for an account with two-factor authentication, a challenge token to submit to\n`POST /api/auth/login/two-factor`. Returns 401 for a wrong password or a disabled or unknown\naccount and 423 for an account whose stored lockout end date lies in the future. Wrong\npasswords do not lock an account, because that would let anyone who knows a username\nlock it out; the per-address rate limit slows guessing instead. Nothing in the API sets\na lockout end date, so 423 appears only for a date written to the user store directly\nor by cluster synchronization. Allows anonymous callers and is rate limited.",
+        "summary": "This action checks a username and password. It returns the tokens of a completed sign-in\nor, for an account with two-factor authentication, a challenge token to submit to\n`POST /api/auth/login/two-factor`. Returns 401 for a wrong password or a disabled or unknown\naccount and 423 for an account with lockout enabled and a stored lockout end date in the\nfuture. Wrong passwords do not lock an account, because that would let anyone who knows\na username lock it out; the per-address rate limit slows guessing instead. Nothing in\nthe API sets a lockout end date, so 423 appears only for a date written to the user\nstore directly or by cluster synchronization. Allows anonymous callers and is rate\nlimited.",
         "operationId": "apiAuthLoginPost",
         "requestBody": {
           "content": {
@@ -32086,7 +32086,7 @@
       },
       "ApiToken": {
         "type": "apiKey",
-        "description": "An API token created by POST /api/api-tokens. Enter the value with the prefix and a space: ApiToken <token>.",
+        "description": "An API token created by POST /api/api-tokens. Type the word ApiToken, a space, then the token. Example: ApiToken 0123456789abcdef (not a real token). Fill only one of the two fields, Bearer or ApiToken.",
         "name": "Authorization",
         "in": "header"
       }
