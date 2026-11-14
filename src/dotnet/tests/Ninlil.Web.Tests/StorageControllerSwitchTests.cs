@@ -192,4 +192,81 @@ public class StorageControllerSwitchTests(NinlilDnsWebApplicationFactory factory
         string body = await response.Content.ReadAsStringAsync();
         Assert.Contains("MongoDB", body, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task Switch_AsANamedUser_RecordsThatUserNameAsRequestedBy()
+    {
+        HttpClient admin = await CreateAuthenticatedClientAsync();
+        string userName = $"storage-switch-{Guid.NewGuid():N}";
+        const string password = "Switch-Requester-1234!";
+        string roleName = $"storage-switch-role-{Guid.NewGuid():N}";
+        string databasePath = Path.Combine(
+            Path.GetTempPath(),
+            $"ninlil-dns-storage-switch-requester-{Guid.NewGuid():N}.sqlite3"
+        );
+
+        try
+        {
+            // A user other than the bootstrap administrator, so a name that is read from the wrong
+            // place cannot pass by coincidence.
+            HttpResponseMessage created = await admin.PostAsJsonAsync(
+                "/api/users",
+                new CreateUserRequest(
+                    userName,
+                    password,
+                    $"{userName}@localhost.local",
+                    "Storage Switch Requester"
+                )
+            );
+            created.EnsureSuccessStatusCode();
+            Guid userId = (await created.Content.ReadFromJsonAsync<UserSummary>()).Id;
+
+            HttpResponseMessage createdRole = await admin.PostAsJsonAsync(
+                "/api/roles",
+                new CreateRoleRequest(roleName, "Storage switch requester role")
+            );
+            createdRole.EnsureSuccessStatusCode();
+            Guid roleId = (await createdRole.Content.ReadFromJsonAsync<RoleSummary>()).Id;
+            (
+                await admin.PostAsJsonAsync(
+                    $"/api/roles/{roleId}/permissions",
+                    new RolePermissionRequest("storage:manage")
+                )
+            ).EnsureSuccessStatusCode();
+            (
+                await admin.PostAsJsonAsync(
+                    $"/api/users/{userId}/roles",
+                    new UserRoleAssignmentRequest(roleName)
+                )
+            ).EnsureSuccessStatusCode();
+
+            HttpClient user = factory.CreateClient();
+            HttpResponseMessage login = await user.PostAsJsonAsync(
+                "/api/auth/login",
+                new LoginRequest(userName, password)
+            );
+            login.EnsureSuccessStatusCode();
+            user.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                (await login.Content.ReadFromJsonAsync<LoginResponse>()).AccessToken
+            );
+
+            HttpResponseMessage response = await user.PostAsJsonAsync(
+                "/api/storage/switch",
+                SqliteRequest(databasePath)
+            );
+            Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+            StorageStatus status = await (
+                await admin.GetAsync("/api/storage")
+            ).Content.ReadFromJsonAsync<StorageStatus>();
+            Assert.NotNull(status.PendingSwitch);
+            Assert.Equal(userName, status.PendingSwitch.RequestedBy);
+        }
+        finally
+        {
+            await admin.DeleteAsync("/api/storage/switch");
+            TemporaryFiles.DeleteSqliteDatabase(databasePath);
+        }
+    }
 }
