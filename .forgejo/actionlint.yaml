@@ -20,3 +20,8 @@ paths:
       # a full URL because the upstream action refuses to run outside GitHub. actionlint accepts
       # only {owner}/{repo}@{ref}. Only that one repository is exempt.
       - 'specifying action "https://code\.forgejo\.org/forgejo/upload-artifact@[0-9a-f]{40}" in invalid format.*'
+  # pages.yml publishes with the git-pages action, which lives on codeberg.org and is written as a
+  # full URL like the upload action above. Only that one repository is exempt.
+  .github/workflows/pages.yml:
+    ignore:
+      - 'specifying action "https://codeberg\.org/git-pages/action@[0-9a-f]{40}" in invalid format.*'
