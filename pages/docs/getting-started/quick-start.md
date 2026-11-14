@@ -73,6 +73,8 @@ token. For a call from another machine, serve a trusted certificate
     ```
 
     Copy the long `accessToken` value. The next commands call it `<token>`.
+    Copy it once and reuse it: every sign-in counts toward the sign-in limit, and the sixth from
+    one address within 5 minutes answers `429` (see [Security](../guides/security/security.md)).
 5. Create a primary zone. The answer starts with the zone's `id`; copy it. The next commands call
    it `<zone-id>`:
 

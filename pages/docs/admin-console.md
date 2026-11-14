@@ -59,7 +59,7 @@ The sign-in page shows one of these messages when a sign-in fails:
 | Message | Cause |
 |---|---|
 | Incorrect username or password. | The server answered `401`. The account may also be disabled or not exist. |
-| This account is locked. Try again later, or ask an administrator to unlock it. | The server answered `423`. |
+| This account is locked. Try again later, or ask an administrator to unlock it. | The server answered `423`. This happens only for an account with a stored lockout end date in the future, which Ninlil never sets. |
 | Too many sign-in attempts. Try again in `<n>` minutes. | The server answered `429`: the address reached the sign-in limit. |
 | Could not reach the server. Check your connection and try again. | The browser got no answer. |
 

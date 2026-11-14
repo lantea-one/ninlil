@@ -127,7 +127,7 @@ The status of the sign-in answer tells the cause:
 | Answer | Console message | Cause and fix |
 |---|---|---|
 | `401` | Incorrect username or password. | The password is wrong, the account is disabled or the name is unknown. Check the name. Another administrator can reset the password. |
-| `423` | This account is locked. Try again later, or ask an administrator to unlock it. | The account has a lockout end date in the future. Wrong passwords never set it. An administrator or the system sets it. |
+| `423` | This account is locked. Try again later, or ask an administrator to unlock it. | The account has a lockout end date in the future. Wrong passwords never set it, and no setting or API sets it, so the answer does not occur in normal use. |
 | `429` | Too many sign-in attempts. Try again in `<n>` minutes. | The address reached the sign-in limit. See below. |
 
 **`429` after a few sign-ins.** One address may make 5 password or second-factor sign-in attempts in

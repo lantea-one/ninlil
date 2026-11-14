@@ -232,6 +232,8 @@ and asks the server for that record. It changes nothing outside the folder you r
    ```
 
    Copy the long `accessToken` value. The next commands call it `<token>`.
+   Copy it once and reuse it: every sign-in counts toward the sign-in limit, and the sixth from
+   one address within 5 minutes answers `429` (see [Security](#security)).
 5. Create a primary zone. The answer starts with the zone's `id`; copy it. The next commands call
    it `<zone-id>`:
 
@@ -340,11 +342,15 @@ holds `msquic.dll`, the QUIC library for DNS-over-QUIC.
 
 #### Steps
 
-1. Download the executable and the checksum list. Replace `<version>` with the release's version:
+1. Download the executable and the checksum list. Replace `<tag>` with the release's tag. Open the
+   [releases page](https://git.lantea.one/lantea-one/ninlil/releases): each release is named by its
+   tag, which has the form `v<yyyy>.<mm>.<dd>.<increment>R<short-sha>`, for example
+   `v2026.09.24.1Rab12cd3`. Keep the leading `v` and the `R<short-sha>` part: an address without
+   them answers 404.
 
    ```bash
-   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<version>/ninlil-linux-amd64
-   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<version>/SHA256SUMS
+   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-linux-amd64
+   curl -LO https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/SHA256SUMS
    ```
 
 2. Check the download. The command must print `OK` for your file:
@@ -419,7 +425,7 @@ features rely on Linux kernel interfaces and are unavailable, as on macOS.
 #### Steps
 
 Try it from a console first (an administrator PowerShell, because the defaults use ports 53, 80, and
-443; or override the ports, see "Ports" below):
+443; or override the ports, see [Ports](#ports)):
 
 1. Remove the download mark from the zip, then unzip it into a new folder, so that
    `ninlil-windows-amd64.exe` and `msquic.dll` sit side by side:
@@ -517,8 +523,9 @@ Every release carries installable `ninlil` packages for `x86_64` and `aarch64`.
 
 #### Steps
 
-1. Install the package and start the service. Replace `<tag>` and `<pkgver>` with the release's
-   tag and version:
+1. Install the package and start the service. Replace `<tag>` with the release's tag
+   (see [Download a binary](#download-a-binary)) and `<pkgver>` with its date version, the tag
+   without the `v` and without `R<short-sha>`:
 
    ```bash
    sudo pacman -U https://git.lantea.one/lantea-one/ninlil/releases/download/<tag>/ninlil-<pkgver>-1-x86_64.pkg.tar.zst
@@ -574,9 +581,10 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
    | Fedora, RHEL, Rocky Linux, AlmaLinux | x86-64 | `ninlil-<version>-1.x86_64.rpm` |
    | Fedora, RHEL, Rocky Linux, AlmaLinux | ARM64 | `ninlil-<version>-1.aarch64.rpm` |
 
-   `<version>` is the date version, such as `2026.10.09.1`. A pre-release build's
-   version carries the branch and commit (`2026.10.09.3~develop.a1b2c3d` for a Deb,
-   `2026.10.09.3-0.develop.a1b2c3d` for an RPM); it sorts below the release it precedes.
+   `<version>` is the date version, such as `2026.10.09.1`: the tag without the `v` and without
+   `R<short-sha>`. `<tag>` below is the full tag, as in [Download a binary](#download-a-binary).
+   A pre-release build's version carries the branch and commit (`2026.10.09.3~develop.a1b2c3d`
+   for a Deb, `2026.10.09.3-0.develop.a1b2c3d` for an RPM); it sorts below the release it precedes.
 
 2. Download the package and the checksum list, then check the download. Replace `<tag>` with the
    release's tag and the file name with yours:
@@ -726,7 +734,7 @@ console, or `/documentation` for a browsable REST API reference.
 #### Check that it worked
 
 The data directory (see [The data directory](#the-data-directory)) holds these files. Your list
-can hold more:
+can hold more (for example SQLite's `-shm` and `-wal` files while Ninlil runs):
 
 ```text
 cluster-node-id.txt
@@ -1141,6 +1149,10 @@ of a zone into the matching reverse zone.
   (`updateTsigKeyNames`) and the keys allowed to transfer it (`transferTsigKeyNames`). An empty list
   accepts no key. A request signed with a valid key that the zone does not list gets a signed
   `REFUSED`.
+- A change to a TSIG key (create, change, disable or delete) applies to the next signed message on
+  the node that made it. A change made on another node, or directly in the database, shows after
+  about 10 seconds while the database answers. If the reload after a change fails or takes longer
+  than 30 seconds, Ninlil refuses every TSIG key until a reload succeeds.
 - The keys that clustering creates for its peers carry the label `isClusterKey`. They can be
   disabled but not renamed or deleted, they never sign or verify zone transfers or updates, and
   they go away when the peer is removed.
@@ -2259,15 +2271,16 @@ Ninlil validates DNSSEC for recursive and forwarded answers. See "Behaviour wort
    | `definitionString` | Meaning |
    |---|---|
    | `9.9.9.9` or `9.9.9.9:53` | Plain DNS over UDP, with TCP when an answer is truncated. `udp://` and `tcp://` in front mean the same. |
-   | `[2620:fe::fe]:53` | Plain DNS over IPv6. A port after an IPv6 address needs brackets. Without a port, `2620:fe::fe` also works. |
+   | `[2620:fe::fe]:53` | Plain DNS over IPv6. A port after an IPv6 address needs brackets. Without brackets the whole text is an address: `2620:fe::fe:53` is an IPv6 address on the default port, not address `2620:fe::fe` with port 53. |
    | `tls://dns.quad9.net` | DNS-over-TLS, port 853 unless you add `:<port>`. The host name is also the name Ninlil expects in the server's certificate. |
    | `https://dns.quad9.net/dns-query` | DNS-over-HTTPS. |
    | `quic://dns.example.net` | DNS-over-QUIC, port 853 unless you add `:<port>`. Needs `libmsquic` 2.4.20 or later on this host. |
    | `sdns://...` | A DNSCrypt stamp. See [Encrypted transports and DNS64](#encrypted-transports-and-dns64). |
 
    Ninlil checks the syntax when you save, and never looks a host name up at that point. A
-   definition it cannot parse answers `400` with the reason, for example `an IPv6 address with a
-   port must be written as [address]:port`.
+   definition it cannot parse answers `400` with the reason, for example `a malformed bracketed IPv6
+   address` for `[2620:fe::fe`, or `is not a valid IPv6 address; an IPv6 address with a port must be
+   written as [address]:port` for `2620:fe::fe::53`.
 
 **Forward one domain to its own servers (conditional forwarder zone).**
 
@@ -2738,7 +2751,7 @@ lists, schedules and rewrites.
    exception cancels the block. The Ninlil log shows how the fetch went:
 
    ```text
-   Refreshed block/allow list 'My subscription' (4 entries, 1 of them exceptions; 0 unsupported rules skipped) from 'http://127.0.0.1:18999/list.txt'.
+   Refreshed block/allow list 'My subscription' (3 entries, 1 of them exceptions; 0 unsupported rules skipped) from 'http://127.0.0.1:18999/list.txt'.
    ```
 
 3. Ask for the rewrites from step 16:
@@ -3069,8 +3082,8 @@ A records (RFC 6147 §5.1.2), and an answer that failed DNSSEC validation never 
    www.example.test.	3600	IN	A	192.0.2.10
    ```
 
-   Without `+tls-ca`, `dig` stops with `TLS peer certificate verification ... failed: self-signed
-   certificate`. That is the expected refusal of an untrusted certificate.
+   Always pass `+tls-ca` for a check. Without it `dig` (9.20) answers and does not verify the
+   certificate, so that answer proves nothing about the certificate.
 2. DNS-over-HTTPS. The `dns` parameter is the query in base64url. This one asks for `www.example.com`
    type A. The status line and the media type show a DNS answer:
 
@@ -3214,7 +3227,7 @@ A records (RFC 6147 §5.1.2), and an answer that failed DNSSEC validation never 
 
 #### When something goes wrong
 
-- *`dig +tls` says `self-signed certificate`.* Pass `+tls-ca=ninlil-cert.pem` as in the check, or
+- *A client says `self-signed certificate`.* Pass `+tls-ca=ninlil-cert.pem` as in the check, or
   use a certificate your clients trust (see "Certificates").
 - *A client says the certificate name does not match.* The self-signed certificate names only
   `localhost`. Set `certificate.selfSignedSubjectAlternativeNames` to the name clients use, delete
@@ -3805,8 +3818,8 @@ When a scope has a DNS zone, Ninlil also writes an `A` or `AAAA` record for each
   the device must send a host name. The log shows `DHCP->DNS registration refused` when the name is
   taken.
 - *The relay drops everything.* The log has `Dropping a DHCPv4 request this relay would otherwise
-  forward: no upstream server addresses are configured`. Save `upstreamServerAddresses` and
-  restart.
+  forward: no upstream server addresses are configured
+  (DhcpServer:Relay:Dhcpv4:UpstreamServerAddresses)`. Save `upstreamServerAddresses` and restart.
 - *A relayed device gets no reply.* No enabled scope on the upstream server covers `giaddr`
   (Debug log: `DHCPv4 request relayed from <address>, which no enabled scope covers; no reply`), or
   the upstream server answers from an address that is not in the list.
@@ -4095,7 +4108,8 @@ not copy them either.
    ```
 
    If the HTTPS port is not 443, add `"advertisedPort":<port>`. The default `0` means the
-   web HTTPS port.
+   web HTTPS port. Wait a few seconds before step 3: Ninlil reloads its configuration file first,
+   and an invite sent at once can answer `Clustering is not enabled on this node`.
 3. On node A, create an invite:
 
    ```bash
@@ -4747,7 +4761,8 @@ you out of every session, yours included; sign in again with a code from the app
   administrator out by guessing. The `lockout` fields of `/api/identity-settings` are deprecated
   and have no effect; a later release removes them. The OpenAPI document marks them `deprecated`,
   and the console's Identity page does not show them. Password guessing is limited by the sign-in
-  limit instead.
+  limit instead. The sign-in answers `423` only for an account whose stored lockout end date lies in
+  the future. No setting and no API sets that date, so the answer does not occur in normal use.
 - **The sign-in limit counts per client address.** It allows 5 attempts in 5 minutes for the
   password sign-in and the second-factor sign-in together, and returns `429 Too Many Requests` after
   that. An IPv6 client counts by its /64 network, so an attacker cannot rotate through addresses of
@@ -6037,7 +6052,8 @@ Open `https://127.0.0.1:18443/swagger` in a browser, choose **Authorize**, paste
 - **`PATCH` ignores a field it does not know.** A misspelled name in a `PATCH` body is skipped and
   the answer is still `204`. Check the result with a `GET`.
 - **A settings `PATCH` answers with a note.** The note says whether the change is live or needs a
-  restart, as on the console. A live change reaches the running server within about a second.
+  restart, as on the console. A live change reaches the running server within about a second, so
+  a `GET` straight after the `PATCH` can still return the old values. Read again after a moment.
 - **Lists page by offset.** `take` defaults to 50, and a value above 500 is cut to 500. A
   negative `skip` counts as 0, and a `take` of 0 or less counts as 50.
 - **`GET /status` has two views.** Without a credential, or without the `status:read` permission, it
@@ -6073,8 +6089,9 @@ built for a small attack surface:
 
 - **Chiseled base image** (`mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra`): no
   shell and no package manager. It holds the libraries a self-contained .NET program needs (C and
-  C++ runtime, ICU, time-zone data, OpenSSL) plus `libmsquic` 2.6.2 for DNS-over-QUIC and its
-  dependency `libnuma1`, which the image build adds from a pinned list.
+  C++ runtime, ICU, time-zone data, OpenSSL) plus `libmsquic` for DNS-over-QUIC and its
+  dependency `libnuma1`, which the image build adds from a pinned list
+  ([`docker/native-libraries.lock`](./docker/native-libraries.lock) records the versions).
 - **Non-root**: the server runs as uid `1654`. The application files are read-only to it; only
   `/app/data` is writable.
 - **Everything persistent in one volume**: `/app/data` holds the database (with the default SQLite

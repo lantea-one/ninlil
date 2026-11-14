@@ -123,6 +123,9 @@ That is safe only on the machine that runs Ninlil; see [Self-signed certificate]
     {"note":"Written to the configuration file. This setting is read live, so it takes effect immediately -- no restart required."}
     ```
 
+    A live change reaches the running server within about a second. A `GET` straight after the
+    `PATCH` can still return the old values, so read again after a moment.
+
 An enum field, such as `type` here, takes one of the names the OpenAPI document lists. Case does not
 matter. A number, a digit string or an unknown name answers `400` and the message lists the valid
 names.
