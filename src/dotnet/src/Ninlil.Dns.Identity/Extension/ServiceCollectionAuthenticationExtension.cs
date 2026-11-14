@@ -189,7 +189,7 @@ public static class ServiceCollectionAuthenticationExtension
                     options.MapInboundClaims = false;
 
                     options.Scope.Clear();
-                    foreach (string scope in ssoOptions.Scopes)
+                    foreach (string scope in ssoOptions.EffectiveScopes)
                         options.Scope.Add(scope);
 
                     options.Events = new OpenIdConnectEvents
