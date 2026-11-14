@@ -257,7 +257,7 @@ an authenticator like this:
     ```
 
     The answer is an empty `204`.
-3. Sign in again. The password step now answers `requiresTwoFactor` and an `mfaToken`. Send the
+3. Sign in again. The password step answers `requiresTwoFactor` and an `mfaToken`. Send the
    code from the app with that token:
 
     ```bash

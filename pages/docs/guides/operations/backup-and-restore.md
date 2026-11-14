@@ -101,7 +101,7 @@ curl -k https://127.0.0.1:18443/api/zones -H "Authorization: Bearer <token>"
 ```
 
 Sign in first with an account from the backup, because the restore replaced the accounts of the
-machine you restored on. The bootstrap password of that machine now answers `401`.
+machine you restored on. The bootstrap password of that machine answers `401`.
 
 ## Behaviour worth knowing
 
