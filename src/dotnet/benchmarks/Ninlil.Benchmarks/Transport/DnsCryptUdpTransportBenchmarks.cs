@@ -1,10 +1,7 @@
-using System.Buffers;
-using System.Buffers.Text;
 using System.Net;
 using BenchmarkDotNet.Attributes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Ninlil.Benchmarks.Pipeline;
 using Ninlil.Benchmarks.Storage;
 using Ninlil.Dns.Common.Enum;
@@ -35,11 +32,9 @@ namespace Ninlil.Benchmarks.Transport;
 public class DnsCryptUdpTransportBenchmarks
 {
     private const int Operations = 1280;
-    private const string ProviderName = "bench.example";
 
     private PipelineBenchmarkHost _host;
-    private string _stateDirectory;
-    private DnsCryptCertificateRotationService _rotation;
+    private DnsCryptBenchmarkProvider _provider;
     private DnsCryptUdpListener _listener;
     private DnsCryptForwarderClient _client;
     private UpstreamForwarderDefinition _definition;
@@ -66,7 +61,7 @@ public class DnsCryptUdpTransportBenchmarks
         catch
         {
             // A failed setup never reaches the cleanup method, so the state directory goes here.
-            DeleteStateDirectory();
+            _provider?.DeleteStateDirectory();
             throw;
         }
     }
@@ -83,55 +78,19 @@ public class DnsCryptUdpTransportBenchmarks
         );
         await _host.WarmUpAndCheckAsync();
 
-        _stateDirectory = Path.Combine(
-            Path.GetTempPath(),
-            $"ninlil-bench-dnscrypt-{Guid.NewGuid():N}"
-        );
-        Directory.CreateDirectory(_stateDirectory);
-
         int port = FreeUdpPort();
-        DnsCryptOptions dnsCrypt = new()
-        {
-            Enable = true,
-            Port = port,
-            ListenAddresses = "127.0.0.1",
-            ProviderName = ProviderName,
-            CertificateStateFilePath = Path.Combine(_stateDirectory, "state.json"),
-            EnabledEsVersions = [DnsCryptEsVersion.XChaCha20Poly1305],
-            CertificateRotationInterval = TimeSpan.FromMinutes(10),
-            CertificateValidityDuration = TimeSpan.FromMinutes(20),
-            CertificateClockSkewTolerance = TimeSpan.Zero,
-        };
-        ServiceCollection services = new();
-        services.AddSingleton(Options.Create(dnsCrypt));
-        services.AddSingleton<IOptionsMonitor<DnsCryptOptions>>(new FixedOptionsMonitor(dnsCrypt));
-        services.AddSingleton<ILoggerFactory>(_host.Services.GetRequiredService<ILoggerFactory>());
-        services.AddLogging();
-        services.AddSingleton<FileDnsCryptCertificateStore>();
-        ServiceProvider provider = services.BuildServiceProvider();
-        FileDnsCryptCertificateStore store =
-            provider.GetRequiredService<FileDnsCryptCertificateStore>();
-
-        _rotation = new DnsCryptCertificateRotationService(
-            store,
-            provider.GetRequiredService<IOptionsMonitor<DnsCryptOptions>>(),
-            provider.GetRequiredService<ILogger<DnsCryptCertificateRotationService>>()
-        );
-        await _rotation.StartAsync(CancellationToken.None);
-        await WaitUntilAsync(() => store.Entries.Count > 0);
+        _provider = await DnsCryptBenchmarkProvider.StartAsync(_host, port);
 
         _listener = new DnsCryptUdpListener(
             _host.Pipeline,
-            store,
-            provider.GetRequiredService<IOptionsMonitor<DnsCryptOptions>>(),
-            provider.GetRequiredService<ILogger<DnsCryptUdpListener>>()
+            _provider.Store,
+            _provider.Options,
+            _provider.Services.GetRequiredService<ILogger<DnsCryptUdpListener>>()
         );
         await _listener.StartAsync(CancellationToken.None);
-        await WaitUntilAsync(() => _listener.IsListening);
+        await DnsCryptBenchmarkProvider.WaitUntilAsync(() => _listener.IsListening);
 
-        _definition = DnsCryptStampParser.Parse(
-            BuildStamp($"127.0.0.1:{port}", store.ProviderKeyPair.PublicKeyWireFormat)
-        );
+        _definition = DnsCryptStampParser.Parse(_provider.BuildStamp($"127.0.0.1:{port}"));
         _client = new DnsCryptForwarderClient();
 
         DnsName name = _host.NameFor(PipelineBenchmarkHost.ScenarioEnum.AuthoritativeHit);
@@ -173,22 +132,13 @@ public class DnsCryptUdpTransportBenchmarks
         {
             await _listener.StopAsync(CancellationToken.None);
             _listener.Dispose();
-            await _rotation.StopAsync(CancellationToken.None);
+            await _provider.StopRotationAsync();
             await _host.DisposeAsync();
         }
         finally
         {
-            DeleteStateDirectory();
+            _provider.DeleteStateDirectory();
         }
-    }
-
-    /// <summary>
-    ///     This method removes the state directory with the certificate files the run wrote.
-    /// </summary>
-    private void DeleteStateDirectory()
-    {
-        if (_stateDirectory != null && Directory.Exists(_stateDirectory))
-            Directory.Delete(_stateDirectory, recursive: true);
     }
 
     /// <summary>
@@ -218,36 +168,6 @@ public class DnsCryptUdpTransportBenchmarks
         return answers;
     }
 
-    /// <summary>
-    ///     This method builds the <c>sdns://</c> stamp of a DNSCrypt resolver at
-    ///     <paramref name="address" /> (a host:port) with the given provider public key.
-    /// </summary>
-    private static string BuildStamp(string address, byte[] providerPublicKey)
-    {
-        ArrayBufferWriter<byte> buffer = new();
-        buffer.GetSpan(1)[0] = 0x01;
-        buffer.Advance(1);
-        buffer.GetSpan(8).Clear();
-        buffer.Advance(8);
-
-        WriteLengthPrefixed(buffer, System.Text.Encoding.ASCII.GetBytes(address));
-        WriteLengthPrefixed(buffer, providerPublicKey);
-        WriteLengthPrefixed(
-            buffer,
-            System.Text.Encoding.UTF8.GetBytes($"2.dnscrypt-cert.{ProviderName}")
-        );
-
-        return "sdns://" + Base64Url.EncodeToString(buffer.WrittenSpan);
-    }
-
-    private static void WriteLengthPrefixed(IBufferWriter<byte> buffer, byte[] value)
-    {
-        buffer.GetSpan(1)[0] = (byte)value.Length;
-        buffer.Advance(1);
-        value.CopyTo(buffer.GetSpan(value.Length));
-        buffer.Advance(value.Length);
-    }
-
     private static int FreeUdpPort()
     {
         using System.Net.Sockets.Socket probe = new(
@@ -257,32 +177,5 @@ public class DnsCryptUdpTransportBenchmarks
         );
         probe.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return ((IPEndPoint)probe.LocalEndPoint).Port;
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        // BackgroundService binds and generates on a continuation after StartAsync returns.
-        for (int attempt = 0; attempt < 500 && !condition(); attempt++)
-            await Task.Delay(10);
-
-        if (!condition())
-            throw new InvalidOperationException("The DNSCrypt listener did not start.");
-    }
-
-    /// <summary>
-    ///     This class is an <see cref="IOptionsMonitor{TOptions}" /> that always returns one
-    ///     value; the listener and the rotation service read their settings through it.
-    /// </summary>
-    private sealed class FixedOptionsMonitor(DnsCryptOptions value)
-        : IOptionsMonitor<DnsCryptOptions>
-    {
-        /// <inheritdoc />
-        public DnsCryptOptions CurrentValue => value;
-
-        /// <inheritdoc />
-        public DnsCryptOptions Get(string name) => value;
-
-        /// <inheritdoc />
-        public IDisposable OnChange(Action<DnsCryptOptions, string> listener) => null;
     }
 }
