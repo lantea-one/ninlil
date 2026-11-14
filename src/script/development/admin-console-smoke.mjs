@@ -1152,7 +1152,7 @@ async function visit(context, entry, variant, slug, width, theme) {
     const failed = outcome.checks.filter((check) => !check.ok);
     let changed = failed.length ? addressWatcher.describeSince(attempt === 1 ? began - ADDRESS_CHANGE_MARGIN_MS : began) : null;
     let sessionLost = false;
-    if (!changed && failed.some((check) => /\b401 \/api\/auth\/refresh/.test(check.message ?? ''))) {
+    if (!changed && failed.some((check) => /\b401 \/api\/auth\/refresh(?= |$)/.test(check.message ?? ''))) {
       // An address change aborts a refresh call after the server has rotated the refresh cookie,
       // so the browser never gets the new one and the session is dead from then on. The abort can
       // land between two visits, where the page being left discards it, so the visit that first
