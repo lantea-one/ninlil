@@ -92,11 +92,8 @@ public sealed class ManualTimeProvider(DateTimeOffset start) : TimeProvider
     ///     This class is a timer on the hand-moved clock: it fires from
     ///     <see cref="ManualTimeProvider.FireDueTimers" />, once per due time (a period re-arms it).
     /// </summary>
-    private sealed class ManualTimer(
-        ManualTimeProvider owner,
-        TimerCallback callback,
-        object state
-    ) : ITimer
+    private sealed class ManualTimer(ManualTimeProvider owner, TimerCallback callback, object state)
+        : ITimer
     {
         private readonly object _gate = new();
         private DateTimeOffset? _due;
