@@ -22,6 +22,13 @@ outside Forgejo.
 
 ### Behaviour worth knowing
 
+- **The AAAA record form refuses an IPv4 tail that is followed by `::`.** Text such as `1.2.3.4::`
+  or `0:0:192.0.2.1::` passed the form's check and was refused only by the server. The form now
+  shows "Enter a valid IPv6 address." before it saves.
+  ([#420](https://git.lantea.one/lantea-one/ninlil/issues/420))
+- **The dashboard's Zones tile shows the Zones menu icon.** It showed the product's brand icon. The
+  four At a Glance tiles now take their icons from the menu entries of the same pages.
+  ([#431](https://git.lantea.one/lantea-one/ninlil/issues/431))
 - **IPv6 addresses with an IPv4 tail are sent with the right bytes, and malformed IPv6 text is
   refused.** In APL records and DHCP option values, the console turned the IPv4 part of
   `::ffff:192.0.2.1` into wrong bytes and sent them without an error; such an address is now sent
