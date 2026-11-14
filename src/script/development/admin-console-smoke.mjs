@@ -53,8 +53,9 @@
 //
 // Outputs and exit code
 //   <out>/report.json and <out>/report.md with every check (failures first), counts and the
-//   screenshot index, plus a note and a summary count for every repeated visit. Exit code 0 when every check passed and at least one page was visited; 1
-//   when a check failed or the sweep visited nothing; 2 when the host or browser could not start.
+//   screenshot index, plus a note and a summary count for every repeated visit. Exit code 0 when
+//   every check passed and at least one page was visited; 1 when a check failed or the sweep
+//   visited nothing; 2 when the host or browser could not start.
 
 import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -205,9 +206,14 @@ class AddressWatcher {
     this.timer = null;
   }
 
-  /** Reads the addresses and records a change, with what was added and removed. */
+  /**
+   * Reads the addresses and records a change, with what was added and removed. A read that fails
+   * is skipped: an exception thrown from the timer would end the process without stopping the
+   * host and the browser, and one missed poll only delays noticing a change.
+   */
   poll() {
-    const next = AddressWatcher.read();
+    let next;
+    try { next = AddressWatcher.read(); } catch { return; }
     const added = [...next].filter((address) => !this.current.has(address));
     const removed = [...this.current].filter((address) => !next.has(address));
     if (added.length || removed.length) this.changes.push({ at: Date.now(), added, removed });
@@ -1114,15 +1120,13 @@ async function sweepUser(context) {
  * changed from {@link ADDRESS_CHANGE_MARGIN_MS} before the visit to its end, the visit is run again
  * once from the navigation on and only the second attempt's results are kept. The second attempt
  * looks for changes since its own start only, so the change that caused the repeat is not counted
- * again. A second disturbed
- * attempt is not repeated; its failures stand and the note says so. Nothing is excused when the
- * address set stayed the same.
+ * again. A second disturbed attempt is not repeated; its failures stand and the note says so.
+ * Nothing is excused when the address set stayed the same.
  */
 async function visit(context, entry, variant, slug, width, theme) {
   const { report, user } = context;
   const identity = { page: slug, user: user.label, width, theme };
   let outcome = null;
-  let repeated = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const began = Date.now();
     outcome = await attemptVisit(context, entry, variant, slug, width, theme);
@@ -1132,8 +1136,9 @@ async function visit(context, entry, variant, slug, width, theme) {
       // The page that was aborted may still log its close. Leaving it for a blank page first lets
       // that message arrive now, before the repeat's navigation clears the observations.
       try { await context.page.send('Page.navigate', { url: 'about:blank' }); } catch { /* the repeat reports its own failure */ }
+      // The wait has no exact bound to meet: four poll intervals are enough in runs beside
+      // container starts, and the cost is paid once per repeat.
       await sleep(ADDRESS_POLL_MS * 4);
-      repeated = true;
       report.repeatedVisits += 1;
       report.notes.push({ ...identity, note: `repeated once, the host's network addresses changed during the visit (${changed})` });
     } else {
@@ -1143,7 +1148,6 @@ async function visit(context, entry, variant, slug, width, theme) {
   report.checks.push(...outcome.checks);
   report.notes.push(...outcome.notes);
   report.screenshots.push(...outcome.screenshots);
-  return repeated;
 }
 
 /** Runs one attempt of a visit and returns its checks, notes and screenshot entries. */
