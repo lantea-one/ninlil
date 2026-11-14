@@ -395,21 +395,36 @@ public sealed class DnsName : IEquatable<DnsName>
         if (ReferenceEquals(this, other))
             return true;
 
-        if (Labels.Count != other.Labels.Count)
+        return LabelsEqual(Labels, 0, other.Labels);
+    }
+
+    /// <summary>
+    ///     This method compares the labels of <paramref name="left" /> from
+    ///     <paramref name="leftSkip" /> on with all labels of <paramref name="right" />, with the
+    ///     rules of <see cref="Equals(DnsName)" />. <see cref="DnsNameComparer" /> uses it to compare
+    ///     a suffix of a name with a stored name without building the suffix.
+    /// </summary>
+    internal static bool LabelsEqual(
+        IReadOnlyList<byte[]> left,
+        int leftSkip,
+        IReadOnlyList<byte[]> right
+    )
+    {
+        if (left.Count - leftSkip != right.Count)
             return false;
 
-        // DNS names compare case-insensitively (RFC 1035 §3.1), but only for ASCII letters;
+        // DNS names compare case-insensitively (RFC 4343 §3), but only for ASCII letters;
         // any other byte must match exactly.
-        for (int i = 0; i < Labels.Count; i++)
+        for (int i = 0; i < right.Count; i++)
         {
-            byte[] left = Labels[i];
-            byte[] right = other.Labels[i];
+            byte[] leftLabel = left[leftSkip + i];
+            byte[] rightLabel = right[i];
 
-            if (left.Length != right.Length)
+            if (leftLabel.Length != rightLabel.Length)
                 return false;
 
-            for (int j = 0; j < left.Length; j++)
-                if (AsciiUpper(left[j]) != AsciiUpper(right[j]))
+            for (int j = 0; j < leftLabel.Length; j++)
+                if (AsciiUpper(leftLabel[j]) != AsciiUpper(rightLabel[j]))
                     return false;
         }
 
@@ -432,18 +447,35 @@ public sealed class DnsName : IEquatable<DnsName>
         if (cached != 0)
             return cached;
 
-        HashCode hash = new();
-
-        foreach (byte[] label in Labels)
-        foreach (byte b in label)
-            hash.Add(AsciiUpper(b));
-
-        // Zero marks "not computed yet", so a name whose hash is zero stores one instead. Equal
-        // names still agree because every name goes through this same remapping.
-        int computed = hash.ToHashCode();
-        cached = computed == 0 ? 1 : computed;
+        int computed = ComputeHash(Labels, 0);
+        cached = computed;
         hashCode = cached;
         return cached;
+    }
+
+    /// <summary>
+    ///     This method computes the hash code of the labels from <paramref name="skipLabels" /> on,
+    ///     which is the value <see cref="GetHashCode" /> returns for the name those labels form.
+    ///     Reading the labels in place lets <see cref="DnsNameComparer" /> hash a suffix of a name
+    ///     without allocating it.
+    /// </summary>
+    internal static int ComputeHash(IReadOnlyList<byte[]> labels, int skipLabels)
+    {
+        HashCode hash = new();
+
+        for (int i = skipLabels; i < labels.Count; i++)
+        {
+            byte[] label = labels[i];
+
+            for (int j = 0; j < label.Length; j++)
+                hash.Add(AsciiUpper(label[j]));
+        }
+
+        // Zero marks "not computed yet" in the cached field, so a name whose hash is zero hashes
+        // as one instead. Equal names still agree because every name goes through this same
+        // remapping.
+        int computed = hash.ToHashCode();
+        return computed == 0 ? 1 : computed;
     }
 
     /// <summary>

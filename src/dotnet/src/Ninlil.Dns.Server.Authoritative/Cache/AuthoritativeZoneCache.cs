@@ -35,7 +35,9 @@ public sealed class AuthoritativeZoneCache(
     /// <summary>
     ///     This field contains every cached zone, keyed by name.
     /// </summary>
-    private readonly ConcurrentDictionary<DnsName, CachedZone> _zonesByName = new();
+    private readonly ConcurrentDictionary<DnsName, CachedZone> _zonesByName = new(
+        DnsNameComparer.Instance
+    );
 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -130,14 +132,15 @@ public sealed class AuthoritativeZoneCache(
     {
         CachedZone exactMatch = null;
 
-        // Suffix shares the label arrays of name instead of copying them, which is safe because a
-        // DnsName and its labels are never changed after construction. The name's hash is cached
-        // per instance, so each suffix is hashed once for its lookup.
+        // The comparer of _zonesByName lets the dictionary be probed with a label offset of the
+        // query name, so no DnsName is built per suffix. The lookup gives the same answers as
+        // probing with name.Suffix(start).
+        ConcurrentDictionary<DnsName, CachedZone>.AlternateLookup<DnsNameSuffix> suffixes =
+            _zonesByName.GetAlternateLookup<DnsNameSuffix>();
+
         for (int start = 0; start <= name.Labels.Count; start++)
         {
-            DnsName candidate = name.Suffix(start);
-
-            if (!_zonesByName.TryGetValue(candidate, out CachedZone zone))
+            if (!suffixes.TryGetValue(new DnsNameSuffix(name, start), out CachedZone zone))
                 continue;
 
             if (start > 0)
@@ -156,10 +159,11 @@ public sealed class AuthoritativeZoneCache(
         {
             for (int start = 1; start <= name.Labels.Count; start++)
             {
-                DnsName candidate = name.Suffix(start);
-
                 if (
-                    _zonesByName.TryGetValue(candidate, out CachedZone ancestorZone)
+                    suffixes.TryGetValue(
+                        new DnsNameSuffix(name, start),
+                        out CachedZone ancestorZone
+                    )
                     && ancestorZone.GetRecords(name, DnsResourceRecordTypeEnum.NS).Count > 0
                 )
                     return ancestorZone;
