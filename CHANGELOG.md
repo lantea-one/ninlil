@@ -11,8 +11,31 @@ outside Forgejo.
 
 ## Unreleased
 
+### Removed
+
+- **Library API (NuGet).** `IClientIdentityResolver.ResolveAsync` returns
+  `ValueTask<ClientIdentityResolution>` instead of `Task<ClientIdentityResolution>`, so an answer
+  from memory allocates no task. Code that implements the interface changes its return type
+  (`ValueTask.FromResult(...)` replaces `Task.FromResult(...)`); code that awaits the call needs
+  no change, and code that stores the result or awaits it twice must call `AsTask()` first
+  ([#228](https://git.lantea.one/lantea-one/ninlil/issues/228)).
+
 ### Behaviour worth knowing
 
+- **The AAAA record form refuses an IPv4 tail that is followed by `::`.** Text such as `1.2.3.4::`
+  or `0:0:192.0.2.1::` passed the form's check and was refused only by the server. The form now
+  shows "Enter a valid IPv6 address." before it saves.
+  ([#420](https://git.lantea.one/lantea-one/ninlil/issues/420))
+- **The dashboard's Zones tile shows the Zones menu icon.** It showed the product's brand icon. The
+  four At a Glance tiles now take their icons from the menu entries of the same pages.
+  ([#431](https://git.lantea.one/lantea-one/ninlil/issues/431))
+- **An idle MongoDB replica is no longer refused for one check when it is only a moment late with
+  the primary's periodic no-op write.** A lag of more than 2 seconds is read again after 2 seconds
+  and the second reading decides, so a replica that catches up in between stays eligible and a
+  stuck one is still refused. A refused replica sends its reads to the primary until the next
+  check, so this removes a short performance dip, not a correctness problem. See
+  [read replicas](./README.md#read-replicas-and-database-clusters)
+  ([#432](https://git.lantea.one/lantea-one/ninlil/issues/432)).
 - **IPv6 addresses with an IPv4 tail are sent with the right bytes, and malformed IPv6 text is
   refused.** In APL records and DHCP option values, the console turned the IPv4 part of
   `::ffff:192.0.2.1` into wrong bytes and sent them without an error; such an address is now sent

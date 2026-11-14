@@ -33,11 +33,11 @@ public sealed class FakeClientIdentityResolver : IClientIdentityResolver
     ) => _resolutions = new Dictionary<IPAddress, ClientIdentityResolution>(resolutions);
 
     /// <inheritdoc />
-    public Task<ClientIdentityResolution> ResolveAsync(
+    public ValueTask<ClientIdentityResolution> ResolveAsync(
         IPAddress remoteAddress,
         CancellationToken stoppingToken = default
     ) =>
-        Task.FromResult(
+        ValueTask.FromResult(
             _resolutions.TryGetValue(remoteAddress, out ClientIdentityResolution resolution)
                 ? resolution
                 : null
