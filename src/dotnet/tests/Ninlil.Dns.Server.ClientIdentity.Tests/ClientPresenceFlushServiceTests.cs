@@ -419,9 +419,9 @@ public sealed class ClientPresenceFlushServiceTests : IAsyncLifetime
         ) => _map[address] = new ClientIdentityResolution(identifier, version);
 
         /// <inheritdoc />
-        public Task<ClientIdentityResolution> ResolveAsync(
+        public ValueTask<ClientIdentityResolution> ResolveAsync(
             IPAddress remoteAddress,
             CancellationToken stoppingToken = default
-        ) => Task.FromResult(_map.GetValueOrDefault(remoteAddress));
+        ) => ValueTask.FromResult(_map.GetValueOrDefault(remoteAddress));
     }
 }

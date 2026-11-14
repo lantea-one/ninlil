@@ -84,7 +84,7 @@ describe('DashboardStatsService', () => {
     expect(webhooksApiSpy.apiWebhooksGet).toHaveBeenCalledWith({ skip: 0, take: 1 });
 
     expect(stats).toEqual([
-      { label: 'Zones', icon: 'cilLan', count: 12 },
+      { label: 'Zones', icon: 'cilGlobeAlt', count: 12 },
       { label: 'Forwarders', icon: 'cilShareAll', count: 3 },
       { label: 'Filter Lists', icon: 'cilBan', count: 2 },
       { label: 'Webhooks', icon: 'cilLink', count: 0 },
