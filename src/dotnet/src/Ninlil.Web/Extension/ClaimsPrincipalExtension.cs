@@ -5,12 +5,12 @@ using System.Security.Claims;
 namespace Ninlil.Web.Extension;
 
 /// <summary>
-///     This class provides our <see cref="ClaimsPrincipal" /> extension for reading the caller's
-///     user identifier. It reads the <c>sub</c> claim that
+///     This class provides our <see cref="ClaimsPrincipal" /> extensions for reading the caller's
+///     user identifier and user name. They read the <c>sub</c> and <c>unique_name</c> claims that
 ///     <see cref="Ninlil.Dns.Identity.Claims.UserClaimsBuilder" /> puts on every access token,
 ///     rather than using <c>UserManager&lt;TUser&gt;.GetUserAsync</c>, which looks for
 ///     <see cref="ClaimTypes.NameIdentifier" />, a claim these tokens do not carry. Reading the
-///     claim by name also avoids depending on the inbound claim-type mapping a JWT handler
+///     claims by name also avoids depending on the inbound claim-type mapping a JWT handler
 ///     version applies.
 /// </summary>
 public static class ClaimsPrincipalExtension
@@ -25,5 +25,19 @@ public static class ClaimsPrincipalExtension
         string subject = instance.FindFirstValue(JwtRegisteredClaimNames.Sub);
 
         return Guid.TryParse(subject, out Guid userId) ? userId : null;
+    }
+
+    /// <summary>
+    ///     This method reads the caller's user name from the <c>unique_name</c> claim. With inbound
+    ///     claim mapping off, <c>User.Identity.Name</c> and <see cref="ClaimTypes.Name" /> find no
+    ///     such claim, so this is the one way to get the name.
+    /// </summary>
+    /// <param name="instance">The current <see cref="ClaimsPrincipal" /> instance.</param>
+    /// <returns>The caller's user name, or <see langword="null" /> if the claim is missing or blank.</returns>
+    public static string GetUserName(this ClaimsPrincipal instance)
+    {
+        string userName = instance.FindFirstValue(JwtRegisteredClaimNames.UniqueName);
+
+        return string.IsNullOrWhiteSpace(userName) ? null : userName;
     }
 }

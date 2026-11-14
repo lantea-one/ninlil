@@ -1,8 +1,8 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Ninlil.Dns.Common.Exceptions;
 using Ninlil.Dns.Identity.Authorization;
 using Ninlil.Web.Examples.Storage;
+using Ninlil.Web.Extension;
 using Ninlil.Web.Models;
 using Ninlil.Web.Services.Storage;
 using Swashbuckle.AspNetCore.Filters;
@@ -81,7 +81,7 @@ public class StorageController(IStorageEngineSwitchService switchService) : Cont
 
         StorageSwitchScheduled scheduled = await switchService.ScheduleSwitchAsync(
             new StorageEngineSwitchRequest(request.TargetEngine, connectionString),
-            User.FindFirstValue(ClaimTypes.Name) ?? User.Identity?.Name ?? "unknown",
+            User.GetUserName() ?? "unknown",
             stoppingToken
         );
 

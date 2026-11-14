@@ -32,6 +32,9 @@ outside Forgejo.
   `TlsCertificateOptions.SelfSignedSubjectAlternativeNames` are empty unless a list is saved;
   read `EffectiveScopes` and `EffectiveSelfSignedSubjectAlternativeNames` for what applies.
   ([#448](https://git.lantea.one/lantea-one/ninlil/issues/448))
+- **A pending storage switch names the administrator who requested it.** `pendingSwitch.requestedBy`
+  in `GET /api/storage` showed `unknown` for every signed-in user; it now holds the user name.
+  ([#449](https://git.lantea.one/lantea-one/ninlil/issues/449))
 - **The AAAA record form refuses an IPv4 tail that is followed by `::`.** Text such as `1.2.3.4::`
   or `0:0:192.0.2.1::` passed the form's check and was refused only by the server. The form now
   shows "Enter a valid IPv6 address." before it saves.
