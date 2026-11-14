@@ -35,6 +35,9 @@ Ninlil takes no backups by itself.
 4. To restore: a running Ninlil you can sign in to, and the `.ltbk` file. A restore replaces the
    accounts too, so sign-in afterwards uses the accounts from the backup.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Create a backup
 
 1. In the console, open **Backup & Restore** (`/backup`), enter the passphrase twice and choose
@@ -44,9 +47,17 @@ Ninlil takes no backups by itself.
     curl -k -o ninlil-backup.ltbk https://127.0.0.1:18443/api/backup -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' -d '{"passphrase":"<passphrase>"}'
     ```
 
-    The file `ninlil-backup.ltbk` appears in the current folder. Without a `passphrase`, Ninlil writes
-    the file unencrypted. An unencrypted file holds the key ring and the certificate's private key in
-    plain text, so always set a passphrase.
+    The file `ninlil-backup.ltbk` appears in the current folder. `curl -o` creates it with your
+    shell's default permissions, which usually let other users read it. The file holds your whole
+    configuration, even though it is encrypted, so restrict it at once (or run `umask 077` before the
+    call):
+
+    ```bash
+    chmod 600 ninlil-backup.ltbk
+    ```
+
+    Without a `passphrase`, Ninlil writes the file unencrypted. An unencrypted file holds the key
+    ring and the certificate's private key in plain text, so always set a passphrase.
 2. Copy the file to a place that is not on the same machine, and keep the passphrase elsewhere.
 
 ### Check that it worked

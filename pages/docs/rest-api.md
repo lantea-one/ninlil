@@ -41,6 +41,9 @@ Two kinds of credential work, and both carry the permissions of the account behi
 
 Each call needs the permission its route names, such as `zones:write`.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 ### Sign in
@@ -180,7 +183,8 @@ A used, revoked or expired refresh token answers `401`.
 
     `"oneTime":true` makes a token that works for one call. Add
     `"expiresAtUtc":"2027-08-31T00:00:00+00:00"` to give it an end date. In the console:
-    **API Tokens**, **New**.
+    **API Tokens**, **New**. A token without an end date stays valid until you revoke it, so give a
+    script's token an end date or revoke it when you stop using it.
 2. Use it with the header `Authorization: ApiToken <raw-token>`. The word is `ApiToken`, not
    `Bearer`:
 

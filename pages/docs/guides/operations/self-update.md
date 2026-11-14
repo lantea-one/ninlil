@@ -28,6 +28,9 @@ Host a feed yourself, on any web server, when you want the notice.
     {"configured":false,"currentVersion":"0.0.0.0","latestKnownVersion":null,"updateAvailable":false,"releaseUrl":null,"releaseNotes":null,"lastCheckedAtUtc":"...","lastCheckError":null,"updateInstructions":"No release feed is configured yet -- set one in Self-Update Settings to enable checking for a newer release."}
     ```
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Set up the notifier
 
 1. Write the feed file. Only `version` is required. Write the version in the same numeric form as

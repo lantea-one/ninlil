@@ -65,6 +65,9 @@ The Storage page (**Settings**, **Storage**, `/settings/storage`) names the engi
 curl -k https://127.0.0.1:18443/api/storage -H "Authorization: Bearer <token>"
 ```
 
+`-k` skips the certificate check, which is safe only on the machine that runs Ninlil; see
+[Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ```text
 {"engine":"PostgreSql","pendingSwitch":null,"lastSwitchOutcome":null,"switchSupportedEngines":["Sqlite","PostgreSql","MySql","SqlServer"],"primary":{"hosts":["127.0.0.1:32768"]},"readReplica":null, ...}
 ```

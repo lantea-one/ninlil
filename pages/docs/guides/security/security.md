@@ -19,6 +19,9 @@ and from direct grants. The permission `*` allows everything.
 3. The location of the data directory. The [first run](../../getting-started/first-run.md) page
    lists it for each installation.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Protect the data directory
 
 The data directory holds the database, the key ring, the JWT signing key and the TLS certificate
@@ -244,11 +247,12 @@ an authenticator like this:
     ```
 
     ```text
-    {"sharedKey":"GSCV7VZ6VLM7FYVPH5HKDJBRF5QE47T5","authenticatorUri":"otpauth://totp/Ninlil.Dns:alice?secret=GSCV7VZ6VLM7FYVPH5HKDJBRF5QE47T5&issuer=Ninlil.Dns&digits=6"}
+    {"sharedKey":"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ","authenticatorUri":"otpauth://totp/Ninlil.Dns:alice?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Ninlil.Dns&digits=6"}
     ```
 
-    Enter `sharedKey` in an authenticator app, or scan `authenticatorUri` as a QR code. The values
-    differ every time.
+    Enter `sharedKey` in an authenticator app, or scan `authenticatorUri` as a QR code. The sample
+    `sharedKey` above is the RFC 6238 test secret, not a real one. The values you get differ every
+    time.
 2. Confirm it with the six-digit code the app shows. Confirming ends every session of the account,
    this one included:
 

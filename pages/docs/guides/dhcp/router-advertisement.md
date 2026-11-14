@@ -15,6 +15,9 @@ Ninlil announces, add the prefix and start the service. The README is the
 3. The right to open a raw ICMPv6 socket: `CAP_NET_RAW` or root. In a container, see
    [Docker](../../docker.md).
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Advertise the network
 Router Advertisement (RA) lets a device build its own IPv6 address and find its router. Ninlil
 advertises nothing while the content is empty.

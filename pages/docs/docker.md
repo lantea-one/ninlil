@@ -92,6 +92,11 @@ docker run -d --name ninlil --network host \
   git.lantea.one/lantea-one/ninlil:latest
 ```
 
+This container runs as root and shares the host's network namespace, so it sees every interface of
+the host and its listeners bind the host's ports directly, with no Docker port mapping in between.
+Use it only on a host you trust with that. Files it writes to the volume are root-owned: the
+non-root container (user `1654`) cannot write them until you hand the volume back with `chown`.
+
 DHCP and Router Advertisement need two capabilities: `NET_RAW` (the Router Advertisement socket)
 and `NET_BIND_SERVICE` (ports 67 and 547). Docker gives both to a container by default, so the
 command adds none. If you start the container with `--cap-drop ALL`, add

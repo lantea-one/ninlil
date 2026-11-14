@@ -61,6 +61,9 @@ Four services take part, and each is off until you turn it on:
 You can create scopes, reservations and options without opening any port: the REST API only
 stores them. A device gets an answer once the service for its protocol runs.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Create a scope and turn on DHCPv4
 
 1. Create the scope for your network. A duration is written `hours:minutes:seconds`, or

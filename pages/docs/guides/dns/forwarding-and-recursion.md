@@ -34,6 +34,9 @@ Ninlil validates DNSSEC for forwarded and recursive answers.
 
     Your addresses differ. No output and a `timed out` message mean a firewall blocks the path.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 ### Allow recursive service
@@ -103,7 +106,7 @@ query for a name it does not host with `REFUSED`. Choose one of two ways.
     | `[2620:fe::fe]:53` | Plain DNS over IPv6. A port after an IPv6 address needs brackets. |
     | `tls://dns.quad9.net` | DNS-over-TLS, port 853 unless you add `:<port>`. The host name is also the name Ninlil expects in the server's certificate. |
     | `https://dns.quad9.net/dns-query` | DNS-over-HTTPS. |
-    | `quic://dns.example.net` | DNS-over-QUIC, port 853 unless you add `:<port>`. Needs `libmsquic` 2.4.20 or later on this host. |
+    | `quic://dns.example.net` | DNS-over-QUIC, port 853 unless you add `:<port>`. Needs `libmsquic` 2.4.20 or later on the host. |
     | `sdns://...` | A DNSCrypt stamp. See [Encrypted transports and DNS64](encrypted-transports.md). |
 
     Ninlil checks the syntax when you save and never looks a host name up at that point. A definition
@@ -139,7 +142,8 @@ that know it. The closest enabled zone above the queried name wins.
 
 7. DNSSEC validation is on by default. A private domain has no chain of trust from the public root,
    so validation fails for it. Put the domain on the Insecure domains list. A name at or below an
-   entry skips validation and is answered without the AD bit. Saving a list replaces the built-in
+   entry skips validation and is answered without the AD bit, so a forged answer for such a name is
+   accepted: list only domains you control. Saving a list replaces the built-in
    one, so repeat the built-in names you still need (`home.arpa` and `internal` here):
 
     ```bash
@@ -228,6 +232,8 @@ that know it. The closest enabled zone above the queried name wins.
 - Recursion uses QNAME minimization (RFC 9156), serves an expired answer when servers are unreachable
   (RFC 8767) and keeps the root trust anchors up to date (RFC 5011). A network that blocks DNSSEC
   data needs `NINLIL_DNS_SERVER_RECURSIVE_ENABLE_DNSSEC_VALIDATION=false`, or clients get `SERVFAIL`.
+  With validation off, Ninlil does not check the DNSSEC signatures of recursive and forwarded
+  answers, so a forged answer is accepted. Turn it off only on a network that blocks DNSSEC data.
 - The README holds the full rules:
   [Forwarding and recursion](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#forwarding-and-recursion).
 

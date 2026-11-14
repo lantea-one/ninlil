@@ -23,6 +23,9 @@ key:
 4. To publish the DS record for a zone that is not a child of a zone Ninlil hosts: a login to your
    registrar or to the parent zone's DNS provider.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 ### Sign a zone

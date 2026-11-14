@@ -28,6 +28,9 @@ environment, it is plaintext and wins over a saved one.
 4. Know the data directory, which holds the key ring
    ([First run](../../getting-started/first-run.md)).
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Save the secrets in the admin console or through the API
 
 1. Open **Settings**, then **Single sign-on**. Enter the authority, the client ID and the client

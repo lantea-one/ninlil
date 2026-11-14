@@ -55,6 +55,12 @@ webhook subscriptions, DHCP data, clients, TLS certificates or the JWT signing k
 
     Note the `id` of each. The commands call them `<bootstrap-user-id>` and `<bootstrap-role-id>`.
 
+The commands that name a node (`<node-a>`, `<node-b>`) call another machine with `curl -k`, which
+skips the certificate check, so anyone in the path could pose as that node and read the token. Run
+them only on a network you trust, or install a trusted certificate on each node and leave `-k` out.
+The other examples call `127.0.0.1`; see
+[Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Form a cluster
 
 Node A invites, node B joins.

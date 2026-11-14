@@ -22,6 +22,9 @@ check. Ninlil stores the certificate as a PKCS#12 file (`.pfx`) and renews it be
 5. Optional: an e-mail address for the CA to reach you. Ninlil registers every address you list as a
    `mailto:` contact (RFC 8555 §7.3). With none, the account has no contact.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 1. Change the ACME settings. `domains` lists every name a certificate is wanted for, one certificate

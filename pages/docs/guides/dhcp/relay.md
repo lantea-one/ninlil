@@ -14,6 +14,9 @@ network. Each protocol runs either as Ninlil's server or as a relay, never both.
 3. A DHCP server on another network, with an enabled scope that covers the relay's address on the
    clients' network.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Forward requests to an upstream server
 A relay agent forwards the requests of its network to a DHCP server somewhere else. Each protocol
 runs either as Ninlil's server or as a relay, chosen at start, never both.

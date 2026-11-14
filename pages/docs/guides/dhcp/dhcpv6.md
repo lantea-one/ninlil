@@ -16,6 +16,9 @@ scope for prefix delegation. DHCPv6 answers on UDP port `547` (RFC 9915). The RE
    `CAP_NET_BIND_SERVICE`, see [Ports](../../reference/ports.md)). The scope and reservation rules
    in [DHCPv4 scopes, reservations and leases](dhcp.md) apply to DHCPv6 scopes too.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Turn on DHCPv6 and create scopes
 
 1. Start the service, then save the switch with the `dhcpv6-protocol` section (the variable is

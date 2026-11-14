@@ -49,6 +49,9 @@ it keeps `Secondary`, `SecondaryCatalog`, `SecondaryForwarder` and `Stub` zones.
 4. Clocks on the two servers that differ by less than 300 seconds. A TSIG signature carries the time
    it was made, and a difference above the fudge (300 seconds by default) fails verification.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 ### On the primary

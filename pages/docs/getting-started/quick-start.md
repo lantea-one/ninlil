@@ -26,6 +26,14 @@ and asks the server for that record. It changes nothing outside the folder you r
     Netid State  Recv-Q Send-Q Local Address:Port Peer Address:Port
     ```
 
+## Self-signed certificate
+
+Ninlil generates a self-signed TLS certificate, so `curl` cannot check it. `-k` turns the
+certificate check off for that one command. That is safe only for a call to `127.0.0.1` from the
+machine that runs Ninlil. On a network, `-k` lets anyone in the path pose as the server and read the
+token. For a call from another machine, serve a trusted certificate
+([Certificates (ACME)](../guides/dns/certificates-acme.md)) and leave `-k` out.
+
 ## Steps
 
 1. Get the executable: follow steps 1 to 3 of

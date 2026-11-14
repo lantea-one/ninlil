@@ -61,6 +61,9 @@ for DoH.
     Without a line, install it as the
     [installation guide](../../getting-started/installation/index.md) for your install type says.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 ### Turn on DNS-over-TLS
