@@ -583,8 +583,8 @@ QUIC peer advertises the minimum UDP payload size over IPv4. See
 
    `<version>` is the date version, such as `2026.10.09.1`: the tag without the `v` and without
    `R<short-sha>`. `<tag>` below is the full tag, as in [Download a binary](#download-a-binary).
-   A pre-release build's version carries the branch and commit (`2026.10.09.3~develop.a1b2c3d` for a Deb,
-   `2026.10.09.3-0.develop.a1b2c3d` for an RPM); it sorts below the release it precedes.
+   A pre-release build's version carries the branch and commit (`2026.10.09.3~develop.a1b2c3d`
+   for a Deb, `2026.10.09.3-0.develop.a1b2c3d` for an RPM); it sorts below the release it precedes.
 
 2. Download the package and the checksum list, then check the download. Replace `<tag>` with the
    release's tag and the file name with yours:
@@ -3082,8 +3082,8 @@ A records (RFC 6147 §5.1.2), and an answer that failed DNSSEC validation never 
    www.example.test.	3600	IN	A	192.0.2.10
    ```
 
-   Always pass `+tls-ca` for a check. `dig` 9.20.30 answered without it and did not verify the
-   certificate, so an answer without `+tls-ca` proves nothing about the certificate.
+   Always pass `+tls-ca` for a check. Without it `dig` (9.20) answers and does not verify the
+   certificate, so that answer proves nothing about the certificate.
 2. DNS-over-HTTPS. The `dns` parameter is the query in base64url. This one asks for `www.example.com`
    type A. The status line and the media type show a DNS answer:
 

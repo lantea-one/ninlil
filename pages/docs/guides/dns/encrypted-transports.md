@@ -211,8 +211,8 @@ That is safe only on the machine that runs Ninlil; see [Self-signed certificate]
     www.example.test.	3600	IN	A	192.0.2.10
     ```
 
-    Always pass `+tls-ca` for a check. `dig` 9.20.30 answered without it and did not verify the
-    certificate, so an answer without `+tls-ca` proves nothing about the certificate.
+    Always pass `+tls-ca` for a check. Without it `dig` (9.20) answers and does not verify the
+    certificate, so that answer proves nothing about the certificate.
 2. DNS-over-HTTPS. The `dns` parameter is the query in base64url. This one asks for `www.example.com`
    type A. The status line and the media type show a DNS answer:
 
