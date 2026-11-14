@@ -281,6 +281,14 @@ dark theme. Every visit checks that there is no script error, that every same-or
 below 400, that a heading is visible, that nothing overflows horizontally and that the network goes
 idle. The harness is not part of the pipeline: run it by hand after a change to the console.
 
+Chromium aborts its open sockets when the machine's IP addresses change, for example when a
+container that stays up on the same host gets an address. That shows up as `net::ERR_NETWORK_CHANGED`
+or a SignalR close with code 1006. The harness watches the addresses itself and, when a visit fails
+while they changed, signs the user in again and runs that visit once more, keeping only the second
+attempt. The sign-in matters because an aborted token refresh can end the session. The report counts
+such visits and lists each one in its notes, so a run beside container starts on the same machine
+can show them; with a stable address set the same errors still fail.
+
 #### Before you start
 
 1. Build the backend and the console as in
