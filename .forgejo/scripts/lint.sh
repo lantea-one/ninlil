@@ -18,8 +18,11 @@
 #      src/script/development/file-scoped-namespaces.sh converts.
 #   4. The agent definitions of every coding assistant (.claude/, .gemini/, .agents/, .codex/)
 #      match the roles in src/agents/ (src/script/development/sync-agent-definitions.py --check).
-#   5. Every relative link and #anchor in the tracked Markdown files resolves
-#      (.forgejo/scripts/check-markdown-links.py; external URLs are not fetched).
+#   5. Every relative link and #anchor in the tracked Markdown files resolves, the wiki under
+#      pages/docs/ included. A link to a repository file on the Forgejo web interface
+#      (https://git.lantea.one/lantea-one/ninlil/src/branch/main/...) is checked against the
+#      working tree too (.forgejo/scripts/check-markdown-links.py; other external URLs are not
+#      fetched).
 #   6. Every .forgejo/scripts/tests/*.test.sh.
 #
 # Inputs: none; run from anywhere (it changes to the repository root). Needs shellcheck,

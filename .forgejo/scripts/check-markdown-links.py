@@ -16,7 +16,12 @@ For each tracked *.md file (git ls-files, minus anything under node_modules) it 
 Fenced code blocks (``` and ~~~), inline code spans and HTML comments are ignored when finding
 links. Indented code blocks are not: nested list content uses the same indentation, and telling
 the two apart needs a full CommonMark parser, so a link-like text there is checked like a link.
-Links with a scheme (https:, mailto:, ...) are skipped unless external checking is on.
+A link to a file of this repository on the Forgejo web interface, such as
+`https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#ports`, is checked like a
+root-relative link against the working tree: the file must exist and the anchor must match a
+heading. The wiki under pages/docs/ uses these links to reach files outside its own folder, which
+MkDocs cannot link to by path.
+Other links with a scheme (https:, mailto:, ...) are skipped unless external checking is on.
 
 Usage: python3 -I .forgejo/scripts/check-markdown-links.py [--external]
 Inputs: run from inside the git repository (it works on the repository root). `--external`, or
@@ -44,6 +49,8 @@ INLINE_LINK = re.compile(r"\]\(\s*(?:<([^<>\n]*)>|((?:[^()\s]|\([^()\s]*\))*))")
 HTML_COMMENT = re.compile(r"<!--.*?-->")
 REFERENCE_DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?(\S+?)>?(?:\s|$)")
 HTML_LINK = re.compile(r"""\b(?:href|src)\s*=\s*["']([^"']+)["']""")
+# A file of this repository on the Forgejo web interface, on a long-lived branch.
+FORGE_FILE = re.compile(r"^https://git\.lantea\.one/lantea-one/ninlil/src/branch/(?:main|develop)/(.*)$")
 HTML_ANCHOR = re.compile(r"""<a\s[^>]*?\b(?:id|name)\s*=\s*["']([^"']+)["']""")
 
 
@@ -187,6 +194,9 @@ def main(arguments):
         for number, target in document.links:
             if not target:
                 continue
+            forge_file = FORGE_FILE.match(target)
+            if forge_file:
+                target = "/" + forge_file.group(1)
             if SCHEME.match(target) or target.startswith("//"):
                 if external and target.lower().startswith(("http:", "https:")):
                     external_urls.setdefault(target, []).append((name, number))

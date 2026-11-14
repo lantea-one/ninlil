@@ -1,0 +1,66 @@
+name: 'Publish Wiki'
+##
+## Builds the wiki under pages/ with MkDocs in strict mode and publishes it to
+## https://lantea-one.pages.lantea.one/ninlil/ on the git-pages server pages.lantea.one.
+## A push to main that changes pages/** or this workflow publishes. A run can also be started by
+## hand ("Run workflow" on the Actions page); a hand-started run of any branch other than main
+## builds nothing and publishes nothing.
+##
+## Input: a push to main, or a hand-started run.
+## Output: the site in pages/site/ (built by .forgejo/scripts/build-wiki.sh in the docs toolchain
+## container of docker/ci.Dockerfile), uploaded to the site above. The upload authenticates with
+## the run's own token; the repository needs no secret.
+##
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'pages/**'
+      - '.forgejo/workflows/pages.yml'
+##
+## Two runs never upload at the same time: the later run waits for the earlier one.
+##
+concurrency:
+  group: 'pages-publish'
+  cancel-in-progress: false
+##
+## The upload authenticates with the run's token, which is given write access to the repository.
+##
+permissions:
+  contents: write
+jobs:
+  ##
+  ## Builds and uploads. The condition keeps every other branch from publishing.
+  ##
+  publish:
+    name: 'Build and Publish'
+    if: >-
+      forgejo.ref == 'refs/heads/main'
+    runs-on: 'asgard'
+    timeout-minutes: 15
+    steps:
+      ##
+      - name: 'Checkout Sources'
+        uses: 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' # v7.0.1
+        with:
+          clean: true
+          ref: '${{ forgejo.sha }}'
+      ##
+      - name: 'Build the Wiki'
+        run: |-
+          .forgejo/scripts/in-container.sh docs .forgejo/scripts/build-wiki.sh
+      ##
+      ## The action is pinned to the newest commit of the v2 branch of git-pages/action. It follows
+      ## the tag v2.2.0, which has no strict or comment input: later commits added both.
+      ##
+      - name: 'Publish the Wiki'
+        uses: 'https://codeberg.org/git-pages/action@7f9731f428a25eaf47b42794263a0c100af9a363' # v2 branch, after v2.2.0
+        with:
+          site: 'https://lantea-one.pages.lantea.one/ninlil/'
+          server: 'pages.lantea.one'
+          token: '${{ forgejo.token }}'
+          source: 'pages/site/'
+          strict: true
+          comment: '${{ forgejo.sha }}'

@@ -15,7 +15,7 @@
 # SHA-256> with the label ninlil.builder=<toolchain>, and runs the container from that tag. It never
 # removes an image; the hourly cleanup workflow removes builders of other Dockerfile versions.
 #
-# Usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages> <command> [argument...]
+# Usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages|docs> <command> [argument...]
 #   --docker  Also hands the container the host's Docker socket, for the tests that start
 #             database containers (Testcontainers), and routes those containers' published ports
 #             back through the host gateway.
@@ -31,7 +31,7 @@ if [[ "${1:-}" == '--docker' ]]; then
     docker_socket=true
     shift
 fi
-toolchain="${1:?usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages> <command> [argument...]}"
+toolchain="${1:?usage: in-container.sh [--docker] <dotnet|node|arch|lint|packages|docs> <command> [argument...]}"
 shift
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

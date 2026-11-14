@@ -1,0 +1,129 @@
+## MkDocs configuration of the Ninlil wiki.
+##
+## What it does: builds the Markdown under pages/docs/ into the static site in pages/site/
+## (git-ignored) with the Material theme. Build it with .forgejo/scripts/build-wiki.sh in the
+## docs toolchain container (docker/ci.Dockerfile, target docs).
+## .forgejo/workflows/pages.yml publishes the site to the site_url below from main.
+##
+## Inputs: pages/docs/**/*.md. Output: pages/site/.
+##
+## The site makes no request to another host when a reader opens it: font loading is off (the
+## browser's own fonts are used), search runs in the browser from an index inside the site, and no
+## analytics or embed is configured.
+##
+site_name: 'Ninlil'
+site_description: 'Documentation for Ninlil, a DNS, DHCPv4, DHCPv6 and Router Advertisement server.'
+site_url: 'https://lantea-one.pages.lantea.one/ninlil/'
+repo_url: 'https://git.lantea.one/lantea-one/ninlil'
+repo_name: 'lantea-one/ninlil'
+edit_uri: 'src/branch/develop/pages/docs/'
+docs_dir: 'docs'
+site_dir: 'site'
+## Any warning (a broken link, an unknown key) fails the build.
+strict: true
+use_directory_urls: true
+theme:
+  name: 'material'
+  language: 'en'
+  ## No font is fetched from a third-party host.
+  font: false
+  ## Light and dark follow the system setting; the header toggle lets a reader override it.
+  palette:
+    - media: '(prefers-color-scheme)'
+      toggle:
+        icon: 'material/brightness-auto'
+        name: 'Colour scheme: system setting'
+    - media: '(prefers-color-scheme: light)'
+      scheme: 'default'
+      primary: 'indigo'
+      accent: 'indigo'
+      toggle:
+        icon: 'material/brightness-7'
+        name: 'Colour scheme: light'
+    - media: '(prefers-color-scheme: dark)'
+      scheme: 'slate'
+      primary: 'indigo'
+      accent: 'indigo'
+      toggle:
+        icon: 'material/brightness-4'
+        name: 'Colour scheme: dark'
+  features:
+    - 'navigation.tabs'
+    - 'navigation.sections'
+    - 'navigation.indexes'
+    - 'navigation.top'
+    - 'navigation.path'
+    - 'toc.follow'
+    - 'search.suggest'
+    - 'search.highlight'
+    - 'content.code.copy'
+    - 'content.action.edit'
+## Built-in search only: the index is part of the site and runs in the browser.
+plugins:
+  - 'search'
+markdown_extensions:
+  - 'admonition'
+  - 'attr_list'
+  - 'def_list'
+  - 'tables'
+  - 'toc':
+      permalink: true
+  - 'pymdownx.details'
+  - 'pymdownx.superfences'
+  - 'pymdownx.highlight':
+      anchor_linenums: false
+  - 'pymdownx.inlinehilite'
+extra:
+  ## No analytics and no "made with" footer.
+  generator: false
+## The navigation: every page under pages/docs/ appears here, grouped as the reader looks for it.
+nav:
+  - 'Home': 'index.md'
+  - 'Getting started':
+      - 'What Ninlil is': 'getting-started/what-is-ninlil.md'
+      - 'Quick start': 'getting-started/quick-start.md'
+      - 'Installation':
+          - 'Choose an installation': 'getting-started/installation/index.md'
+          - 'Download a binary': 'getting-started/installation/binary.md'
+          - 'Windows': 'getting-started/installation/windows.md'
+          - 'Arch Linux': 'getting-started/installation/arch-linux.md'
+          - 'Debian, Ubuntu, Fedora, RHEL and Rocky Linux': 'getting-started/installation/deb-and-rpm.md'
+          - 'Build and run from source': 'getting-started/installation/from-source.md'
+      - 'First run': 'getting-started/first-run.md'
+  - 'Configuration': 'configuration.md'
+  - 'Guides':
+      - 'Overview': 'guides/index.md'
+      - 'DNS':
+          - 'Zones and records': 'guides/dns/zones-and-records.md'
+          - 'DNSSEC': 'guides/dns/dnssec.md'
+          - 'Secondary zones and transfers': 'guides/dns/secondary-zones.md'
+          - 'Cloud DNS sync': 'guides/dns/cloud-dns-sync.md'
+          - 'Certificates (ACME)': 'guides/dns/certificates-acme.md'
+          - 'Forwarding and recursion': 'guides/dns/forwarding-and-recursion.md'
+          - 'Filtering, rewrites and parental controls': 'guides/dns/filtering.md'
+          - 'Encrypted transports and DNS64': 'guides/dns/encrypted-transports.md'
+      - 'DHCP':
+          - 'DHCPv4 scopes, reservations and leases': 'guides/dhcp/dhcp.md'
+          - 'DHCPv6 and prefix delegation': 'guides/dhcp/dhcpv6.md'
+          - 'Router Advertisement': 'guides/dhcp/router-advertisement.md'
+          - 'Relay agent': 'guides/dhcp/relay.md'
+          - 'TFTP and PXE': 'guides/dhcp/tftp-and-pxe.md'
+      - 'Security':
+          - 'Security': 'guides/security/security.md'
+          - 'Single sign-on and e-mail secrets': 'guides/security/sso-and-email-secrets.md'
+      - 'Operations':
+          - 'Clustering, events and webhooks': 'guides/operations/clustering.md'
+          - 'Storage': 'guides/operations/storage.md'
+          - 'Backup and restore': 'guides/operations/backup-and-restore.md'
+          - 'Self-update': 'guides/operations/self-update.md'
+  - 'Admin console': 'admin-console.md'
+  - 'REST API': 'rest-api.md'
+  - 'Docker': 'docker.md'
+  - 'Upgrades': 'upgrades.md'
+  - 'Troubleshooting': 'troubleshooting.md'
+  - 'Reference':
+      - 'Overview': 'reference/index.md'
+      - 'Environment variables': 'reference/environment-variables.md'
+      - 'Ports': 'reference/ports.md'
+      - 'Exit codes': 'reference/exit-codes.md'
+      - 'Releases and versioning': 'reference/releases-and-versioning.md'

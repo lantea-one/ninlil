@@ -18,6 +18,7 @@ time; later, jump to the part you need.
   - [Add a migration](#add-a-migration)
   - [Add a setting](#add-a-setting)
   - [Add a console page](#add-a-console-page)
+  - [Change the wiki](#change-the-wiki)
 - [Build the binaries and packages](#build-the-binaries-and-packages)
 - [Report a bug or propose a change](#report-a-bug-or-propose-a-change)
 - [Commit, branch and pull request](#commit-branch-and-pull-request)
@@ -647,6 +648,51 @@ component, each in its own subfolder. Feature pages follow that "list + form" sh
 #### Check that it worked
 
 All four commands exit with code 0, and the smoke harness reports `failed: 0`.
+
+### Change the wiki
+
+The wiki lives in `pages/` (`pages/mkdocs.yml` and the Markdown under `pages/docs/`). It is
+documentation: change it together with the [README](./README.md) when behaviour a user sees
+changes.
+
+#### Before you start
+
+Docker is installed (`docker --version`). The build runs in the pinned `docs` toolchain container,
+so MkDocs needs no installation on your machine.
+
+#### Steps
+
+1. Build the wiki in strict mode. Any warning, such as a broken link, fails the build:
+
+   ```bash
+   ./.forgejo/scripts/in-container.sh docs ./.forgejo/scripts/build-wiki.sh
+   ```
+
+2. To add a page, create `pages/docs/<area>/<name>.md` with one `#` heading, then add it to `nav:` in
+   `pages/mkdocs.yml`. A page outside `nav:` builds but nobody finds it.
+3. Link to another page by relative path (`../reference/ports.md`). MkDocs cannot link to a file
+   outside `pages/docs/`, so link to the README, `ENVIRONMENT.md` and other repository files by
+   their web address, for example
+   `https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#ports`. The lint job checks
+   such a link against the working tree.
+4. Preview the result in a browser:
+
+   ```bash
+   python3 -m http.server 8000 --bind 127.0.0.1 --directory pages/site
+   ```
+
+   Open `http://127.0.0.1:8000/`. Press Ctrl+C to stop it.
+5. Run the link check, which covers `pages/docs/` like every tracked Markdown file:
+
+   ```bash
+   python3 -I .forgejo/scripts/check-markdown-links.py
+   ```
+
+#### Check that it worked
+
+The build ends with `Documentation built in <n> seconds` and no `WARNING` line, and the link check
+ends with `0 problems.`. A push to `main` that changes `pages/**` publishes the site
+(`.forgejo/workflows/pages.yml`).
 
 ## Build the binaries and packages
 
