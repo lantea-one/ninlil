@@ -37,9 +37,12 @@ public class TsigKeyEntity : AuditableEntityBase
 
     /// <summary>
     ///     This property indicates whether the key is disabled. A disabled key is kept but treated as
-    ///     unknown: signing or verifying with it fails with a TSIG BADKEY error. Key lookups are cached
-    ///     for up to 10 seconds (<c>TsigKeyLookupCache</c>), so disabling or deleting a key takes up
-    ///     to that long to stop it verifying.
+    ///     unknown: signing or verifying with it fails with a TSIG BADKEY error. Keys are held in
+    ///     memory (<c>TsigKeyLookupCache</c>). A change made on this node applies to the next
+    ///     message. A change made on another node, or directly in the database, applies within the
+    ///     cache lifetime, <c>TsigKeyLookupCache.Lifetime</c> (10 seconds), plus the time one reload
+    ///     takes, while the database answers; a reload for age alone that fails keeps the last good
+    ///     copy.
     /// </summary>
     public bool IsDisabled { get; set; }
 

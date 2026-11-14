@@ -30,17 +30,18 @@ namespace Ninlil.Dns.Server.Tsig;
 ///         channel.
 ///     </para>
 /// </summary>
-/// <param name="tsigKeyRepository">The repository this service looks up pre-shared keys from.</param>
 /// <param name="secretProtector">The protector that decrypts a key's shared secret.</param>
 /// <param name="options">
 ///     The signing settings. Read through <see cref="IOptionsMonitor{TOptions}" /> on every
 ///     signature, because <see cref="IOptions{TOptions}" /> would keep returning the value
 ///     cached at startup and a configuration change would need a restart.
 /// </param>
-/// <param name="keyCache">The shared key lookup cache.</param>
+/// <param name="keyCache">
+///     The shared in-memory key lookup. It lets this service hold no scoped dependency, so the
+///     service is a singleton.
+/// </param>
 /// <param name="timeProvider">The clock for Time Signed and the Fudge window.</param>
 public class TsigService(
-    ITsigKeyRepository tsigKeyRepository,
     TsigSecretProtector secretProtector,
     IOptionsMonitor<TsigServiceOptions> options,
     TsigKeyLookupCache keyCache,
@@ -271,11 +272,7 @@ public class TsigService(
         if (expectedKeyName is not null && !tsig.KeyName.Equals(DnsName.Parse(expectedKeyName)))
             return TsigVerificationResult.Failure(DnsResponseCodeEnum.BadKey);
 
-        TsigKeyEntity key = await keyCache.FindAsync(
-            tsig.KeyName.ToString(),
-            tsigKeyRepository,
-            stoppingToken
-        );
+        TsigKeyEntity key = await keyCache.FindAsync(tsig.KeyName.ToString(), stoppingToken);
 
         // A disabled key, a cluster key and a key of another algorithm are reported the same as
         // an unknown one (BADKEY).
@@ -354,7 +351,7 @@ public class TsigService(
     )
     {
         TsigKeyEntity key =
-            await keyCache.FindAsync(keyName, tsigKeyRepository, stoppingToken)
+            await keyCache.FindAsync(keyName, stoppingToken)
             ?? throw new InvalidOperationException($"No TSIG key named '{keyName}' exists.");
 
         if (key.IsDisabled)

@@ -1,8 +1,6 @@
-using Microsoft.Extensions.DependencyInjection;
 using Ninlil.Dns.Common.Enum;
 using Ninlil.Dns.Common.Wire;
 using Ninlil.Dns.Data.Abstractions.Entity;
-using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Server.Core.Resolution;
 
 // Define our namespace.
@@ -14,16 +12,14 @@ namespace Ninlil.Dns.Server.Tsig;
 ///     <c>DnsQueryProcessingPipeline</c> verify signed QUERY, NOTIFY and UPDATE requests and sign
 ///     their replies without Server.Core depending on the key store.
 ///     <para>
-///         It is a singleton, but <see cref="ITsigService" /> is scoped (it reads the key
-///         repository), so every call opens its own scope.
+///         It is a singleton and so is <see cref="ITsigService" />: both read keys from the
+///         in-memory <see cref="TsigKeyLookupCache" />, so a message opens no service scope.
 ///     </para>
 /// </summary>
-/// <param name="scopeFactory">The factory used to open a scope for <see cref="ITsigService" />.</param>
+/// <param name="tsigService">The TSIG engine that verifies and signs.</param>
 /// <param name="keyCache">The shared key lookup cache, used to find the key of a BADTIME reply.</param>
-public class TsigTransactionSignatureService(
-    IServiceScopeFactory scopeFactory,
-    TsigKeyLookupCache keyCache
-) : IDnsTransactionSignatureService
+public class TsigTransactionSignatureService(ITsigService tsigService, TsigKeyLookupCache keyCache)
+    : IDnsTransactionSignatureService
 {
     /// <summary>
     ///     This constant contains the octets of a TSIG record outside its names and its MAC and
@@ -39,9 +35,6 @@ public class TsigTransactionSignatureService(
     )
     {
         DnsTsigOptions tsig = context.Request.Tsig;
-
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
 
         TsigVerificationResult result = await tsigService.VerifyAsync(
             context.RawMessage,
@@ -68,9 +61,6 @@ public class TsigTransactionSignatureService(
         // The reply may be a message the caches share between clients, so it is never changed.
         DnsMessage copy = Copy(response);
 
-        await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-        ITsigService tsigService = scope.ServiceProvider.GetRequiredService<ITsigService>();
-
         if (signature.IsVerified)
             return await tsigService.SignResponseAsync(
                 copy,
@@ -83,11 +73,7 @@ public class TsigTransactionSignatureService(
         // Only a BADTIME reply is signed, and it needs the key the sender proved it holds.
         TsigKeyEntity key =
             signature.Error == DnsResponseCodeEnum.BadTime
-                ? await keyCache.FindAsync(
-                    signature.KeyName,
-                    scope.ServiceProvider.GetRequiredService<ITsigKeyRepository>(),
-                    stoppingToken
-                )
+                ? await keyCache.FindAsync(signature.KeyName, stoppingToken)
                 : null;
 
         return await tsigService.SignErrorResponseAsync(

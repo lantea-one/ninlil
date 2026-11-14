@@ -64,16 +64,15 @@ public sealed class AuthoritativeZoneCacheFindZoneTests : IAsyncLifetime
     }
 
     /// <inheritdoc />
-    public async Task DisposeAsync()
+    public Task DisposeAsync()
     {
         _host.Dispose();
-        await Task.CompletedTask;
 
-        foreach (
-            string path in new[] { _databasePath, _databasePath + "-wal", _databasePath + "-shm" }
-        )
-            if (File.Exists(path))
-                File.Delete(path);
+        // The helper clears this database's connection pool first: a pooled connection keeps the
+        // file open, and Windows refuses to delete an open file.
+        TemporaryFiles.DeleteSqliteDatabase(_databasePath);
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

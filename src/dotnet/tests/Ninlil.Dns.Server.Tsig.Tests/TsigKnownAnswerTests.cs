@@ -95,6 +95,7 @@ public class TsigKnownAnswerTests
     {
         public List<TsigKeyEntity> Keys { get; } = [];
         public InMemoryTsigKeyRepository Repository { get; }
+        public TsigKeyCacheHost CacheHost { get; }
         public ManualTimeProvider Clock { get; }
         public TsigService Service { get; }
         public TsigSecretProtector Protector { get; }
@@ -104,11 +105,11 @@ public class TsigKnownAnswerTests
             Repository = new InMemoryTsigKeyRepository(Keys);
             Clock = new ManualTimeProvider(now);
             Protector = new TsigSecretProtector(new EphemeralDataProtectionProvider());
+            CacheHost = new TsigKeyCacheHost(Repository, Clock);
             Service = new TsigService(
-                Repository,
                 Protector,
                 new FixedOptionsMonitor(new TsigServiceOptions()),
-                new TsigKeyLookupCache(Clock),
+                CacheHost.Cache,
                 Clock
             );
         }
@@ -724,14 +725,56 @@ public class TsigKnownAnswerTests
         Assert.Null(result.Tsig);
     }
 
+    /// <summary>
+    ///     This method raises the signal a repository save raises for a TSIG key change.
+    /// </summary>
+    private static void NotifyKeysChanged(Harness harness) =>
+        harness.CacheHost.Notifier.NotifyChanged([typeof(TsigKeyEntity)]);
+
+    /// <summary>
+    ///     This method verifies the vector again and again, advancing no clock, until the result is
+    ///     the given error or the bounded wait ends. A refresh that follows only the age of the
+    ///     copy runs in the background, so the result changes a moment after the clock moves.
+    /// </summary>
+    private static async Task<DnsResponseCodeEnum> VerifyUntilAsync(
+        Harness harness,
+        Vector vector,
+        DnsResponseCodeEnum error
+    )
+    {
+        TsigVerificationResult result = await VerifyAsync(harness, vector);
+
+        for (int attempt = 0; attempt < 250 && result.Error != error; attempt++)
+        {
+            await Task.Delay(20);
+            result = await VerifyAsync(harness, vector);
+        }
+
+        return result.Error;
+    }
+
     [Fact]
-    public async Task KeyLookup_ADisabledKeyKeepsVerifyingUntilTheCacheLifetimeEnds()
+    public async Task KeyLookup_ADeletedKeyIsRefusedOnTheNextMessage()
     {
         Vector vector = Vectors["V1"];
         Harness harness = CreateHarness(vector);
 
         Assert.True((await VerifyAsync(harness, vector)).IsValid);
-        Assert.Equal(1, harness.Repository.LookupCount);
+
+        harness.Keys.Clear();
+        NotifyKeysChanged(harness);
+
+        Assert.Equal(DnsResponseCodeEnum.BadKey, (await VerifyAsync(harness, vector)).Error);
+    }
+
+    [Fact]
+    public async Task KeyLookup_ADisabledKeyIsRefusedOnTheNextMessage()
+    {
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
+
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+        Assert.Equal(1, harness.Repository.LoadCount);
 
         // Replace the stored row by a disabled copy, as a database update would.
         TsigKeyEntity enabled = harness.Keys[0];
@@ -743,18 +786,45 @@ public class TsigKnownAnswerTests
             SecretEncrypted = enabled.SecretEncrypted,
             IsDisabled = true,
         };
-
-        Assert.True((await VerifyAsync(harness, vector)).IsValid);
-        Assert.Equal(1, harness.Repository.LookupCount);
-
-        harness.Clock.Advance(TsigKeyLookupCache.Lifetime + TimeSpan.FromSeconds(1));
+        NotifyKeysChanged(harness);
 
         Assert.Equal(DnsResponseCodeEnum.BadKey, (await VerifyAsync(harness, vector)).Error);
-        Assert.Equal(2, harness.Repository.LookupCount);
+        Assert.Equal(2, harness.Repository.LoadCount);
     }
 
     [Fact]
-    public async Task KeyLookup_AnUnknownNameIsLookedUpOncePerLifetime()
+    public async Task KeyLookup_WithoutAChangeSignal_ADisabledKeyIsRefusedAfterTheLifetime()
+    {
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
+
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+
+        TsigKeyEntity enabled = harness.Keys[0];
+        harness.Keys[0] = new TsigKeyEntity
+        {
+            Id = enabled.Id,
+            Name = enabled.Name,
+            AlgorithmName = enabled.AlgorithmName,
+            SecretEncrypted = enabled.SecretEncrypted,
+            IsDisabled = true,
+        };
+
+        // A change made by another node raises no signal here: the old copy is used until it is
+        // older than the lifetime.
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+        Assert.Equal(1, harness.Repository.LoadCount);
+
+        harness.Clock.Advance(TsigKeyLookupCache.Lifetime + TimeSpan.FromSeconds(1));
+
+        Assert.Equal(
+            DnsResponseCodeEnum.BadKey,
+            await VerifyUntilAsync(harness, vector, DnsResponseCodeEnum.BadKey)
+        );
+    }
+
+    [Fact]
+    public async Task KeyLookup_AnUnknownNameIsAnsweredFromTheSameLoad()
     {
         Vector vector = Vectors["V1"];
         Harness harness = new(At(vector.TimeSigned));
@@ -762,44 +832,114 @@ public class TsigKnownAnswerTests
         for (int i = 0; i < 3; i++)
             Assert.Equal(DnsResponseCodeEnum.BadKey, (await VerifyAsync(harness, vector)).Error);
 
-        Assert.Equal(1, harness.Repository.LookupCount);
+        Assert.Equal(1, harness.Repository.LoadCount);
+    }
 
+    [Fact]
+    public async Task KeyLookup_AMixedCaseNameFindsTheLowercaseRowThenTheExactText()
+    {
+        Harness harness = new(DateTimeOffset.UtcNow);
+        TsigKeyEntity legacy = harness.AddKey("Legacy.Key", "hmac-sha256", new byte[32]);
+        TsigKeyEntity lower = harness.AddKey("lower.key", "hmac-sha256", new byte[32]);
+
+        Assert.Same(legacy, await harness.CacheHost.Cache.FindAsync("Legacy.Key."));
+        Assert.Same(lower, await harness.CacheHost.Cache.FindAsync("LOWER.key"));
+        Assert.Null(await harness.CacheHost.Cache.FindAsync("LEGACY.key"));
+        Assert.Equal(1, harness.Repository.LoadCount);
+    }
+
+    [Fact]
+    public async Task KeyLookup_AFailedReloadAfterAChange_RefusesEveryKeyUntilALoadSucceeds()
+    {
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
+
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+
+        // The key is deleted, but the reload that follows the change fails: the old copy may
+        // still hold the deleted key, so it must not be used.
+        harness.Repository.FailLoads = true;
+        NotifyKeysChanged(harness);
+
+        Assert.Equal(DnsResponseCodeEnum.BadKey, (await VerifyAsync(harness, vector)).Error);
+
+        harness.Repository.FailLoads = false;
         harness.Clock.Advance(TsigKeyLookupCache.Lifetime + TimeSpan.FromSeconds(1));
-        await VerifyAsync(harness, vector);
 
-        Assert.Equal(2, harness.Repository.LookupCount);
+        // The key still exists in this test, so a successful load brings it back.
+        Assert.Equal(
+            DnsResponseCodeEnum.NoError,
+            await VerifyUntilAsync(harness, vector, DnsResponseCodeEnum.NoError)
+        );
     }
 
     [Fact]
-    public async Task KeyLookup_AMixedCaseNameTriesTheLowercaseNameThenTheExactText()
+    public async Task KeyLookup_AReloadAfterAChangeThatTimesOut_RefusesEveryKeyUntilALoadSucceeds()
     {
-        Harness harness = new(DateTimeOffset.UtcNow);
-        TsigKeyEntity key = harness.AddKey("Legacy.Key", "hmac-sha256", new byte[32]);
-        TsigKeyLookupCache cache = new(harness.Clock);
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
 
-        TsigKeyEntity found = await cache.FindAsync("Legacy.Key.", harness.Repository, default);
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
 
-        Assert.Same(key, found);
-        Assert.Equal(2, harness.Repository.LookupCount);
+        // The key is deleted and the reload that follows the change hangs. The refresh timeout is
+        // a timer on the manual clock, so moving the clock past it ends the load.
+        TsigKeyEntity key = harness.Keys[0];
+        harness.Keys.Clear();
+        harness.Repository.HangLoads = true;
+        NotifyKeysChanged(harness);
+
+        Task<TsigVerificationResult> waiting = VerifyAsync(harness, vector);
+        await harness.Repository.HangStarted.Task;
+        harness.Clock.Advance(TimeSpan.FromSeconds(31));
+
+        Assert.Equal(DnsResponseCodeEnum.BadKey, (await waiting).Error);
+
+        // The failure is not served as a good copy: the next message is refused as well.
+        Assert.Equal(DnsResponseCodeEnum.BadKey, (await VerifyAsync(harness, vector)).Error);
+
+        // A later successful load serves the current keys again.
+        harness.Repository.HangLoads = false;
+        harness.Keys.Add(key);
+        NotifyKeysChanged(harness);
+
+        Assert.Equal(DnsResponseCodeEnum.NoError, (await VerifyAsync(harness, vector)).Error);
     }
 
     [Fact]
-    public async Task KeyLookup_TheCacheHoldsAtMost1024EntriesAndDropsTheOldest()
+    public async Task KeyLookup_ARefreshOnlyForAgeThatTimesOut_KeepsTheLastGoodKeys()
     {
-        Harness harness = new(DateTimeOffset.UtcNow);
-        TsigKeyLookupCache cache = new(harness.Clock);
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
 
-        for (int i = 0; i <= TsigKeyLookupCache.MaximumEntries; i++)
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+
+        harness.Repository.HangLoads = true;
+        harness.Clock.Advance(TsigKeyLookupCache.Lifetime + TimeSpan.FromSeconds(1));
+
+        // The read that starts the refresh still sees the old copy while the load hangs.
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+        await harness.Repository.HangStarted.Task;
+        harness.Clock.Advance(TimeSpan.FromSeconds(31));
+
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+    }
+
+    [Fact]
+    public async Task KeyLookup_AFailedRefreshOnlyForAge_KeepsTheLastGoodKeys()
+    {
+        Vector vector = Vectors["V1"];
+        Harness harness = CreateHarness(vector);
+
+        Assert.True((await VerifyAsync(harness, vector)).IsValid);
+
+        harness.Repository.FailLoads = true;
+        harness.Clock.Advance(TsigKeyLookupCache.Lifetime + TimeSpan.FromSeconds(1));
+
+        // The read that starts the failing refresh and every later one still see the old copy.
+        for (int i = 0; i < 3; i++)
         {
-            await cache.FindAsync($"k{i}", harness.Repository, default);
-            harness.Clock.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.True((await VerifyAsync(harness, vector)).IsValid);
+            await Task.Delay(20);
         }
-
-        int before = harness.Repository.LookupCount;
-        await cache.FindAsync($"k{TsigKeyLookupCache.MaximumEntries}", harness.Repository, default);
-        Assert.Equal(before, harness.Repository.LookupCount);
-
-        await cache.FindAsync("k0", harness.Repository, default);
-        Assert.Equal(before + 1, harness.Repository.LookupCount);
     }
 }
