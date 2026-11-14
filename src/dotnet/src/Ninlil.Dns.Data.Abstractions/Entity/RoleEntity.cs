@@ -36,8 +36,8 @@ public class RoleEntity : AuditableEntityBase
     ///     <see langword="null" /> for an ordinary role. Cluster identity federation sets it when two
     ///     nodes created a role with the same <see cref="Name" /> during a network partition and this
     ///     role lost the last-write-wins tie-break: the role is renamed with a
-    ///     <c>-conflict-&lt;shortnodeid&gt;</c> suffix and flagged here instead of being dropped or
-    ///     merged. The API shows it as <c>RoleSummary.ClusterConflictNote</c>.
+    ///     <c>-conflict-&lt;node-id&gt;</c> suffix (the id of the node that created it) and flagged
+    ///     here instead of being dropped or merged. The API shows it as <c>RoleSummary.ClusterConflictNote</c>.
     /// </summary>
     public string ClusterConflictNote { get; set; }
 }

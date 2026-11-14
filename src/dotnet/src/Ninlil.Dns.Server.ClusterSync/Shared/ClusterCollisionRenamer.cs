@@ -6,23 +6,47 @@ namespace Ninlil.Dns.Server.ClusterSync.Shared;
 ///     <c>UserClusterConfigSyncApplier</c> and <c>RoleClusterConfigSyncApplier</c>. When two
 ///     nodes create a user or role with the same unique name (for example during a network
 ///     partition), the loser of the last-write-wins comparison is renamed and given an
-///     explanatory note, never dropped or merged (see <c>UserEntity.ClusterConflictNote</c>).
+///     explanatory note, never dropped or merged (see <c>UserEntity.ClusterConflictNote</c>). The
+///     loser is named after the node that created it.
 /// </summary>
 public static class ClusterCollisionRenamer
 {
     /// <summary>
+    ///     This constant contains the longest user or role name the stores accept.
+    /// </summary>
+    private const int MaxNameLength = 256;
+
+    /// <summary>
     ///     This method builds the name a collision loser gets: the original value plus
-    ///     <c>-conflict-</c> and the other node's id, cut to 256 characters. It is deterministic,
-    ///     so nodes that pass the same node id compute the same name.
+    ///     <c>-conflict-</c> and the id of the node that created the loser, as 32 hex digits. The
+    ///     name is shortened, never the suffix, so it fits 256 characters and still names the node.
+    ///     It is deterministic, and two losers with the same name come from different nodes, so
+    ///     every node computes the same name for a loser and the names of two losers differ.
     /// </summary>
     /// <param name="originalValue">The value that collided (a username or a role name).</param>
-    /// <param name="conflictingNodeId">
-    ///     The node id of the other side of the collision, the one not renamed.
+    /// <param name="loserNodeId">
+    ///     The id of the node that created the renamed account or role. For a row with no
+    ///     recorded origin (the bootstrap administrator, or any row written before clustering was
+    ///     switched on) the caller passes the id of the node that holds it, which is the node that
+    ///     wrote it.
     /// </param>
-    public static string BuildRenamedValue(string originalValue, Guid conflictingNodeId) =>
-        $"{originalValue}-conflict-{conflictingNodeId:N}"[
-            ..Math.Min($"{originalValue}-conflict-{conflictingNodeId:N}".Length, 256)
-        ];
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="loserNodeId" /> is <see cref="Guid.Empty" />, which names no node.
+    /// </exception>
+    public static string BuildRenamedValue(string originalValue, Guid loserNodeId)
+    {
+        if (loserNodeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "A renamed value is named after a real node; an all-zero node id names none.",
+                nameof(loserNodeId)
+            );
+        }
+
+        string suffix = $"-conflict-{loserNodeId:N}";
+        int keptLength = Math.Min(originalValue.Length, MaxNameLength - suffix.Length);
+        return originalValue[..keptLength] + suffix;
+    }
 
     /// <summary>
     ///     This method builds the explanation stored in the loser's <c>ClusterConflictNote</c>,

@@ -59,7 +59,8 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
             _dataProtectionProvider,
             NullLogger<UserClusterConfigSyncApplier>.Instance,
             _revalidator,
-            _jwtTokenService
+            _jwtTokenService,
+            new FixedClusterOptionsMonitor(NodeA)
         );
     }
 
@@ -690,5 +691,159 @@ public sealed class UserClusterConfigSyncApplierTests : IDisposable
         Assert.Equal("dave", renamed.UserName);
         Assert.NotEqual("dave", holder.UserName);
         Assert.NotNull(holder.ClusterConflictNote);
+    }
+
+    private static readonly Guid NodeC = Guid.Parse("cccccccc-0000-0000-0000-000000000000");
+
+    /// <summary>
+    ///     This method applies one account envelope from a peer node.
+    /// </summary>
+    private Task ApplyFromAsync(
+        Guid accountId,
+        string userName,
+        DateTimeOffset timestamp,
+        Guid originatingNodeId
+    ) =>
+        _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                UserClusterConfigSyncApplier.EntityTypeName,
+                accountId.ToString(),
+                IsDeleted: false,
+                Payload(userName),
+                timestamp,
+                originatingNodeId
+            ),
+            CancellationToken.None
+        );
+
+    /// <summary>
+    ///     This method stores an account written on this node: no recorded origin, like the
+    ///     bootstrap administrator.
+    /// </summary>
+    private async Task AddLocalAccountAsync(Guid id, string userName, DateTimeOffset createdAt)
+    {
+        await _userRepository.AddAsync(
+            new UserEntity
+            {
+                Id = id,
+                UserName = userName,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                CreatedAtUtc = createdAt,
+            }
+        );
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    ///     This test covers the bootstrap account, which has no recorded origin. The incoming
+    ///     account is older, so it loses to this node's account, and the renamed copy carries the
+    ///     id of the node that sent it, never an all-zero id.
+    /// </summary>
+    [Fact]
+    public async Task ApplyAsync_IncomingAccountLosesToALocalAccountWithNoOrigin_IsNamedAfterTheSendingNode()
+    {
+        Guid localId = Guid.NewGuid();
+        Guid incomingId = Guid.NewGuid();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await AddLocalAccountAsync(localId, "admin", now);
+
+        await ApplyFromAsync(incomingId, "admin", now.AddMinutes(-5), NodeB);
+
+        Assert.Equal("admin", (await _userRepository.GetByIdAsync(localId)).UserName);
+        Assert.Equal(
+            $"admin-conflict-{NodeB:N}",
+            (await _userRepository.GetByIdAsync(incomingId)).UserName
+        );
+    }
+
+    /// <summary>
+    ///     This test covers the bootstrap account losing to a newer incoming account. A row with
+    ///     no recorded origin was written on this node, so the renamed copy carries this node's
+    ///     id.
+    /// </summary>
+    [Fact]
+    public async Task ApplyAsync_LocalAccountWithNoOriginLosesToTheIncomingOne_IsNamedAfterThisNode()
+    {
+        Guid localId = Guid.NewGuid();
+        Guid incomingId = Guid.NewGuid();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await AddLocalAccountAsync(localId, "admin", now);
+
+        await ApplyFromAsync(incomingId, "admin", now.AddMinutes(5), NodeB);
+
+        Assert.Equal("admin", (await _userRepository.GetByIdAsync(incomingId)).UserName);
+        UserEntity renamed = await _userRepository.GetByIdAsync(localId);
+        Assert.Equal($"admin-conflict-{NodeA:N}", renamed.UserName);
+        Assert.Equal($"ADMIN-CONFLICT-{NodeA:N}".ToUpperInvariant(), renamed.NormalizedUserName);
+    }
+
+    /// <summary>
+    ///     This test covers three nodes that each hold a bootstrap <c>admin</c> (no recorded
+    ///     origin on the holding node; the sender of a peer's account stamps its own id). This
+    ///     node is A; B's and C's accounts arrive in either order, and C's is the newest. The
+    ///     winner keeps <c>admin</c>; each loser is named after the node that created it, so the
+    ///     three names are distinct and do not depend on the arrival order. Applying the same
+    ///     envelopes again changes nothing. It covers one receiving node in both arrival orders;
+    ///     the other nodes apply the same rule to the same envelopes.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ApplyAsync_ThreeNodesEachHoldingAnAdmin_EndWithThreeDistinctStableNames(
+        bool nodeBArrivesFirst
+    )
+    {
+        Guid localId = Guid.NewGuid();
+        Guid fromBId = Guid.NewGuid();
+        Guid fromCId = Guid.NewGuid();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await AddLocalAccountAsync(localId, "admin", now);
+
+        Func<Task> fromB = () => ApplyFromAsync(fromBId, "admin", now.AddMinutes(1), NodeB);
+        Func<Task> fromC = () => ApplyFromAsync(fromCId, "admin", now.AddMinutes(2), NodeC);
+        foreach (Func<Task> apply in nodeBArrivesFirst ? new[] { fromB, fromC } : [fromC, fromB])
+            await apply();
+
+        async Task<string[]> NamesAsync() =>
+            [
+                (await _userRepository.GetByIdAsync(localId)).UserName,
+                (await _userRepository.GetByIdAsync(fromBId)).UserName,
+                (await _userRepository.GetByIdAsync(fromCId)).UserName,
+            ];
+
+        string[] expected = [$"admin-conflict-{NodeA:N}", $"admin-conflict-{NodeB:N}", "admin"];
+        Assert.Equal(expected, await NamesAsync());
+
+        // A repeated sync neither renames again nor creates a second renamed copy.
+        await fromB();
+        await fromC();
+        Assert.Equal(expected, await NamesAsync());
+        Assert.Equal(3, await _userRepository.CountAsync());
+    }
+
+    /// <summary>
+    ///     This test covers an installation that already holds <c>admin-conflict-</c> followed by
+    ///     an all-zero id. A new collision renames onto a different name, so it neither collides
+    ///     with that account nor renames it again.
+    /// </summary>
+    [Fact]
+    public async Task ApplyAsync_AnAccountNamedWithAnAllZeroIdAlreadyExists_StaysAsItIsAndDoesNotCollide()
+    {
+        Guid zeroId = Guid.NewGuid();
+        Guid localId = Guid.NewGuid();
+        Guid incomingId = Guid.NewGuid();
+        string zeroName = $"admin-conflict-{Guid.Empty:N}";
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await AddLocalAccountAsync(zeroId, zeroName, now);
+        await AddLocalAccountAsync(localId, "admin", now);
+
+        await ApplyFromAsync(incomingId, "admin", now.AddMinutes(-5), NodeB);
+
+        Assert.Equal(zeroName, (await _userRepository.GetByIdAsync(zeroId)).UserName);
+        Assert.Equal("admin", (await _userRepository.GetByIdAsync(localId)).UserName);
+        Assert.Equal(
+            $"admin-conflict-{NodeB:N}",
+            (await _userRepository.GetByIdAsync(incomingId)).UserName
+        );
     }
 }

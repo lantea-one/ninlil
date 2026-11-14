@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Ninlil.Dns.Data.Abstractions.Entity;
 using Ninlil.Dns.Data.Abstractions.Repository;
 using Ninlil.Dns.Identity;
 using Ninlil.Dns.Identity.Authentication;
+using Ninlil.Dns.Server.Cluster.Options;
 using Ninlil.Dns.Server.ClusterSync.Shared;
 using Ninlil.Dns.Server.Core.ClusterSync;
 
@@ -26,12 +28,17 @@ namespace Ninlil.Dns.Server.ClusterSync.Identity;
 ///     applies to access tokens already issued on this node on their next request.
 /// </param>
 /// <param name="logger">The logger a malformed envelope or a detected collision is recorded to.</param>
+/// <param name="clusterOptions">
+///     The cluster settings, read for this node's id, which names a renamed role that has no
+///     recorded origin (see <see cref="ClusterCollisionRenamer" />).
+/// </param>
 public class RoleClusterConfigSyncApplier(
     IRoleRepository roleRepository,
     IClusterSyncTombstoneRepository tombstoneRepository,
     IUnitOfWork unitOfWork,
     ILogger<RoleClusterConfigSyncApplier> logger,
-    IAccessTokenRevalidator accessTokenRevalidator
+    IAccessTokenRevalidator accessTokenRevalidator,
+    IOptionsMonitor<ClusterOptions> clusterOptions
 ) : IClusterConfigSyncApplier
 {
     /// <summary>
@@ -205,6 +212,13 @@ public class RoleClusterConfigSyncApplier(
         string effectiveNormalizedName = payload.NormalizedName;
         string conflictNote = null;
 
+        // The renamed account or role is named after the node that created it, so the loser's name
+        // is the same on every node and two losers of one name differ. A row with no recorded
+        // origin (the bootstrap account, or one written before clustering was switched on) was
+        // written on the node that holds it: the sender stamps its own id on such a row, and this
+        // node does the same for its own.
+        Guid ownNodeId = clusterOptions.CurrentValue.NodeId;
+
         // A collision is a different local id holding the same normalized name.
         RoleEntity conflicting = await roleRepository.FindByNormalizedNameAsync(
             payload.NormalizedName,
@@ -224,7 +238,7 @@ public class RoleClusterConfigSyncApplier(
             {
                 string renamedName = ClusterCollisionRenamer.BuildRenamedValue(
                     conflicting.Name,
-                    envelope.OriginatingNodeId
+                    conflicting.OriginatingNodeId ?? ownNodeId
                 );
 
                 logger.LogWarning(
@@ -252,12 +266,12 @@ public class RoleClusterConfigSyncApplier(
             {
                 effectiveName = ClusterCollisionRenamer.BuildRenamedValue(
                     payload.Name,
-                    conflicting.OriginatingNodeId ?? Guid.Empty
+                    envelope.OriginatingNodeId
                 );
                 effectiveNormalizedName = effectiveName.ToUpperInvariant();
                 conflictNote = ClusterCollisionRenamer.BuildConflictNote(
                     payload.Name,
-                    conflicting.OriginatingNodeId ?? Guid.Empty,
+                    conflicting.OriginatingNodeId ?? ownNodeId,
                     conflicting.GetLastModifiedUtc()
                 );
 

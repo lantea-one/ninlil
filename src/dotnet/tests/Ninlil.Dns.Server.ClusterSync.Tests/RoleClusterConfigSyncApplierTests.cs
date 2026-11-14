@@ -48,7 +48,8 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
             new ClusterSyncTombstoneRepository(_context),
             _unitOfWork,
             NullLogger<RoleClusterConfigSyncApplier>.Instance,
-            _revalidator
+            _revalidator,
+            new FixedClusterOptionsMonitor(NodeA)
         );
     }
 
@@ -284,5 +285,85 @@ public sealed class RoleClusterConfigSyncApplierTests : IDisposable
         Assert.Equal("Operators", holder.Name);
         Assert.StartsWith("Operators-conflict-", renamed.Name);
         Assert.NotNull(renamed.ClusterConflictNote);
+    }
+
+    /// <summary>
+    ///     This method stores a role written on this node: no recorded origin, like the bootstrap
+    ///     <c>Administrators</c> role.
+    /// </summary>
+    private async Task AddLocalRoleAsync(Guid id, string name, DateTimeOffset createdAt)
+    {
+        await _repository.AddAsync(
+            new RoleEntity
+            {
+                Id = id,
+                Name = name,
+                NormalizedName = name.ToUpperInvariant(),
+                CreatedAtUtc = createdAt,
+            }
+        );
+        await _unitOfWork.SaveChangesAsync();
+    }
+
+    /// <summary>
+    ///     This test covers the incoming role losing to a local role with no recorded origin: the
+    ///     renamed copy carries the id of the node that sent it, never an all-zero id.
+    /// </summary>
+    [Fact]
+    public async Task ApplyAsync_IncomingRoleLosesToALocalRoleWithNoOrigin_IsNamedAfterTheSendingNode()
+    {
+        Guid localId = Guid.NewGuid();
+        Guid incomingId = Guid.NewGuid();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await AddLocalRoleAsync(localId, "Administrators", now);
+
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                RoleClusterConfigSyncApplier.EntityTypeName,
+                incomingId.ToString(),
+                IsDeleted: false,
+                Payload("Administrators"),
+                now.AddMinutes(-5),
+                NodeB
+            ),
+            CancellationToken.None
+        );
+
+        Assert.Equal("Administrators", (await _repository.GetByIdAsync(localId)).Name);
+        Assert.Equal(
+            $"Administrators-conflict-{NodeB:N}",
+            (await _repository.GetByIdAsync(incomingId)).Name
+        );
+    }
+
+    /// <summary>
+    ///     This test covers a local role with no recorded origin losing to a newer incoming role:
+    ///     it was written on this node, so the renamed copy carries this node's id.
+    /// </summary>
+    [Fact]
+    public async Task ApplyAsync_LocalRoleWithNoOriginLosesToTheIncomingOne_IsNamedAfterThisNode()
+    {
+        Guid localId = Guid.NewGuid();
+        Guid incomingId = Guid.NewGuid();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await AddLocalRoleAsync(localId, "Administrators", now);
+
+        await _applier.ApplyAsync(
+            new ClusterConfigSyncEnvelope(
+                RoleClusterConfigSyncApplier.EntityTypeName,
+                incomingId.ToString(),
+                IsDeleted: false,
+                Payload("Administrators"),
+                now.AddMinutes(5),
+                NodeB
+            ),
+            CancellationToken.None
+        );
+
+        Assert.Equal("Administrators", (await _repository.GetByIdAsync(incomingId)).Name);
+        Assert.Equal(
+            $"Administrators-conflict-{NodeA:N}",
+            (await _repository.GetByIdAsync(localId)).Name
+        );
     }
 }

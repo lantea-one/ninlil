@@ -159,8 +159,8 @@ public class UserEntity : AuditableEntityBase
     ///     <see cref="UserName" /> during a network partition and this account lost the
     ///     last-write-wins tie-break (<c>ClusterSyncConflictResolver.IncomingWins</c>). The losing
     ///     account is not dropped or merged: it is renamed with a
-    ///     <c>-conflict-&lt;shortnodeid&gt;</c> suffix and this field explains what happened and
-    ///     when. The REST API and the console's user list show it as
+    ///     <c>-conflict-&lt;node-id&gt;</c> suffix (the id of the node that created it) and this
+    ///     field explains what happened and when. The REST API and the console's user list show it as
     ///     <c>UserSummary.ClusterConflictNote</c>. Only an administrator editing the account clears
     ///     it.
     /// </summary>
