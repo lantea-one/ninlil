@@ -104,7 +104,7 @@ nav:
           - 'Filtering and parental controls': 'guides/dns/filtering.md'
           - 'Encrypted transports and DNS64': 'guides/dns/encrypted-transports.md'
       - 'DHCP':
-          - 'DHCP, DHCPv6 and Router Advertisement': 'guides/dhcp/dhcp.md'
+          - 'DHCPv4 scopes, reservations and leases': 'guides/dhcp/dhcp.md'
           - 'DHCPv6 and prefix delegation': 'guides/dhcp/dhcpv6.md'
           - 'Router Advertisement': 'guides/dhcp/router-advertisement.md'
           - 'Relay agent': 'guides/dhcp/relay.md'
