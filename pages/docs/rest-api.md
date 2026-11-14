@@ -312,6 +312,10 @@ offers two schemes:
   example `ApiToken 7f2e...`). Swagger UI sends this field as typed, so the prefix has to be part
   of it. A raw token without the prefix answers `401`.
 
+The two fields are alternatives: fill only one. Swagger UI sends one `Authorization` header, and
+with both filled the value of the **ApiToken** field is the one sent. A mistyped token there makes
+every call answer `401`, even though the access token is valid.
+
 ## Common mistakes
 
 - **`curl` prints `SSL certificate problem: self-signed certificate`.** Add `-k`, or install a
