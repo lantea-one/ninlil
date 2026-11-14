@@ -22,6 +22,16 @@ outside Forgejo.
 
 ### Behaviour worth knowing
 
+- **A cluster join names a renamed account or role after the node that created it.** When two
+  nodes hold a user or role with the same name, the one that loses the newest-write comparison is
+  renamed to `<name>-conflict-<node-id>`. The bootstrap `admin` account and `Administrators` role
+  have no recorded origin, so the rename gave them an all-zero node id, and the id belonged to the
+  other side of the collision, so two losers of one name could end with the same name. The id is
+  now the id of the node that created the renamed row (the node that holds it, when it has no
+  recorded origin), which is the same on every node and different for each loser, and a long name
+  is shortened before the suffix is added. A name that an earlier join already gave an all-zero id
+  stays as it is and is not renamed again
+  ([#450](https://git.lantea.one/lantea-one/ninlil/issues/450)).
 - **Saved SSO scopes and self-signed certificate names are read back as saved.** After a restart,
   a saved SSO scope list was appended to the three defaults (`openid`, `profile`, `email`), so
   `GET /api/sso-settings` showed the list twice, and a list that left out `profile` or `email`
