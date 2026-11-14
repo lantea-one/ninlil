@@ -871,3 +871,6 @@ dist-ssr
 
 # BenchmarkDotNet results and the seeded SQLite files (src/dotnet/benchmarks/Ninlil.Benchmarks).
 BenchmarkDotNet.Artifacts/
+
+# The built wiki (pages/mkdocs.yml writes it here)
+pages/site/
