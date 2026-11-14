@@ -22,6 +22,11 @@ outside Forgejo.
 
 ### Behaviour worth knowing
 
+- **The OpenAPI document declares the API token scheme.** `/swagger/v1/swagger.json` lists
+  `ApiToken` beside `Bearer` as an `apiKey` in the `Authorization` header, so Swagger UI's
+  **Authorize** dialog can send an API token typed as the word `ApiToken`, a space and the token.
+  Fill only one of the dialog's two fields. See [REST API](./README.md#rest-api)
+  ([#447](https://git.lantea.one/lantea-one/ninlil/issues/447)).
 - **Saved SSO scopes and self-signed certificate names are read back as saved.** After a restart,
   a saved SSO scope list was appended to the three defaults (`openid`, `profile`, `email`), so
   `GET /api/sso-settings` showed the list twice, and a list that left out `profile` or `email`
