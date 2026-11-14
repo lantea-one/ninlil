@@ -137,7 +137,9 @@ public sealed class RefreshingSnapshot<T>(
         if (Volatile.Read(ref _servedGeneration) < Volatile.Read(ref _expireGeneration))
             return new ValueTask<T>(LoadExpiredAsync(stoppingToken));
 
-        if (timeProvider.GetUtcNow() - entry.LoadedAtUtc >= timeToLive)
+        // A monotonic counter read: this runs once per DNS query and needs no DateTimeOffset, and
+        // a wall-clock step cannot make the value look fresh or stale.
+        if (timeProvider.GetElapsedTime(entry.LoadedAt) >= timeToLive)
             StartIfIdle();
 
         return new ValueTask<T>(entry.Value);
@@ -269,7 +271,7 @@ public sealed class RefreshingSnapshot<T>(
             {
                 using CancellationTokenSource timeout = new(RefreshTimeout, timeProvider);
                 T value = await loader(reason, timeout.Token);
-                _entry = new Entry(value, timeProvider.GetUtcNow());
+                _entry = new Entry(value, timeProvider.GetTimestamp());
             }
             catch (Exception exception)
             {
@@ -281,7 +283,7 @@ public sealed class RefreshingSnapshot<T>(
 
                 // Restart the time-to-live so a failing database is retried once per period, not
                 // once per query. Without any earlier value, readers use the empty one.
-                _entry = new Entry(_entry?.Value ?? emptyValue, timeProvider.GetUtcNow());
+                _entry = new Entry(_entry?.Value ?? emptyValue, timeProvider.GetTimestamp());
             }
 
             lock (_gate)
@@ -304,7 +306,8 @@ public sealed class RefreshingSnapshot<T>(
     }
 
     /// <summary>
-    ///     This record is one loaded value and when it was loaded.
+    ///     This record is one loaded value and when it was loaded, as a
+    ///     <see cref="TimeProvider.GetTimestamp" /> value.
     /// </summary>
-    private sealed record Entry(T Value, DateTimeOffset LoadedAtUtc);
+    private sealed record Entry(T Value, long LoadedAt);
 }

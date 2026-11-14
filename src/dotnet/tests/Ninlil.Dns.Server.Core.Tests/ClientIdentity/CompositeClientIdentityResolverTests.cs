@@ -70,13 +70,13 @@ public sealed class CompositeClientIdentityResolverTests
     {
         public int CallCount { get; private set; }
 
-        public Task<ClientIdentityResolution> ResolveAsync(
+        public ValueTask<ClientIdentityResolution> ResolveAsync(
             IPAddress remoteAddress,
             CancellationToken stoppingToken = default
         )
         {
             CallCount++;
-            return Task.FromResult(result);
+            return ValueTask.FromResult(result);
         }
     }
 }

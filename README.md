@@ -5364,8 +5364,9 @@ NINLIL_STORAGE_MONGODB_READ_PREFERENCE=SecondaryPreferred
   primary's newest operation has a lag of 0, however old that operation is, so an idle replica set
   (which writes only a no-op about every 10 to 20 seconds) is not reported as behind. A secondary
   that lacks it is behind by the time since its own last applied operation, by the primary's
-  clock. A secondary that misses a no-op write by a few milliseconds can read as behind for one
-  check.
+  clock. A secondary that is a few milliseconds late with a no-op write would read as behind by
+  the time since its previous operation, so a lag of more than 2 seconds is read again after 2
+  seconds and the second reading counts. A secondary that is really stuck is still behind then.
 
 **When a replica gets reads**
 

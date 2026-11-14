@@ -128,3 +128,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   { label: 'Services', path: 'services', icon: 'cilCog', permission: 'services:read' },
 ] as const;
+
+/**
+ * This function returns the icon of the nav item with the given route path. A page that stands
+ * for a menu entry (the Dashboard's At a Glance tiles) calls it, so the tile and the entry cannot
+ * drift apart. It throws for a path that is not a nav item, which a spec catches.
+ */
+export function navItemIcon(path: string): string {
+  const item = NAV_ITEMS.find((candidate) => candidate.path === path);
+
+  if (!item) {
+    throw new Error(`No nav item has the path "${path}".`);
+  }
+
+  return item.icon;
+}
