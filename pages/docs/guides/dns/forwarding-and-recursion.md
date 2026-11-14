@@ -103,14 +103,16 @@ query for a name it does not host with `REFUSED`. Choose one of two ways.
     | `definitionString` | Meaning |
     |---|---|
     | `9.9.9.9` or `9.9.9.9:53` | Plain DNS over UDP, with TCP when an answer is truncated. `udp://` and `tcp://` in front mean the same. |
-    | `[2620:fe::fe]:53` | Plain DNS over IPv6. A port after an IPv6 address needs brackets. |
+    | `[2620:fe::fe]:53` | Plain DNS over IPv6. A port after an IPv6 address needs brackets. Without brackets the whole text is an address: `2620:fe::fe:53` is an IPv6 address on the default port, not address `2620:fe::fe` with port 53. |
     | `tls://dns.quad9.net` | DNS-over-TLS, port 853 unless you add `:<port>`. The host name is also the name Ninlil expects in the server's certificate. |
     | `https://dns.quad9.net/dns-query` | DNS-over-HTTPS. |
     | `quic://dns.example.net` | DNS-over-QUIC, port 853 unless you add `:<port>`. Needs `libmsquic` 2.4.20 or later on the host. |
     | `sdns://...` | A DNSCrypt stamp. See [Encrypted transports and DNS64](encrypted-transports.md). |
 
     Ninlil checks the syntax when you save and never looks a host name up at that point. A definition
-    it cannot parse answers `400` with the reason.
+    it cannot parse answers `400` with the reason, for example `a malformed bracketed IPv6 address` for
+    `[2620:fe::fe`, or `is not a valid IPv6 address; an IPv6 address with a port must be written as
+    [address]:port` for `2620:fe::fe::53`.
 
 ### Forward one domain to its own servers
 

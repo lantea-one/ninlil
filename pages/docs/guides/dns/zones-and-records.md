@@ -188,6 +188,10 @@ Ninlil can write a PTR record for every A and AAAA record of a zone into the mat
   send it.
 - Each zone lists its own TSIG keys: `updateTsigKeyNames` for updates and `transferTsigKeyNames` for
   transfers. A key is not valid for a zone that does not list it.
+- A change to a TSIG key (create, change, disable or delete) applies to the next signed message on
+  the node that made it. A change made on another node, or directly in the database, shows after
+  about 10 seconds while the database answers. If the reload after a change fails or takes longer
+  than 30 seconds, Ninlil refuses every TSIG key until a reload succeeds.
 - PTR management works for `Primary` and `CloudPrimary` zones. `ptrIpv4PrefixLength` (default 24)
   sets the size of each reverse zone. The README lists the other zone types and the full rules:
   [Zones and records](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#zones-and-records).

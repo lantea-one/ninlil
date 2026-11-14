@@ -59,7 +59,8 @@ It needs root, `tcpdump` and DHCP clients, and CI does not run it. See the READM
 ## When something goes wrong
 
 - *The relay drops everything.* The log has `Dropping a DHCPv4 request this relay would otherwise
-  forward: no upstream server addresses are configured`. Save `upstreamServerAddresses` and restart.
+  forward: no upstream server addresses are configured
+  (DhcpServer:Relay:Dhcpv4:UpstreamServerAddresses)`. Save `upstreamServerAddresses` and restart.
 - *A relayed device gets no reply.* No enabled scope on the upstream server covers `giaddr`, or the
   upstream server answers from an address that is not in the list.
 
