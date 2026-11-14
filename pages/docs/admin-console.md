@@ -24,9 +24,12 @@ permissions of the signed-in account.
     ```
 
     `404` means this build has no console. A build from source without the Angular build has none
-    ([Build from source](getting-started/installation/from-source.md)).
+    ([Build and run from source](getting-started/installation/from-source.md)).
 3. A sign-in name and password. On a fresh installation, use the bootstrap administrator
    ([First run](getting-started/first-run.md)).
+
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](getting-started/quick-start.md#self-signed-certificate).
 
 ## Steps
 

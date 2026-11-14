@@ -14,7 +14,7 @@ blocks. It is off by default and listens on UDP port `69`.
 ## Before you start
 
 1. A running Ninlil, a signed-in API token and a DHCPv4 scope for the network of the computers that
-   boot. [DHCP, DHCPv6 and Router Advertisement](dhcp.md) shows both. `<token>` and `<scope-id>`
+   boot. [DHCPv4 scopes, reservations and leases](dhcp.md) shows both. `<token>` and `<scope-id>`
    are the values from that page; the commands use the Quick start's HTTPS port `18443`.
 2. A user that holds `dhcpsettings:write` and `dhcpscopes:write`. The bootstrap administrator holds
    every permission.
@@ -43,6 +43,9 @@ blocks. It is off by default and listens on UDP port `69`.
     ```text
     tftp
     ```
+
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
 
 ## Serve the boot files
 
@@ -177,7 +180,7 @@ blocks. It is off by default and listens on UDP port `69`.
 
 ## Next steps
 
-- [DHCP, DHCPv6 and Router Advertisement](dhcp.md): scopes, reservations and options.
+- [DHCPv4 scopes, reservations and leases](dhcp.md): scopes, reservations and options.
 - [Ports](../../reference/ports.md): the ports Ninlil opens.
 - [README: TFTP and PXE](https://git.lantea.one/lantea-one/ninlil/src/branch/main/README.md#tftp-and-pxe):
   the complete reference.

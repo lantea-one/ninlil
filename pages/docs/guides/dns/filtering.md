@@ -27,6 +27,9 @@ lists, schedules and rewrites.
    [Forwarding and recursion](forwarding-and-recursion.md), steps 1 to 4.
 4. `dig`. Every check asks `dig @127.0.0.1 -p 15300`.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 ### Block names with a list
@@ -177,10 +180,10 @@ lists, schedules and rewrites.
 
     ```bash
     curl -k https://127.0.0.1:18443/api/clients/<client-id>/pause -H 'Authorization: Bearer <token>' -H 'Content-Type: application/json' -d '{"durationMinutes":10}'
-    curl -k -X POST https://127.0.0.1:18443/api/clients/<client-id>/resume -H 'Authorization: Bearer <token>'
     ```
 
-    A group has the same two calls under `/api/client-groups/<group-id>/`.
+    `POST /api/clients/<client-id>/resume` ends the pause early (check item 5 below). A group has
+    the same two calls under `/api/client-groups/<group-id>/`.
 13. Add a time-of-day schedule. The window blocks queries from the start time to the end time in the
     named time zone, and an end time before the start time crosses midnight. `daysOfWeek` is a
     comma-separated list of day names:
@@ -236,6 +239,11 @@ lists, schedules and rewrites.
     ```
 
     In the console: **DNS Rewrites**, **New rewrite**.
+
+    Turning rewrites on writes the setting to the configuration file, and Ninlil applies it when it
+    reloads that file. A query sent in the first fraction of a second after the `PATCH` is not
+    rewritten yet (it takes about 0.3 seconds). A rewrite saved while rewrites are on applies to the
+    next query on the same server. A change made on another cluster node shows within 60 seconds.
 
 ## Check that it worked
 
@@ -301,7 +309,13 @@ lists, schedules and rewrites.
     example.net.		60	IN	A	0.0.0.0
     ```
 
-5. Ask the API for the lists that apply to a group:
+5. Resume the client, so its queries are answered again:
+
+    ```bash
+    curl -k -X POST https://127.0.0.1:18443/api/clients/<client-id>/resume -H 'Authorization: Bearer <token>'
+    ```
+
+6. Ask the API for the lists that apply to a group:
 
     ```bash
     curl -k https://127.0.0.1:18443/api/client-groups/<group-id>/list-assignments -H 'Authorization: Bearer <token>'

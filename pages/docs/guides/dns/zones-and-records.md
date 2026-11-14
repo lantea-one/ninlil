@@ -35,6 +35,9 @@ of the DNS name space that Ninlil answers for, stored as a list of **records**.
 
     A page holds 50 zones unless you set `take` (500 at most). Raise `skip` to reach the next page.
 
+The examples call the API on `127.0.0.1` with `curl -k`, which skips the certificate check.
+That is safe only on the machine that runs Ninlil; see [Self-signed certificate](../../getting-started/quick-start.md#self-signed-certificate).
+
 ## Steps
 
 ### Add and change records
@@ -180,7 +183,7 @@ Ninlil can write a PTR record for every A and AAAA record of a zone into the mat
 
 - A zone you create has no records. Its first record must be its SOA record. Every accepted change
   afterwards advances the serial.
-- A disabled record is kept but never answered. A disabled zone answers `REFUSED`.
+- A disabled record is kept but never answered. A disabled zone answers queries with `REFUSED` and updates with `NOTAUTH`.
 - A record with `excludeFromSync` set stays on this server: zone transfers and cloud pushes never
   send it.
 - Each zone lists its own TSIG keys: `updateTsigKeyNames` for updates and `transferTsigKeyNames` for
@@ -200,11 +203,16 @@ Ninlil can write a PTR record for every A and AAAA record of a zone into the mat
   Quick start shows the command.
 - *`400` "'www' is not in zone 'example.test'; did you mean 'www.example.test'?"* A record name must
   be the zone's name or a name below it. Write the full name, or `@` for the zone's own name.
-- *`nsupdate` prints `update failed: REFUSED`.* Check, in this order: the zone has
-  `dynamicUpdateEnabled` set to `true`; the key name in `updateTsigKeyNames` is the one you pass to
-  `nsupdate -y`; the secret is the one the key creation answered.
+- *`nsupdate` prints `update failed: REFUSED`.* Ninlil verified nothing that lets the update in.
+  Check, in this order: the zone has `dynamicUpdateEnabled` set to `true`; you passed a key with
+  `nsupdate -y`; the key's name is in the zone's `updateTsigKeyNames`. A key that exists but is not
+  listed for the zone gets `REFUSED`.
+- *`nsupdate` prints `update failed: NOTAUTH(BADSIG)`.* The secret is wrong. Use the secret that the
+  key creation answered.
+- *`nsupdate` prints `update failed: NOTAUTH(BADKEY)`.* Ninlil has no key of that name. Check the
+  name you pass to `nsupdate -y`.
 - *`nsupdate` prints `update failed: NOTAUTH`.* The zone name in the update file is not a zone that
-  Ninlil hosts, or the update names a class other than `IN`.
+  Ninlil hosts (a disabled zone counts as not hosted), or the update names a class other than `IN`.
 
 ## Next
 
