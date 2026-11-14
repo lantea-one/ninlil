@@ -68,8 +68,8 @@ outside Forgejo.
   signed message, and signing no longer opens a service scope.** The keys now live in one
   in-memory copy that a key change expires at once on the node that made the change (before, the
   old verdict lasted up to 10 seconds). A change made by another node or by a direct database edit
-  shows after at most 10 seconds. If the reload after a change fails, every TSIG key is refused
-  until a reload succeeds. For code that uses the `Ninlil.Dns.Server.Tsig` package: `TsigService`
+  shows after at most 10 seconds. If the reload after a change fails or runs past its 30-second limit,
+  every TSIG key is refused until a reload succeeds. For code that uses the `Ninlil.Dns.Server.Tsig` package: `TsigService`
   and `ITsigService` are singletons, the `TsigService` constructor no longer takes a key
   repository, and `TsigKeyLookupCache` needs an `IEntityChangeNotifier` and no longer takes a
   repository per lookup.
