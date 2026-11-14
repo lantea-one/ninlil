@@ -382,13 +382,19 @@ public abstract class ReplicaCacheTestsBase(ReplicatedEngineHost host)
     }
 
     /// <summary>
-    ///     This class is a clock the tests step by hand, so a time-to-live needs no waiting.
+    ///     This class is a clock the tests step by hand, so a time-to-live needs no waiting. The
+    ///     monotonic timestamp follows the same clock, in ticks of 100 ns, because the caches
+    ///     measure the age of a snapshot with <see cref="TimeProvider.GetElapsedTime(long)" />.
     /// </summary>
     private sealed class SteppingTimeProvider : TimeProvider
     {
         private DateTimeOffset _now = DateTimeOffset.UtcNow;
 
         public override DateTimeOffset GetUtcNow() => _now;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _now.UtcTicks;
 
         public void Advance(TimeSpan amount) => _now += amount;
     }
