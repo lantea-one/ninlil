@@ -80,6 +80,9 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -146,6 +149,9 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -198,7 +204,7 @@ export class AuthService extends BaseService implements AuthServiceInterface {
     }
 
     /**
-     * This action checks a username and password. It returns the tokens of a completed sign-in or, for an account with two-factor authentication, a challenge token to submit to &#x60;POST /api/auth/login/two-factor&#x60;. Returns 401 for a wrong password or a disabled or unknown account and 423 while the account is locked out. Wrong passwords do not lock an account, because that would let anyone who knows a username lock it out; the per-address rate limit slows guessing instead. Only an administrator\&#39;s or the system\&#39;s lockout gives 423. Allows anonymous callers and is rate limited.
+     * This action checks a username and password. It returns the tokens of a completed sign-in or, for an account with two-factor authentication, a challenge token to submit to &#x60;POST /api/auth/login/two-factor&#x60;. Returns 401 for a wrong password or a disabled or unknown account and 423 for an account whose stored lockout end date lies in the future. Wrong passwords do not lock an account, because that would let anyone who knows a username lock it out; the per-address rate limit slows guessing instead. Nothing in the API sets a lockout end date, so 423 appears only for a date written to the user store directly or by cluster synchronization. Allows anonymous callers and is rate limited.
      * @endpoint post /api/auth/login
      * @param requestParameters
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
@@ -212,6 +218,9 @@ export class AuthService extends BaseService implements AuthServiceInterface {
         const loginRequest = requestParameters?.loginRequest;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -280,6 +289,9 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -345,6 +357,9 @@ export class AuthService extends BaseService implements AuthServiceInterface {
         const twoFactorLoginRequest = requestParameters?.twoFactorLoginRequest;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -413,6 +428,9 @@ export class AuthService extends BaseService implements AuthServiceInterface {
 
         let localVarHeaders = this.defaultHeaders;
 
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
+
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
 
@@ -478,6 +496,9 @@ export class AuthService extends BaseService implements AuthServiceInterface {
         const refreshRequest = requestParameters?.refreshRequest;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
@@ -545,6 +566,9 @@ export class AuthService extends BaseService implements AuthServiceInterface {
         const confirmPasswordResetRequest = requestParameters?.confirmPasswordResetRequest;
 
         let localVarHeaders = this.defaultHeaders;
+
+        // authentication (ApiToken) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('ApiToken', 'Authorization', localVarHeaders);
 
         // authentication (Bearer) required
         localVarHeaders = this.configuration.addCredentialToHeaders('Bearer', 'Authorization', localVarHeaders, 'Bearer ');
