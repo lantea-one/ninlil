@@ -1,0 +1,85 @@
+## MkDocs configuration of the Ninlil wiki.
+##
+## What it does: builds the Markdown under pages/docs/ into the static site in pages/site/
+## (git-ignored) with the Material theme. Build it with .forgejo/scripts/build-wiki.sh in the
+## docs toolchain container (docker/ci.Dockerfile, target docs).
+##
+## Inputs: pages/docs/**/*.md. Output: pages/site/.
+##
+## The site makes no request to another host when a reader opens it: font loading is off (the
+## browser's own fonts are used), search runs in the browser from an index inside the site, and no
+## analytics or embed is configured.
+##
+site_name: 'Ninlil'
+site_description: 'Documentation for Ninlil, a DNS, DHCPv4, DHCPv6 and Router Advertisement server.'
+repo_url: 'https://git.lantea.one/lantea-one/ninlil'
+repo_name: 'lantea-one/ninlil'
+edit_uri: 'src/branch/develop/pages/docs/'
+docs_dir: 'docs'
+site_dir: 'site'
+## Any warning (a broken link, an unknown key) fails the build.
+strict: true
+use_directory_urls: true
+theme:
+  name: 'material'
+  language: 'en'
+  ## No font is fetched from a third-party host.
+  font: false
+  ## Light and dark follow the system setting; the header toggle lets a reader override it.
+  palette:
+    - media: '(prefers-color-scheme)'
+      toggle:
+        icon: 'material/brightness-auto'
+        name: 'Colour scheme: system setting'
+    - media: '(prefers-color-scheme: light)'
+      scheme: 'default'
+      primary: 'indigo'
+      accent: 'indigo'
+      toggle:
+        icon: 'material/brightness-7'
+        name: 'Colour scheme: light'
+    - media: '(prefers-color-scheme: dark)'
+      scheme: 'slate'
+      primary: 'indigo'
+      accent: 'indigo'
+      toggle:
+        icon: 'material/brightness-4'
+        name: 'Colour scheme: dark'
+  features:
+    - 'navigation.tabs'
+    - 'navigation.sections'
+    - 'navigation.indexes'
+    - 'navigation.top'
+    - 'navigation.path'
+    - 'toc.follow'
+    - 'search.suggest'
+    - 'search.highlight'
+    - 'content.code.copy'
+    - 'content.action.edit'
+## Built-in search only: the index is part of the site and runs in the browser.
+plugins:
+  - 'search'
+markdown_extensions:
+  - 'admonition'
+  - 'attr_list'
+  - 'def_list'
+  - 'tables'
+  - 'toc':
+      permalink: true
+  - 'pymdownx.details'
+  - 'pymdownx.superfences'
+  - 'pymdownx.highlight':
+      anchor_linenums: false
+  - 'pymdownx.inlinehilite'
+extra:
+  ## No analytics and no "made with" footer.
+  generator: false
+## The skeleton pages below hold only a title and a TODO(435) marker until their content is written.
+nav:
+  - 'Home': 'index.md'
+  - 'Install':
+      - 'Overview': 'install/index.md'
+  - 'Guides':
+      - 'Overview': 'guides/index.md'
+  - 'Reference':
+      - 'Overview': 'reference/index.md'
