@@ -3,7 +3,10 @@ namespace Ninlil.Dns.Server.ClientIdentity.Tests;
 
 /// <summary>
 ///     This class is a clock tests move by hand, so time-to-live and expiry checks do not
-///     depend on real elapsed time. Timers created from it never fire.
+///     depend on real elapsed time. Timers created from it never fire. The monotonic timestamp
+///     follows the same hand-moved clock, in ticks of 100 ns, so code that measures age with
+///     <see cref="TimeProvider.GetElapsedTime(long)" /> sees the same time as code that reads
+///     <see cref="GetUtcNow" />.
 /// </summary>
 public sealed class ManualTimeProvider : TimeProvider
 {
@@ -11,6 +14,12 @@ public sealed class ManualTimeProvider : TimeProvider
 
     /// <inheritdoc />
     public override DateTimeOffset GetUtcNow() => _now;
+
+    /// <inheritdoc />
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+    /// <inheritdoc />
+    public override long GetTimestamp() => _now.UtcTicks;
 
     /// <summary>
     ///     This method moves the clock forward.
