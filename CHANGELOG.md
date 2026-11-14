@@ -30,7 +30,10 @@ outside Forgejo.
   now the id of the node that created the renamed row (the node that holds it, when it has no
   recorded origin), which is the same on every node and different for each loser, and a long name
   is shortened before the suffix is added. A name that an earlier join already gave an all-zero id
-  stays as it is and is not renamed again
+  stays as it is and is not renamed again. For code that uses the `Ninlil.Dns.Server.ClusterSync`
+  package: the constructors of `UserClusterConfigSyncApplier` and `RoleClusterConfigSyncApplier`
+  take an `IOptionsMonitor<ClusterOptions>` as a new last argument, and
+  `ClusterCollisionRenamer.BuildRenamedValue` throws an `ArgumentException` for an empty node id
   ([#450](https://git.lantea.one/lantea-one/ninlil/issues/450)).
 - **Saved SSO scopes and self-signed certificate names are read back as saved.** After a restart,
   a saved SSO scope list was appended to the three defaults (`openid`, `profile`, `email`), so

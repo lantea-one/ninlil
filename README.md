@@ -4358,9 +4358,9 @@ Each command below runs on node A unless it says otherwise.
   the id of the node that created the renamed account or role, as 32 hex digits and no dashes. The
   bootstrap `admin` account and `Administrators` role have no recorded origin, so they are named
   after the node that holds them. An installation whose earlier join produced an all-zero id keeps
-  that name as it is; a new rename never reuses it. The renamed name stays. A fresh node holds its bootstrap `admin`
-  account and `Administrators` role, so every join renames one pair. Delete node B's own pair after the join, as in step 6 of
-  "Form a cluster".
+  that name as it is; a new rename never reuses it. The renamed name stays. A fresh node holds its
+  bootstrap `admin` account and `Administrators` role, so every join renames one pair. Delete
+  node B's own pair after the join, as in step 6 of "Form a cluster".
 - **Settings come from the inviter's runtime configuration file.** A section is sent when it was
   saved on that node at least once, and only the keys the file holds. A value an environment
   variable pins on node A is not sent unless the file holds it, and a value pinned on node B stays
